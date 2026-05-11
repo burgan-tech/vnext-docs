@@ -32,7 +32,7 @@
     "description": "The label of footer link with label=GitHub linking to https://github.com/burgan-tech/vnext-docs"
   },
   "copyright": {
-    "message": "© 2026 Burgan Bank. vNext Platform Documentation.",
+    "message": "© 2026 Burgan Tech. vNext Platform Documentation.",
     "description": "The footer copyright"
   }
 }

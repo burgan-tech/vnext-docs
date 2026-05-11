@@ -118,7 +118,7 @@ const config: Config = {
   headTags: [
     {
       tagName: 'meta',
-      attributes: { name: 'keywords', content: 'vnext, workflow, platform, bankacılık, dokümantasyon, Burgan Bank' },
+      attributes: { name: 'keywords', content: 'vnext, workflow, platform, bankacılık, dokümantasyon, Burgan Tech' },
     },
     {
       tagName: 'meta',
@@ -189,7 +189,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `© ${new Date().getFullYear()} Burgan Bank. vNext Platform Documentation.`,
+      copyright: `© ${new Date().getFullYear()} Burgan Tech. vNext Platform Documentation.`,
     },
     prism: {
       theme: prismThemes.github,

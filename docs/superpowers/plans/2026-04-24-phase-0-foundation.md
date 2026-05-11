@@ -365,7 +365,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `© ${new Date().getFullYear()} Burgan Bank. vNext Platform Documentation.`,
+      copyright: `© ${new Date().getFullYear()} Burgan Tech. vNext Platform Documentation.`,
     },
     prism: {
       theme: prismThemes.github,
@@ -881,7 +881,7 @@ rm -rf blog/*
 ```yaml
 vnext-team:
   name: vNext Team
-  title: Burgan Bank Engineering
+  title: Burgan Tech Engineering
   url: https://github.com/burgan-tech
   image_url: https://github.com/burgan-tech.png
 ```
