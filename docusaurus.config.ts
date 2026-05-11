@@ -11,8 +11,8 @@ const config: Config = {
     v4: true,
   },
 
-  url: 'https://burgan-tech.github.io',
-  baseUrl: '/vnext-docs/',
+  url: 'https://supreme-adventure-wwzomwm.pages.github.io',
+  baseUrl: '/',
 
   organizationName: 'burgan-tech',
   projectName: 'vnext-docs',
