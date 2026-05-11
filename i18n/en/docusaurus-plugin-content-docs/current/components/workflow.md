@@ -1,0 +1,116 @@
+---
+sidebar_position: 0
+title: Workflow
+description: vNext Workflow component — definition, types, capability matrix, and special transitions
+---
+
+# Workflow
+
+A **Workflow** is the core **definable unit** modeling business processes on the vNext platform. Defined as JSON and validated against `vnext-schema`.
+
+> **Schema:** [`vnext-schema/workflow-definition.schema.json`](https://github.com/burgan-tech/vnext-schema)
+
+## Workflow Types
+
+| Code | Type | Description | Typical Usage |
+|---|---|---|---|
+| **C** | Core | Platform core workflows | System operations, platform services |
+| **F** | Flow | Main workflows | Business main processes, user interaction |
+| **S** | SubFlow | Sub workflows | Reusable process pieces |
+| **P** | SubProcess | Sub processes | Parallel and independent operations (fire-and-forget) |
+
+## Required Top-Level Fields
+
+Every workflow definition must include the following top-level fields (per `vnext-schema` `required`):
+
+| Field | Type | Description |
+|---|---|---|
+| `key` | string | Unique workflow identifier (unique within domain) |
+| `flow` | string | Categorization flow name |
+| `flowVersion` | string | Flow version (SemVer) |
+| `domain` | string | Owning domain |
+| `version` | string | Workflow definition version (SemVer) |
+| `tags` | string[] | Tags — for query/filter |
+| `attributes` | object | The actual workflow definition (below) |
+
+## `attributes` Structure
+
+`attributes` is the workflow's behavioral definition. The schema requires:
+
+- `type` — workflow type (C/F/S/P)
+- `states` — list of workflow states (at least one `Initial` state)
+- `startTransition` — start transition definition
+- `labels` — multi-language labels
+
+## Capability Matrix
+
+Which sub-features each workflow type **typically uses**:
+
+| Feature | Core (C) | Flow (F) | SubFlow (S) | SubProcess (P) |
+|---|---|---|---|---|
+| **states** (required) | ✓ | ✓ | ✓ | ✓ |
+| **startTransition** (required) | ✓ | ✓ | ✓ | ✓ |
+| **labels** (required) | ✓ | ✓ | ✓ | ✓ |
+| **schema** (master schema) | ✓ | ✓ | ✓ | ✓ |
+| **functions** | ✓ | ✓ | ✓ | ✓ |
+| **extensions** | ✓ | ✓ | ✓ | ✓ |
+| **sharedTransitions** | – | ✓ | ✓ | – |
+| **errorBoundary** (global) | ✓ | ✓ | ✓ | ✓ |
+| **timeout** | – | ✓ | ✓ | ✓ |
+| **queryRoles** | – | ✓ | ✓ | – |
+| **cancel** (special transition) | – | ✓ | ✓ | – |
+| **exit** (special transition) | – | ✓ | – | – |
+| **updateData** (special transition) | – | – | ✓ | – |
+
+> **Note:** The "typical usage" reflects practical patterns; the schema technically accepts all fields for any type.
+
+## Special Transitions
+
+### MasterSchema
+
+The workflow's **`schema`** field defines the main structure of **instance data**. Enables advanced filtering and **consistency checks** at every change point of instance data. See [Schema component](/docs/components/schema).
+
+### Update Data
+
+A specially defined transition. Typically used to **update parent flow data from sub flows** in intermediate blocks. `target` must always be `$self`.
+
+### Shared Transitions
+
+**Common transitions** accessible from multiple states. Specify via `availableIn` array which states can trigger it.
+
+### Cancel
+
+A specially defined transition. When a flow receives a cancel request, it broadcasts **cancel** to its sub flows if any. Sub flows that lack a cancel definition are bypassed.
+
+### Exit
+
+A specially defined transition. Used especially in **client implementations** to terminate active live instances on screen exit or screen leave events.
+
+### Timeout
+
+If `timeout` is defined when starting an instance, it is **scheduled**. When the time arrives during the active period, it executes and ends the instance. If the flow ends earlier, the scheduled job is cancelled.
+
+### Functions
+
+Defines the list of **functions** that will run for the flow and instance. Each function can be pinned with `version`.
+
+### Extension
+
+Defines the list of **extensions** that will run for the flow and instance. Extensions enrich instance data.
+
+### Query Roles
+
+Authorization mechanism. Holds the information about **who can query** the workflow and the states within an instance.
+
+### Error Boundary
+
+The **global error handling** definition at the workflow level. Applied if no boundary is defined at task or state level.
+
+## Related
+
+- [Workflow (conceptual)](/docs/components/workflow) — workflow as a concept
+- [States](/docs/components/workflow) — state types
+- [Transitions](/docs/components/mappings) — transition behaviors
+- [Schema component](/docs/components/schema) — master schema
+- [Tasks](/docs/components/tasks/) — task types
+- Schema source: [vnext-schema (GitHub)](https://github.com/burgan-tech/vnext-schema)

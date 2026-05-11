@@ -1,0 +1,34 @@
+{
+  "title": {
+    "message": "vNext Docs",
+    "description": "The title in the navbar"
+  },
+  "logo.alt": {
+    "message": "vNext Logo",
+    "description": "The alt text of navbar logo"
+  },
+  "item.label.Technical": {
+    "message": "Technical",
+    "description": "Navbar item with label Technical"
+  },
+  "item.label.Architecture": {
+    "message": "Architecture",
+    "description": "Navbar item with label Architecture"
+  },
+  "item.label.Business": {
+    "message": "Business",
+    "description": "Navbar item with label Business"
+  },
+  "item.label.Product": {
+    "message": "Product",
+    "description": "Navbar item with label Product"
+  },
+  "item.label.Release Notes": {
+    "message": "Release Notes",
+    "description": "Navbar item with label Release Notes"
+  },
+  "item.label.GitHub": {
+    "message": "GitHub",
+    "description": "Navbar item with label GitHub"
+  }
+}

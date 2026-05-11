@@ -1,0 +1,104 @@
+import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
+
+const sidebars: SidebarsConfig = {
+  technicalSidebar: [
+    'intro',
+    {
+      type: 'category',
+      label: 'Getting Started',
+      link: { type: 'doc', id: 'getting-started/index' },
+      items: [
+        'getting-started/local-dev',
+        'getting-started/multi-domain',
+        'getting-started/tutorial',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Developer Tools',
+      link: { type: 'doc', id: 'tools/index' },
+      items: [
+        'tools/forge-studio',
+        'tools/workflow-cli',
+        'tools/template-cli',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Workflow',
+      collapsible: true,
+      collapsed: true,
+      items: [
+        'components/workflow',
+        {
+          type: 'category',
+          label: 'Tasks',
+          link: { type: 'doc', id: 'components/tasks/index' },
+          items: [
+            'components/tasks/http',
+            'components/tasks/script',
+            'components/tasks/trigger',
+            'components/tasks/get-instances',
+            'components/tasks/notification',
+            'components/tasks/dapr-service',
+            'components/tasks/dapr-pubsub',
+            'components/tasks/dapr-binding',
+            'components/tasks/dapr-http-endpoint',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Functions',
+          link: { type: 'doc', id: 'components/functions/index' },
+          items: [
+            'components/functions/built-in',
+            'components/functions/custom',
+          ],
+        },
+        'components/mappings',
+        'components/interfaces',
+        'components/extension',
+        'components/schema',
+        'components/view',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Core Concepts',
+      items: [
+        'concepts/user-integration',
+        'concepts/instance-data',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Practical Guides',
+      items: [
+        'how-to/error-handling',
+        'how-to/instance-filtering',
+        'how-to/view-selection',
+        'how-to/async-sync',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Yapılandırma',
+      items: [
+        'configuration/url-templates',
+        'configuration/service-discovery',
+        'configuration/server-timeout',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'API Reference',
+      link: { type: 'doc', id: 'api-reference/index' },
+      items: [
+        'api-reference/rest-api',
+        'api-reference/init-service',
+      ],
+    },
+  ],
+};
+
+export default sidebars;
