@@ -1,12 +1,19 @@
 ---
-sidebar_position: 5
-title: Release Strategy
-description: vNext platformunun sürüm politikası, dağıtım kadansı ve versiyonlama stratejisi
+sidebar_position: 6
+title: Sürümleme ve Değişiklik Politikası
+description: vNext platformunun sürüm politikası, breaking changes disiplini, release notes standardı ve dağıtım kadansı
 ---
 
-# Release Strategy
+# Sürümleme ve Değişiklik Politikası
 
-Bu sayfa, vNext platformunun sürüm yönetimi politikasını, dağıtım kadansını ve versiyonlama yaklaşımını açıklar.
+Bu sayfa, vNext platformunun **sürümleme**, **breaking changes**, **release notes** ve **migration** yaklaşımını açıklar. Hedef; değişimin **güvenle taşınması** ve kullanıcıların değişikliği **öngörebilmesidir**.
+
+## Politika Özeti
+
+- **Kırıcı değişiklikler `docs/breaking-changes/` altında resmi olarak duyurulur.**
+- **Her release için release notes standardı zorunludur.**
+- **Migration adımları mümkünse örnekle birlikte verilir.**
+- **Eski ve yeni sürüm yan yana çalışır; geri dönüş daima mümkündür.**
 
 ## Versiyonlama Politikası
 
@@ -134,20 +141,122 @@ Major versiyon güncellemelerinde:
 3. **Transition Period**: Eski ve yeni API paralel çalışır (minimum 2 minor süre)
 4. **Support**: Geçiş sürecinde aktif destek
 
-## Release Notes Formatı
+## Release Notes Standardı
 
-Her release için standart format:
+Her release için **standart bir release notes formatı** kullanılır. Bu standart, kullanıcıların değişiklikleri **hızlı tarayıp etkisini anlamasına** olanak tanır.
+
+### Zorunlu Alanlar
 
 | Alan | İçerik |
 |------|--------|
 | **Sürüm** | vX.Y.Z |
 | **Tarih** | YYYY-MM-DD |
-| **Kategori** | Feature / Fix / Breaking / Performance |
+| **Kategori** | Feature / Fix / Breaking / Performance / Security |
 | **Özet** | 1-2 cümle değişiklik açıklaması |
 | **Detay** | Teknik detay ve kullanım bilgisi |
-| **Migration** | (Sadece breaking change'lerde) geçiş adımları |
+| **Etkilenen Bileşen** | Workflow / Task / Schema / Function / Platform |
+| **Migration** | (Sadece breaking change'lerde) adım adım geçiş rehberi |
+| **Önerilen Aksiyon** | Hemen / Bir sonraki release ile / İsteğe bağlı |
 
-Tüm geçmiş release notes'lar [Blog](/blog) bölümünde kronolojik sırayla yer almaktadır.
+### Örnek Yapı
+
+```markdown
+## v1.4.0 — 2026-05-08
+
+### Highlights
+- Visual Workflow Designer beta yayınlandı
+- DaprPubSub task'a CloudEvents headers desteği eklendi
+
+### Features
+- [Designer] Sürükle-bırak workflow tasarımı
+- [DaprPubSub] CloudEvents v1.0 headers parametreleri
+- [Metrics] Persistent metric retention süresi yapılandırılabilir
+
+### Fixes
+- [Timer] Cron ifadelerinde DST kayması düzeltildi
+- [Audit] Transition metadata'sı tüm task tiplerinde tutarlı
+
+### Breaking Changes
+- Yok
+
+### Migration
+- Yok (geriye uyumlu)
+
+### Önerilen Aksiyon
+- Visual Designer beta'sını staging ortamında deneyin
+```
+
+Tüm geçmiş release notes'lar [Blog / Release Notes](/blog) bölümünde kronolojik sırayla yer alır.
+
+## Breaking Changes Disiplini
+
+Kırıcı değişiklikler vNext'te **istisnai** ve **kontrollü** süreçlerdir. Disiplin şu unsurları içerir:
+
+### 1. Erken Uyarı (Deprecation Notice)
+
+- Kırıcı değişiklik en az **1 minor önceden** duyurulur
+- Etkilenen kullanıcılara doğrudan bilgilendirme yapılır
+- Eski API/davranış `@deprecated` olarak işaretlenir
+
+### 2. Resmi Duyuru
+
+Her kırıcı değişiklik için **özel bir doküman sayfası** açılır:
+
+- Lokasyon: `docs/breaking-changes/<change-name>.md`
+- Dil: Türkçe + İngilizce (zorunlu)
+- İçerik: Neden değişti, ne değişti, nasıl geçilir
+
+**Örnek mevcut breaking changes:**
+
+- Function–Workflow Validation — `I` veya `F` scope'lu fonksiyonların workflow `functions` dizisinde tanımlı olması zorunluluğu
+- Instance Filter Single String — `filter` artık dizi değil, tek string
+
+### 3. Migration Rehberi
+
+Her kırıcı değişiklik için **adım adım örnekli** rehber:
+
+| Adım | İçerik |
+|------|--------|
+| **Etki Tespiti** | "Sizi etkiler mi? Kontrol komutu / örnek" |
+| **Önce/Sonra Örneği** | Tanım veya kod karşılaştırması |
+| **Geçiş Adımları** | Sıralı, çalıştırılabilir aksiyonlar |
+| **Doğrulama** | "Doğru migrate ettim mi?" kontrolü |
+| **Geri Dönüş** | Sorun çıkarsa rollback yolu |
+
+### 4. Geçiş Süresi
+
+- Eski ve yeni davranış **minimum 2 minor süre** paralel çalışır
+- Eski davranış kaldırılmadan önce final uyarı yayımlanır
+- Major sınırı, kaldırma için doğal sınırdır
+
+### 5. Aktif Destek
+
+- Geçiş sürecinde sorularınız için kanal: GitHub Issues
+- Migration sorununda hızlı yanıt taahhüdü
+- Toplu migration için profesyonel destek seçeneği
+
+## Migration Pratiği
+
+Migration adımları platformun **karakteristiğine uygun** şekilde tasarlanır:
+
+```mermaid
+graph LR
+    A[Eski Sürüm Aktif] --> B[Yan Yana Sürüm Yükle]
+    B --> C[Trafik Kademeli Yönlendir]
+    C --> D[Doğrulama ve Metrik]
+    D --> E{Sorun var mı?}
+    E -->|Hayır| F[Eski Sürümü Devre Dışı Bırak]
+    E -->|Evet| G[Rollback]
+    G --> A
+```
+
+**Önerilen pratikler:**
+
+- **Staging önce, production sonra** — değişikliği staging'de en az 1 hafta çalıştırın
+- **Pilot tenant / domain** — bir domain'de pilot çalıştırın
+- **Metrik karşılaştırması** — eski ve yeni davranışın metriklerini yan yana izleyin
+- **Geri dönüş planı** — her migration'ın rollback adımı hazır olsun
+- **Audit doğrulaması** — migration sonrası audit log'larda anomali olmadığını teyit edin
 
 ## Ortam Matrisi
 
@@ -156,4 +265,12 @@ Tüm geçmiş release notes'lar [Blog](/blog) bölümünde kronolojik sırayla y
 | **Local Dev** | Geliştirme ve debug | Anlık | Developer |
 | **CI** | Otomatik test | Her PR | Otomatik |
 | **Staging** | Integration test ve UAT | Günlük | Ekip |
-| **Production** | Canlı kullanım | Haftalık/talep bazlı | Tüm kullanıcılar |
+| **Production** | Canlı kullanım | Haftalık / talep bazlı | Tüm kullanıcılar |
+
+## İlgili Sayfalar
+
+- [Roadmap](../roadmap/) — Faz bazlı planlama
+- [Feature Catalog](../features/) — Mevcut özellikler ve durumları
+- [Ürün Yönü ve Sınırlar](../direction-scope/) — Stratejik yön
+- [İş Riskleri ve Azaltım](/business/risks/) — Değişiklik etkisi yönetimi
+- [Release Notes (Blog)](/blog) — Geçmiş sürümler
