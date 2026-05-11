@@ -1,0 +1,64 @@
+---
+description: vNext Docs UI/UX design system — color tokens, typography, component patterns, and accessibility standards
+alwaysApply: true
+---
+
+# vNext Docs Design System
+
+Style: Flat Design + Swiss Modernism hybrid. No gradients, no shadows, typography-focused.
+
+## Typography
+
+- Body/Headings: **IBM Plex Sans** (Google Fonts, weights 300–700)
+- Code/Mono: **JetBrains Mono** (Google Fonts, weights 400–700)
+- Infima overrides: `--ifm-font-family-base`, `--ifm-font-family-monospace`
+
+## Color Tokens
+
+| Role | Light | Dark |
+|------|-------|------|
+| Primary | `#2563EB` | `#60A5FA` |
+| Background | `#F8FAFC` | `#0F172A` |
+| Surface | `#FFFFFF` | `#1E293B` |
+| Text | `#1E293B` | `#E2E8F0` |
+| Muted | `#475569` | `#94A3B8` |
+| Border | `#E2E8F0` | `#334155` |
+
+Use `--vn-*` CSS custom properties (defined in `src/css/custom.css`), not raw hex values.
+
+## Component Rules
+
+- **No emojis as icons** — use inline SVG (Lucide-style, 24x24 viewBox, strokeWidth 1.75)
+- **No layout-shifting hovers** — use `border-color`/`opacity`/`color` transitions, never `transform: translateY`
+- **Transitions**: 150–200ms ease (`var(--vn-transition)`)
+- **Border radius**: `--vn-radius-sm` (6px), `--vn-radius-md` (10px), `--vn-radius-lg` (16px)
+- **Admonitions**: Left-border accent style, no heavy background fills
+- **Cards**: Left accent border via `--card-accent` CSS variable, flat surface background
+
+## Accessibility
+
+- WCAG AAA contrast target (slate-800 on white = 12.6:1)
+- `cursor-pointer` on all clickable elements
+- `:focus-visible` outline ring (2px solid primary, 2px offset)
+- `prefers-reduced-motion: reduce` disables all animations
+- All images require `alt`; form inputs require `<label>`
+
+## Dark Mode
+
+All dark-mode overrides use `[data-theme='dark']` selector. Never use `@media (prefers-color-scheme)` directly — Docusaurus handles the toggle.
+
+## Responsive Breakpoints
+
+| Width | Target |
+|-------|--------|
+| 600px | Mobile |
+| 768px | Tablet |
+| 996px | Docusaurus sidebar collapse |
+| 1440px | Wide desktop |
+
+## File Locations
+
+- Design tokens: `src/css/custom.css`
+- Homepage: `src/pages/index.tsx` + `src/pages/index.module.css`
+- Config: `docusaurus.config.ts` (navbar, footer, announcement bar)
+- No `src/theme/` swizzles — all customization via CSS overrides to preserve upgrade-ability

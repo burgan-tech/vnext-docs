@@ -141,7 +141,16 @@ const config: Config = {
       { property: 'og:title', content: 'vNext Docs' },
       { property: 'og:description', content: 'Teknik, mimari, business ve ürün dokümantasyonu' },
     ],
+    announcementBar: {
+      id: 'v4_ready',
+      content:
+        'vNext Docs artık Docusaurus v4-ready altyapısıyla çalışıyor — <a href="/blog">Release Notes</a>',
+      backgroundColor: '#2563eb',
+      textColor: '#ffffff',
+      isCloseable: true,
+    },
     navbar: {
+      hideOnScroll: true,
       title: 'vNext Docs',
       logo: {
         alt: 'vNext Logo',
