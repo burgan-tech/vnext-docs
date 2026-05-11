@@ -308,6 +308,76 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 
 ---
 
+## State Yaşam Döngüsü
+
+State machine aşağıdaki yaşam döngüsünü takip eder:
+
+```mermaid
+flowchart TD
+    A[Transition Triggered] --> B[State Policy Checks]
+    B --> |Valid| C[Current Transition OnExecutionTasks]
+    B --> |Invalid| END1["Error: Policy Violation"]
+
+    C --> D[Current State OnExits]
+    D --> E[State Change]
+    E --> F[Target State OnEntries]
+
+    F --> G{"State Type Check"}
+
+    G --> |Finish| H["Instance Status: Completed"]
+    G --> |SubFlow| I[Execute SubFlow]
+    G --> |"Initial/Intermediate"| J[Auto Transition Check]
+
+    H --> END2[Workflow Completed]
+    I --> K[SubFlow Completed]
+    K --> J
+
+    J --> |Auto Transition Exists| L[Execute Auto Transition]
+    J --> |No Auto Transition| M[Schedule Transition Check]
+
+    L --> A
+
+    M --> |Schedule Transition Exists| N[Wait for Schedule Transition]
+    M --> |No Schedule Transition| O["State Active - Waiting"]
+
+    N --> |Time Reached| P[Execute Schedule Transition]
+    P --> A
+
+    O --> |"Manual/Event Trigger"| A
+```
+
+### Yaşam Döngüsü Adımları
+
+1. **State Policy Kontrolleri**
+   - State'de tanımlı transition'lar kontrol edilir
+   - Client sadece manuel ve event transition'ları tetikleyebilir
+   - Auto ve schedule transition'lar sadece sistem tarafından çalıştırılır
+
+2. **Current Transition OnExecutionTasks**
+   - Mevcut transition'ın OnExecutionTask'ları çalıştırılır
+
+3. **Current State OnExits**
+   - Mevcut state'in OnExit task'ları çalıştırılır
+
+4. **State Değişimi**
+   - Current Transition'ın target state'ine geçiş yapılır
+   - State değişimi sadece transition'lar üzerinden gerçekleşir
+
+5. **State OnEntries**
+   - Yeni state'in OnEntry task'ları çalıştırılır
+
+6. **State Tipi Kontrolü**
+   - **Finish**: Instance durumu "Completed" olarak güncellenir
+   - **SubFlow**: Sadece SubFlow çalıştırılır
+
+7. **Auto Transition'lar**
+   - Otomatik transition'lar çalıştırılır
+
+8. **Schedule Transition'lar**
+   - Zamanlanmış transition'lar çalıştırılır
+
+---
+
 ## Transition Yapısı
 
 ### Transition Alanları
