@@ -12,59 +12,41 @@ vNext platformu, **kullanıcı etkileşimini** workflow akışının doğal bir 
 
 ## Etkileşim Döngüsü
 
-```
-Instance Start
-       │
-       ▼
-┌──────────────────────────┐
-│ State Function           │ ── client long-polling
-│ (status sorgu)           │
-└──────────────────────────┘
-       │
-   status.code
-   ┌───┴────────┐
-   │            │
-status="A"   status="C"
-(Active)     (Completed)
-   │            │
-   ▼            ▼
-View var mı?   Süreç bitti
-   │
-   ▼
-┌──────────────────────────┐
-│ View Function            │
-│ (view tanımı çek)        │
-└──────────────────────────┘
-       │
-       ▼
-┌──────────────────────────┐
-│ Data Function            │
-│ (data ihtiyacı varsa)    │
-└──────────────────────────┘
-       │
-       ▼
-   Render UI
-       │
-       ▼
-   Kullanıcı transition tetikler
-       │
-   ┌───┴─────────────┐
-   │ Transition view │
-   │ var mı?         │
-   └───┬─────────────┘
-       │
-   ┌───┴────────┐
-  yes          no
-   │           │
-   ▼           ▼
-Modal/Popup   Direkt submit
-   │           │
-   └───┬───────┘
-       ▼
-   Submit transition
-       │
-       ▼
-   (loop continues until status="C")
+```mermaid
+flowchart TD
+  Start(["Instance Start"]) --> StateFn["State Function<br/><i>client long-polling</i>"]
+
+  StateFn --> StatusCheck{"status.code?"}
+  StatusCheck -->|"A (Active)"| ViewCheck{"View var mi?"}
+  StatusCheck -->|"C (Completed)"| Done(["Surec bitti"])
+
+  ViewCheck -->|Evet| ViewFn["View Function<br/><i>view tanimi cek</i>"]
+  ViewCheck -->|Hayir| Render
+
+  ViewFn --> DataFn["Data Function<br/><i>data ihtiyaci varsa</i>"]
+  DataFn --> Render["Render UI"]
+
+  Render --> UserAction["Kullanici transition tetikler"]
+  UserAction --> TransCheck{"Transition view<br/>var mi?"}
+
+  TransCheck -->|Evet| Modal["Modal / Popup"]
+  TransCheck -->|Hayir| Submit
+
+  Modal --> Submit["Submit transition"]
+  Submit -->|"Loop"| StateFn
+
+  style Start fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style Done fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style StateFn fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style StatusCheck fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style ViewCheck fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style TransCheck fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style ViewFn fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style DataFn fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Render fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style UserAction fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style Modal fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style Submit fill:#dbeafe,stroke:#1e40af,color:#1e293b
 ```
 
 ## Adım Adım

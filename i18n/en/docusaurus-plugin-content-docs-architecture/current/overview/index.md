@@ -23,13 +23,32 @@ For platform architecture and domain topology, you can review the following docu
 
 For core principles, it is recommended to refer to the **Principles** directory contents:
 
-[![](https://mermaid.ink/img/pako:eNo9jc1qwzAQhF8l7CkBY2JbP7Wu7QOEHHooughr44hGklnJ0NT43SsH3D3NfMzsLDBEi6DAu2C9mXQ4HCjGfDxeyIXBTQ9Mp9NGt7sgJZeyCQPu6HNDMbgw7uSKNyQskQQVjOQsqEwzVuCRvNksLFtWQ76jRw2qSGvoW4MOa-lMJnzF6PcaxXm8g7qZRypunqzJ-OHMSMb_07Jnkd7jHDIoxl8_QC3wA6rp2lo2vWh6yc-9FFxU8ATVvYlactZL1gnedoytFfy-Vs912zLJRcd70coSWP8APtZZgA?type=png)](https://mermaid.live/edit#pako:eNo9jc1qwzAQhF8l7CkBY2JbP7Wu7QOEHHooughr44hGklnJ0NT43SsH3D3NfMzsLDBEi6DAu2C9mXQ4HCjGfDxeyIXBTQ9Mp9NGt7sgJZeyCQPu6HNDMbgw7uSKNyQskQQVjOQsqEwzVuCRvNksLFtWQ76jRw2qSGvoW4MOa-lMJnzF6PcaxXm8g7qZRypunqzJ-OHMSMb_07Jnkd7jHDIoxl8_QC3wA6rp2lo2vWh6yc-9FFxU8ATVvYlactZL1gnedoytFfy-Vs912zLJRcd70coSWP8APtZZgA)
+```mermaid
+mindmap
+  root((Principles))
+    Persistance
+    Versioning
+    References
+```
 
 ### Workflow Logic and Definition
 
 For workflow logic and definition, it is recommended to refer to the **Flow** directory contents:
 
-[![](https://mermaid.ink/img/pako:eNpFj7FuwyAURX8lelMiWVYMBmLWtlGXTq06VF6eDHVQDFgYK2kt_3txJLtM71w474oJGq80SLDGKYt97Xa74H3c78-dvx0OCy_nPWLUK3wEdIOJxrstweG6zp9G3zatuWiLK73co07iv3bWGMew7X3Dvjeu3W5H1ywlwxq8olOdDgNk0AajQMYw6gysDhYXhGl5WUNMpboGmUaF4VpD7ebk9Oi-vLerFvzYXkB-YzckGnuVfvhssA1otzRop3R48qOLIMvqsQPkBHeQBSW5KCpeVIIdK8EZz-AHJD3xXLCyEiXljNCynDP4fbQec0JKwTjlhBWnEyd0_gOzwnE0?type=png)](https://mermaid.live/edit#pako:eNpFj7FuwyAURX8lelMiWVYMBmLWtlGXTq06VF6eDHVQDFgYK2kt_3txJLtM71w474oJGq80SLDGKYt97Xa74H3c78-dvx0OCy_nPWLUK3wEdIOJxrstweG6zp9G3zatuWiLK73co07iv3bWGMew7X3Dvjeu3W5H1ywlwxq8olOdDgNk0AajQMYw6gysDhYXhGl5WUNMpboGmUaF4VpD7ebk9Oi-vLerFvzYXkB-YzckGnuVfvhssA1otzRop3R48qOLIMvqsQPkBHeQBSW5KCpeVIIdK8EZz-AHJD3xXLCyEiXljNCynDP4fbQec0JKwTjlhBWnEyd0_gOzwnE0)
+```mermaid
+mindmap
+  root((Flow))
+    State
+    Transition
+    Task
+    View
+    Schema
+    Extension
+    Feature
+    Mapping
+    Functions
+    Handlers
+```
 
 ### API Definitions
 
@@ -37,22 +56,58 @@ vNext applications interact only through APIs. For API definitions, it is recomm
 
 *Note: For asynchronous API responses, interaction is also provided through SignalR and MQTT channels. This structure (EventBus) is an extension of APIs.*
 
-[![](https://mermaid.ink/img/pako:eNpVjstqwzAQRX_FzCoBY2LrFWsXWkq6665QvBGR4phEkhlL9GH875UMLnRWc8_cOzMzXLw2IMEOTls1dq4o0Puw253eXqf9Putc5xDG4myUNjht7KRTqMi-jbxEdwmD_w_fPd6vD_-5Qiihx0GDDBhNCdagVVnCnO0dhJuxpgOZWq3w3kHnlpQZlfvw3m4x9LG_gbyqx5RUHLUK5nlQPSr7R9G49OyTjy6AZHzdAXKGL5A1aSpRt7xuBTu0gufpN0hy5JVgtBWUcNYQSpcSftarh6ppqGCciJodKRVk-QXKzVzc?type=png)](https://mermaid.live/edit#pako:eNpVjstqwzAQRX_FzCoBY2LrFWsXWkq6665QvBGR4phEkhlL9GH875UMLnRWc8_cOzMzXLw2IMEOTls1dq4o0Puw253eXqf9Putc5xDG4myUNjht7KRTqMi-jbxEdwmD_w_fPd6vD_-5Qiihx0GDDBhNCdagVVnCnO0dhJuxpgOZWq3w3kHnlpQZlfvw3m4x9LG_gbyqx5RUHLUK5nlQPSr7R9G49OyTjy6AZHzdAXKGL5A1aSpRt7xuBTu0gufpN0hy5JVgtBWUcNYQSpcSftarh6ppqGCciJodKRVk-QXKzVzc)
+```mermaid
+mindmap
+  root((APIs))
+    Http Headers
+    Admin APIs
+    Function APIs
+    Workflow APIs
+```
 
 ### Ready-to-Use Applications
 
 For ready-to-use applications that consume vNext services, it is recommended to refer to the **Clients** directory contents:
 
-[![](https://mermaid.ink/img/pako:eNpljUtrwzAQhP-K2VMCJo1fUixKoU0b2kPa0kuh-LKJN46IJRlFSh8m_712wL5kTzvfzuy0sDUlgQAldamwKXQQWGPcZLKsJWl3nE571M_SqMbong0kWBE6bylYo8aK7O3G3ty94klW6KTRo-3DeDeaRnr__nLFVrX5voJPp6702W8GsDYbWdOgPmk8POD2ELztdnJLEEJlZQnCWU8hKLIKewltby7A7UlRAaJbS7SHAgp97jIN6i9j1BCzxld7EDusj53yTYmOHiVWFtVILemS7NJ47UCw-eUHiBZ-QERJPONRzqKcZ_Ocs4yF8AsiWbAZz9KcpwnL4iRNzyH8XVrnszhOecYSxliaRHzB-fkfY1F8sQ?type=png)](https://mermaid.live/edit#pako:eNpljUtrwzAQhP-K2VMCJo1fUixKoU0b2kPa0kuh-LKJN46IJRlFSh8m_712wL5kTzvfzuy0sDUlgQAldamwKXQQWGPcZLKsJWl3nE571M_SqMbong0kWBE6bylYo8aK7O3G3ty94klW6KTRo-3DeDeaRnr__nLFVrX5voJPp6702W8GsDYbWdOgPmk8POD2ELztdnJLEEJlZQnCWU8hKLIKewltby7A7UlRAaJbS7SHAgp97jIN6i9j1BCzxld7EDusj53yTYmOHiVWFtVILemS7NJ47UCw-eUHiBZ-QERJPONRzqKcZ_Ocs4yF8AsiWbAZz9KcpwnL4iRNzyH8XVrnszhOecYSxliaRHzB-fkfY1F8sQ)
+```mermaid
+mindmap
+  root((Clients))
+    Components
+      Feature Manager / Navigation
+      Route Manager
+      API Manager
+      Flow Manager
+      EventHub
+    Mobile
+    Web
+    Back Office
+```
 
 ### Development Environment
 
 For technical information and tools for developing solutions on vNext, it is recommended to refer to the **Development** directory contents:
 
-[![](https://mermaid.ink/img/pako:eNpFjcFugzAMhl8F-dRKCBUIychtG9p5UnuauESNB1FJjELY1iHefVAJ5pP_T_9nT3AljSDBGqet6msXRZ4oHA4VfmFHvUUXjscVr3OmbgyG3Jbf1fWmGhy2_NbRd1Rh39F9FTd8Ier2TvRsyfetwegcRm1o54s4mMah_ycXHEL0gu7aQgyNNxpk8CPGYNFbtUaY1nYNoUWLNchl1crfaqjdvDi9ch9EdtM8jU0L8lN1w5LGXquAlVGNV3anHp1G_0qjCyA5e9wAOcEPyDTPEpGWPC1FcSoFL3gMd5D5E09EwUrBcl5kOWNzDL-Pr6cky5goeM4zlqUF41zMfxcnb2o?type=png)](https://mermaid.live/edit#pako:eNpFjcFugzAMhl8F-dRKCBUIychtG9p5UnuauESNB1FJjELY1iHefVAJ5pP_T_9nT3AljSDBGqet6msXRZ4oHA4VfmFHvUUXjscVr3OmbgyG3Jbf1fWmGhy2_NbRd1Rh39F9FTd8Ier2TvRsyfetwegcRm1o54s4mMah_ycXHEL0gu7aQgyNNxpk8CPGYNFbtUaY1nYNoUWLNchl1crfaqjdvDi9ch9EdtM8jU0L8lN1w5LGXquAlVGNV3anHp1G_0qjCyA5e9wAOcEPyDTPEpGWPC1FcSoFL3gMd5D5E09EwUrBcl5kOWNzDL-Pr6cky5goeM4zlqUF41zMfxcnb2o)
+```mermaid
+mindmap
+  root((Development))
+    Solution
+    Packages
+    Flow Deployment
+    Tools
+      Amorphie Studio
+        Designer
+        Test Bench
+```
 
 ### Operations Management
 
 For technical information and tools for monitoring and developing deployment solutions running on vNext, it is recommended to refer to the **Operations** directory contents:
 
-[![](https://mermaid.ink/img/pako:eNpFTU1rhDAQ_Ssyp10QWY1Gk2u9lhZ6K16CTt2wJpExSq343xsXbOf0Pua9t0HrOgQJRtvOqLGxUUTO-cvlbURSXjs7Xa-HetwretLtdNIPpEW3GNV6at2CtJ5GjQsOLhRE7468Gv71cXCrQeshhp50B9LTjDEYJKMOCtvx24C_o8EGZICdokcDjd1DZlT20zlzxsjN_R3klxqmwOaxUx5rrXpS5k8ltB3Si5vDqOTVswPkBt8gU5YlZSp4KsriJkpe8BhWkKziSVnkoswZLzKW53sMP8_VW5JleVlwVgRLiJRV-f4Lf5Nirw?type=png)](https://mermaid.live/edit#pako:eNpFTU1rhDAQ_Ssyp10QWY1Gk2u9lhZ6K16CTt2wJpExSq343xsXbOf0Pua9t0HrOgQJRtvOqLGxUUTO-cvlbURSXjs7Xa-HetwretLtdNIPpEW3GNV6at2CtJ5GjQsOLhRE7468Gv71cXCrQeshhp50B9LTjDEYJKMOCtvx24C_o8EGZICdokcDjd1DZlT20zlzxsjN_R3klxqmwOaxUx5rrXpS5k8ltB3Si5vDqOTVswPkBt8gU5YlZSp4KsriJkpe8BhWkKziSVnkoswZLzKW53sMP8_VW5JleVlwVgRLiJRV-f4Lf5Nirw)
+```mermaid
+mindmap
+  root((Operations))
+    Metrics
+    Service Discovery
+    Developer Portal
+    Deployment
+```

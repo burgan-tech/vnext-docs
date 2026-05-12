@@ -23,25 +23,50 @@ The vNext Runtime platform is based on the **Domain** concept. A domain represen
 In an organization, domains can be organized as follows:
 
 ### Product Group-Based Domain
-```
-Onboarding Domain
-├── vNext Runtime (onboarding)
-├── Database (onboarding_db)
-├── PubSub (onboarding_events)
-└── State Store (onboarding_state)
+
+```mermaid
+graph LR
+  OD["Onboarding Domain"]
+  OD --> RT["vNext Runtime<br/>(onboarding)"]
+  OD --> DB[("onboarding_db")]
+  OD --> PS["PubSub<br/>(onboarding_events)"]
+  OD --> SS["State Store<br/>(onboarding_state)"]
+
+  style OD fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style RT fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style DB fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style PS fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style SS fill:#fef3c7,stroke:#b45309,color:#1e293b
 ```
 
 **Example:** The onboarding team managing customer acceptance processes has its own domain.
 
 ### Team Responsibility-Based Domains
-```
-Integration Team
-├── IDM Domain (Identity management)
-│   ├── vNext Runtime (idm)
-│   └── Infrastructure
-└── Notification Domain (Notification services)
-    ├── vNext Runtime (notification)
-    └── Infrastructure
+
+```mermaid
+graph LR
+  Team["Integration Team"]
+
+  subgraph idm["IDM Domain"]
+    IDM_RT["vNext Runtime (idm)"]
+    IDM_INF["Infrastructure"]
+  end
+
+  subgraph notif["Notification Domain"]
+    NOT_RT["vNext Runtime (notification)"]
+    NOT_INF["Infrastructure"]
+  end
+
+  Team --> idm
+  Team --> notif
+
+  style Team fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style idm fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style notif fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style IDM_RT fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style IDM_INF fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style NOT_RT fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style NOT_INF fill:#f1f5f9,stroke:#475569,color:#1e293b
 ```
 
 **Example:** The integration team manages IDM and Notification systems under their responsibility as separate domains.
@@ -77,11 +102,14 @@ Each domain has its own infrastructure components:
 Although domains are isolated from each other, they can communicate according to business requirements:
 
 ### 1. Through API Gateway
-```
-┌─────────────┐      API Gateway      ┌─────────────┐
-│  Onboarding │◄──────────────────────►│     IDM     │
-│   Domain    │    REST/HTTP Calls     │   Domain    │
-└─────────────┘                        └─────────────┘
+
+```mermaid
+flowchart LR
+  OB["Onboarding<br/>Domain"] <-->|REST/HTTP| GW{{"API Gateway"}} <-->|REST/HTTP| IDM["IDM<br/>Domain"]
+
+  style OB fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style GW fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style IDM fill:#dbeafe,stroke:#1e40af,color:#1e293b
 ```
 
 - Synchronous communication
@@ -89,15 +117,14 @@ Although domains are isolated from each other, they can communicate according to
 - HTTP Task usage
 
 ### 2. Event-Driven Structures
-```
-┌─────────────┐                        ┌─────────────┐
-│  Payments   │──┐                  ┌──│Notification │
-│   Domain    │  │  Event Bus       │  │   Domain    │
-└─────────────┘  │  (PubSub)        │  └─────────────┘
-                 │                  │
-                 ├─────────┬────────┤
-                 │         │        │
-                 └────────Event────┘
+
+```mermaid
+flowchart LR
+  PAY["Payments<br/>Domain"] -->|Publish| EB{{"Event Bus<br/>(PubSub)"}} -->|Subscribe| NOT["Notification<br/>Domain"]
+
+  style PAY fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style EB fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style NOT fill:#dbeafe,stroke:#1e40af,color:#1e293b
 ```
 
 - Asynchronous communication
@@ -107,86 +134,87 @@ Although domains are isolated from each other, they can communicate according to
 
 ## C4 Context Diagram - Multi-Domain Architecture
 
-```plantuml
-@startuml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+```mermaid
+flowchart TB
+  Customer["Customer<br/><i>Mobile / Web</i>"]
+  Employee["Employee<br/><i>Backoffice</i>"]
+  ExtSys["External Systems<br/><i>Bank, Payment, KYC</i>"]
 
-LAYOUT_WITH_LEGEND()
+  GW{{"API Gateway"}}
+  EvBus{{"Event Bus<br/>(PubSub)"}}
 
-title vNext Platform - Multi-Domain Architecture (Context Level)
+  subgraph platform["vNext Platform"]
+    Onb["Onboarding Domain<br/><i>Customer acceptance</i>"]
+    IDM["IDM Domain<br/><i>Identity & authorization</i>"]
+    Notif["Notification Domain<br/><i>Notification services</i>"]
+    Pay["Payment Domain<br/><i>Payment processes</i>"]
+  end
 
-Person(customer, "Customer", "Mobile/Web user")
-Person(employee, "Employee", "Backoffice user")
-System_Ext(external_api, "External Systems", "Bank, Payment, KYC systems")
+  Customer -->|HTTPS| GW
+  Employee -->|HTTPS| GW
+  GW -->|HTTP/REST| Onb
+  GW -->|HTTP/REST| IDM
+  GW -->|HTTP/REST| Notif
+  GW -->|HTTP/REST| Pay
 
-System_Boundary(vnext_platform, "vNext Platform") {
-    System(onboarding_domain, "Onboarding Domain", "Customer acceptance processes\nvNext Runtime")
-    System(idm_domain, "IDM Domain", "Identity and authorization\nvNext Runtime")
-    System(notification_domain, "Notification Domain", "Notification services\nvNext Runtime")
-    System(payment_domain, "Payment Domain", "Payment processes\nvNext Runtime")
-}
+  Onb -->|"Authentication"| IDM
+  Onb -->|"KYC query"| ExtSys
+  Pay -->|"Payment transaction"| ExtSys
 
-System_Ext(api_gateway, "API Gateway", "Access layer to domains")
-System_Ext(event_bus, "Event Bus", "Inter-domain event communication")
+  Onb -->|"Publishes events"| EvBus
+  Pay -->|"Publishes events"| EvBus
+  EvBus -->|"Consumes events"| Notif
 
-Rel(customer, api_gateway, "Uses", "HTTPS")
-Rel(employee, api_gateway, "Uses", "HTTPS")
-Rel(api_gateway, onboarding_domain, "Routes to", "HTTP/REST")
-Rel(api_gateway, idm_domain, "Routes to", "HTTP/REST")
-Rel(api_gateway, notification_domain, "Routes to", "HTTP/REST")
-Rel(api_gateway, payment_domain, "Routes to", "HTTP/REST")
-
-Rel(onboarding_domain, idm_domain, "Authentication", "HTTP/REST")
-Rel(onboarding_domain, notification_domain, "Send notification", "Event")
-Rel(payment_domain, notification_domain, "SMS/Push notification", "Event")
-Rel(onboarding_domain, external_api, "KYC query", "HTTPS")
-Rel(payment_domain, external_api, "Payment transaction", "HTTPS")
-
-Rel(onboarding_domain, event_bus, "Publishes events", "PubSub")
-Rel(payment_domain, event_bus, "Publishes events", "PubSub")
-Rel(event_bus, notification_domain, "Consumes events", "PubSub")
-
-@enduml
+  style Customer fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style Employee fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style ExtSys fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style GW fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style EvBus fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style platform fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style Onb fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style IDM fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Notif fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Pay fill:#e0f2fe,stroke:#0369a1,color:#1e293b
 ```
 
 ## C4 Container Diagram - Domain Internal Structure
 
-```plantuml
-@startuml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+```mermaid
+flowchart TB
+  User["User<br/><i>Domain user</i>"]
+  ExtSvc["External Services<br/><i>APIs, webhooks</i>"]
 
-LAYOUT_WITH_LEGEND()
+  subgraph domain["vNext Domain (e.g. Onboarding)"]
+    Orch["vnext-app<br/><i>Orchestration Service</i>"]
+    Exec["vnext-execution-app<br/><i>Execution Service</i>"]
+    Init["vnext-init<br/><i>Seed Service</i>"]
+    DB[("Domain Database<br/><i>PostgreSQL</i>")]
+    State[("State Store<br/><i>Redis / Dapr</i>")]
+    PubSub["PubSub<br/><i>RabbitMQ / Dapr</i>"]
+  end
 
-title Single Domain Internal Structure (Container Level)
+  User -->|"HTTPS/REST"| Orch
+  Orch -->|"Instance CRUD (SQL)"| DB
+  Orch -->|"Execute task (Dapr)"| Exec
+  Orch -->|"Reads/writes state"| State
+  Orch -->|"Event pub/sub"| PubSub
 
-Person(user, "User", "Domain user")
+  Exec -->|"HTTP Task"| ExtSvc
+  Exec -->|"Reads data (SQL)"| DB
+  Exec -->|"Uses cache"| State
 
-System_Boundary(domain, "vNext Domain (e.g., Onboarding)") {
-    Container(orchestration, "vnext-app", "Orchestration Service", "Flow management, state machine, transition control")
-    Container(execution, "vnext-execution-app", "Execution Service", "Task execution, serverless worker")
-    Container(init, "vnext-init", "Seed Service", "Initial setup, system components")
-    
-    ContainerDb(database, "Domain Database", "PostgreSQL", "Flow instances, state, data")
-    ContainerDb(state_store, "State Store", "Redis/Dapr", "Distributed state, cache")
-    Container(pubsub, "PubSub", "RabbitMQ/Dapr", "Event messaging")
-}
+  Init -->|"Schema DDL, seed"| DB
+  Init -->|"Deploy system flows"| Orch
 
-System_Ext(external_service, "External Services", "APIs, webhooks")
-
-Rel(user, orchestration, "Workflow management", "HTTPS/REST")
-Rel(orchestration, database, "Instance CRUD", "SQL")
-Rel(orchestration, execution, "Execute task", "Dapr Service Invocation")
-Rel(orchestration, state_store, "Reads/writes state", "Dapr State API")
-Rel(orchestration, pubsub, "Event publish/subscribe", "Dapr PubSub API")
-
-Rel(execution, external_service, "HTTP Task", "HTTPS")
-Rel(execution, database, "Reads data", "SQL")
-Rel(execution, state_store, "Uses cache", "Dapr State API")
-
-Rel(init, database, "Create schema, seed data", "SQL")
-Rel(init, orchestration, "Deploy system flows", "Internal API")
-
-@enduml
+  style User fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style ExtSvc fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style domain fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style Orch fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Exec fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Init fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style DB fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style State fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style PubSub fill:#fef3c7,stroke:#b45309,color:#1e293b
 ```
 
 ## Domain Management Best Practices

@@ -1,62 +1,326 @@
+/* ============================================================
+   HERO
+   ============================================================ */
 .hero {
-  padding: 4rem 0;
+  position: relative;
+  overflow: hidden;
+  padding: 5rem 0 4rem;
   text-align: center;
-  background: linear-gradient(135deg, var(--ifm-color-primary-darker), var(--ifm-color-primary));
-  color: #fff;
+  background: var(--vn-bg);
+}
+
+.heroPattern {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 1px 1px, var(--vn-border) 1px, transparent 0);
+  background-size: 32px 32px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+[data-theme='dark'] .heroPattern {
+  opacity: 0.25;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+}
+
+.heroBadge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ifm-color-primary);
+  border: 1px solid var(--ifm-color-primary-lightest);
+  border-radius: 100px;
+  padding: 0.3rem 1rem;
+  margin-bottom: 1.5rem;
+  background: rgba(37, 99, 235, 0.06);
+}
+
+[data-theme='dark'] .heroBadge {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: rgba(96, 165, 250, 0.25);
 }
 
 .heroTitle {
-  font-size: 3rem;
+  font-size: 3.25rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--vn-text);
   margin-bottom: 1rem;
 }
 
 .heroSubtitle {
-  font-size: 1.25rem;
-  opacity: 0.9;
-  max-width: 700px;
-  margin: 0 auto;
+  font-size: 1.15rem;
+  line-height: 1.6;
+  color: var(--vn-text-muted);
+  max-width: 600px;
+  margin: 0 auto 2rem;
 }
 
+/* CTAs */
+.heroCtas {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ctaPrimary,
+.ctaSecondary {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.7rem 1.75rem;
+  border-radius: 8px;
+  text-decoration: none;
+  transition:
+    background-color var(--vn-transition),
+    color var(--vn-transition),
+    border-color var(--vn-transition);
+  cursor: pointer;
+}
+
+.ctaPrimary {
+  background: var(--ifm-color-primary);
+  color: #ffffff;
+  border: 1px solid var(--ifm-color-primary);
+}
+
+.ctaPrimary:hover {
+  background: var(--ifm-color-primary-dark);
+  border-color: var(--ifm-color-primary-dark);
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.ctaSecondary {
+  background: transparent;
+  color: var(--vn-text);
+  border: 1px solid var(--vn-border);
+}
+
+.ctaSecondary:hover {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+/* ============================================================
+   SECTION HEADER
+   ============================================================ */
+.sectionHeader {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.sectionTitle {
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--vn-text);
+  margin-bottom: 0.5rem;
+}
+
+.sectionSubtitle {
+  font-size: 1rem;
+  color: var(--vn-text-muted);
+  margin: 0;
+}
+
+/* ============================================================
+   PERSONAS GRID
+   ============================================================ */
 .personasSection {
-  padding: 4rem 0;
+  padding: 4rem 0 2rem;
 }
 
 .personasGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
 }
 
+/* Card */
 .personaCard {
-  display: block;
-  padding: 2rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 12px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1.75rem;
+  border: 1px solid var(--vn-border);
+  border-left: 3px solid var(--card-accent, var(--ifm-color-primary));
+  border-radius: var(--vn-radius-md);
+  background: var(--vn-surface);
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  transition:
+    border-color var(--vn-transition),
+    background-color var(--vn-transition);
 }
 
 .personaCard:hover {
-  border-color: var(--ifm-color-primary);
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: var(--card-accent, var(--ifm-color-primary));
+  background: var(--vn-bg);
   text-decoration: none;
+  color: inherit;
 }
 
-.personaEmoji {
-  font-size: 2.5rem;
+[data-theme='dark'] .personaCard:hover {
+  background: var(--vn-surface-raised);
+}
+
+.personaIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.06);
+  color: var(--card-accent, var(--ifm-color-primary));
   margin-bottom: 1rem;
 }
 
+[data-theme='dark'] .personaIcon {
+  background: rgba(96, 165, 250, 0.1);
+}
+
 .personaTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
   margin-bottom: 0.5rem;
-  color: var(--ifm-color-primary);
+  color: var(--vn-text);
 }
 
 .personaDescription {
+  margin: 0 0 1rem;
+  color: var(--vn-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  flex: 1;
+}
+
+.personaArrow {
+  font-size: 1.1rem;
+  color: var(--card-accent, var(--ifm-color-primary));
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity var(--vn-transition),
+    transform var(--vn-transition);
+}
+
+.personaCard:hover .personaArrow {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ============================================================
+   FEATURES
+   ============================================================ */
+.featuresSection {
+  padding: 2rem 0 5rem;
+}
+
+.featuresGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  border-top: 1px solid var(--vn-border);
+  padding-top: 2.5rem;
+}
+
+.featureItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.featureIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.06);
+  color: var(--ifm-color-primary);
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .featureIcon {
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.featureTitle {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--vn-text);
+  margin-bottom: 0.2rem;
+}
+
+.featureDescription {
   margin: 0;
-  color: var(--ifm-color-emphasis-700);
-  font-size: 0.95rem;
+  font-size: 0.8125rem;
+  color: var(--vn-text-muted);
   line-height: 1.5;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 996px) {
+  .personasGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .featuresGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .heroTitle {
+    font-size: 2.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero {
+    padding: 3.5rem 0 3rem;
+  }
+
+  .heroTitle {
+    font-size: 2rem;
+  }
+
+  .heroSubtitle {
+    font-size: 1rem;
+  }
+
+  .personasGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .featuresGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .heroCtas {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .ctaPrimary,
+  .ctaSecondary {
+    width: 100%;
+    justify-content: center;
+  }
 }
