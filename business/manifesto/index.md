@@ -74,6 +74,23 @@ Entegrasyon **bir istisna değil, standart** olmalıdır. Açık standartlar ve 
 - **State store** — durum bilgisinin sağlayıcı bağımsız saklanması
 - **Secrets** — credential'ların merkezi ve güvenli yönetimi
 
+### 8. AI Çağında: Herkes Kod Yazmaz, AI ile Flow Çizer
+
+AI çağında her ekibin sıfırdan kod yazması değil, **AI ile birlikte iş akışlarını tasarlaması** beklenir. vNext, bu paradigmayı iki temel hareketle taşır:
+
+- **Tek kod base, çoklu uygulama** — kurum içindeki tüm süreç-yoğun uygulamalar **aynı vNext runtime'ını** paylaşır. İş mantığı her ekipte ayrı bir codebase olarak değil, **flow tanımları** olarak yaşar.
+- **AI destekli tasarım** — workflow, schema ve task tanımları AI yardımıyla üretilir, doğrulanır ve iyileştirilir. Süreç sahibi "ne istediğini" anlatır; AI ona çalışan bir akış önerir.
+
+**Neden bu kritik?**
+
+- **Yönetilebilirlik artar** — onlarca farklı codebase yerine, **bir runtime + N flow tanımı** modeliyle merkezi yönetim
+- **Operasyonel tutarlılık** — aynı altyapı, aynı izleme, aynı güvenlik tüm uygulamalarda
+- **Citizen developer güçlenir** — AI, teknik olmayan kullanıcılar için doğal dil ↔ flow köprüsünü kurar
+- **Geliştirme hızı** — yeni bir uygulama "yeni kod" değil, "yeni tanım"; AI ile başlangıç noktası dakikalar içinde üretilir
+- **Bilgi konsolidasyonu** — kurum süreç bilgisi flow tanımlarında birikir; AI bu birikimden öğrenir
+
+> AI burada kodu yazan değil, **flow'u çizen** ve süreç sahibiyle birlikte tasarlayan bir partnerdir. Kod yazımı platformun tek bir yerinde (runtime'da) sabitlenir; uygulama çeşitliliği tanım çeşitliliğiyle elde edilir.
+
 ## Platform Sözü
 
 | Biz... | Bunun yerine... |
@@ -85,6 +102,8 @@ Entegrasyon **bir istisna değil, standart** olmalıdır. Açık standartlar ve 
 | Süreci **uçtan uca izlenebilir** kılarız | Sürecin nerede tıkandığını tahmin etmeyiz |
 | İş analistini **citizen developer** olarak güçlendiririz | Her değişiklik için BT bileti açılmasını dayatmayız |
 | **Cloud-native** olarak ölçekleniriz | Donanım bazlı kapasite planlamasıyla sınırlanmayız |
+| **Tek kod base + N flow tanımı** modelini benimseriz | Her uygulama için ayrı codebase kurmayız |
+| **AI ile flow çizmeyi** birinci sınıf yetenek sayarız | "AI çağında her ekip kendi kodunu yazsın" demeyiz |
 
 Bu manifesto, vNext'in **ürün, mimari ve operasyon kararlarında** referans çerçevesidir.
 

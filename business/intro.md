@@ -11,6 +11,18 @@ Bu bölüm, vNext platformunu **iş perspektifinden** anlatır. Hedef kitle: iş
 
 İçerik, ürün/teknik dokümantasyondan **bağımsız ama onlarla bağlantılı** şekilde organize edilmiştir; her sayfanın altında ilgili teknik dokümanlara yönlendirme bulunur.
 
+:::info[AI Çağı İçin Tasarım Felsefesi]
+
+vNext, AI çağında doğru sorunun **"herkes daha hızlı kod yazsın"** değil, **"herkes kod yazmasın — AI ile flow çizsin"** olduğuna inanır.
+
+- **Tek kod base, çoklu uygulama** — kurumdaki süreç-yoğun uygulamalar **aynı vNext runtime'ını** paylaşır; iş mantığı **flow tanımları** olarak yaşar
+- **AI destekli tasarım** — süreç sahibi AI ile akışı çizer; kod yazımı platformun çekirdeğinde sabitlenir
+- **Merkezi yönetim, dağıtık sahiplik** — altyapı tek noktada; iş alanları kendi süreçlerinin sahibi
+
+> Bu felsefenin detayları için [Manifesto](./manifesto/), iş değeri için [Değer Önerisi](./value/), ürün yönü için [Ürün Yönü ve Sınırlar](/product/direction-scope/) sayfalarına bakın.
+
+:::
+
 ## Bu Bölümde Ne Bulacaksınız?
 
 | Bölüm | İçerik | Soru |

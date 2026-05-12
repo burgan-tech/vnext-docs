@@ -8,7 +8,7 @@ description: vNext'in ürün yönü — citizen developer enablement, Dapr conne
 
 Bu sayfa, vNext'in **ürün yönünü** ve **sınırlarını** netleştirir: hangi yönlere yatırım yapılır, hangi sorumluluklar ürün dışında bırakılır?
 
-## Ürün Yönünün Dört Ekseni
+## Ürün Yönünün Beş Ekseni
 
 ```mermaid
 graph TB
@@ -16,11 +16,13 @@ graph TB
     D2[Dapr Connector Ekosistemi]
     D3[Cloud-Native SaaS Hedefi]
     D4[Global Ölçek Vizyonu]
+    D5[AI-Native Süreç Tasarımı]
     P[vNext Ürün Yönü]
     D1 --> P
     D2 --> P
     D3 --> P
     D4 --> P
+    D5 --> P
 ```
 
 ## 1. Citizen Developer Enablement
@@ -98,6 +100,45 @@ graph TB
 
 **Sınır:** Global ölçek vizyonu uzun vadelidir (roadmap'te "Later"). İlk fazda Türkiye/bölgesel bankacılık odağı korunur, küresel açılım faz faz hayata geçirilir.
 
+## 5. AI-Native Süreç Tasarımı (Tek Kod Base, N Flow)
+
+**Hedef:** AI çağında doğru cevap "herkes daha hızlı kod yazsın" değil; **"herkes kod yazmasın — AI ile flow çizsin"** olduğundan, vNext'i bu paradigmanın platformu hâline getirmek.
+
+### Temel Tez
+
+- **Bireysel AI üretkenliği**, kurum çapında N codebase'i N kat artıran bir yönetim yüküne dönüşür
+- **Kurumsal AI üretkenliği**, sadece **tek kod base + AI destekli flow tasarımı** modelinde anlamlıdır
+- **vNext runtime'ı kurumun tek kod base'i olur**; iş mantığı flow tanımlarında yaşar; AI flow tasarımına eşlik eder
+
+### Yatırım Yapılan Alanlar
+
+| Alan | Açıklama | Faz |
+|------|----------|-----|
+| **AI-Assisted Flow Design** | Doğal dil → workflow tanımı üretimi | Next / Later |
+| **Flow Önerisi** | Mevcut süreç metni → akış taslağı | Next |
+| **Akış Doğrulama / İnceleme** | AI ile risk, breaking change, paralel adım analizi | Next |
+| **Doğal Dil Sorgulama** | "Şu an onayda kaç başvuru var?" → instance query | Later |
+| **Process Mining** | Mevcut süreç loglarından otomatik flow çıkarımı | Later |
+| **AI Copilot Entegrasyonu** | IDE / Designer içinde AI eşlik | Next / Later |
+
+### Tek Kod Base'in Operasyonel Karşılığı
+
+| Konu | vNext'in Yaklaşımı |
+|------|--------------------|
+| **Çalıştırma** | Tüm uygulamalar **aynı Orchestration + Execution API**'lerini kullanır |
+| **Güncelleme** | Runtime güncellenir, yüzlerce uygulama otomatik faydalanır |
+| **Güvenlik yaması** | Tek noktada, ekosistem geneline |
+| **Gözlemlenebilirlik** | Standart OpenTelemetry, persistent metrics tüm uygulamalarda aynı |
+| **Audit & Uyumluluk** | Tüm uygulamalar aynı audit trail standardını paylaşır |
+| **Domain izolasyonu** | Tek kod base, **çoklu domain runtime** ile birleşir; uygulamalar veri ve yetki olarak izole kalır |
+
+### Sınırlar
+
+- vNext, kod yazma ihtiyacını **sıfırlamayı vaat etmez**: özel hesaplama (script task), karmaşık entegrasyon adaptörü, performans-kritik bileşen hâlâ uygulama geliştiricilerinin sorumluluğundadır
+- **AI'nın ürettiği flow doğrulanmadan production'a çıkmaz**: insan-onaylı süreç (review, test, audit) zorunludur
+- **AI-Native özellikler aşamalı gelir** — bugün şablon kütüphanesi ve doğrulama araçlarıyla başlar, AI copilot ve doğal dil tasarımıyla genişler
+- vNext, **AI modeli sağlayıcısı değildir** — model entegrasyonu pluggable yapılandırılır (OpenAI, Anthropic, Azure OpenAI, açık modeller, kurum-içi modeller)
+
 ## Ürünün Açık Sınırları (Out of Scope)
 
 Aşağıdaki sorumluluklar ürünün dışındadır ve **domain ekipleriyle birlikte yürütülür**:
@@ -108,7 +149,7 @@ Aşağıdaki sorumluluklar ürünün dışındadır ve **domain ekipleriyle birl
 | **Özel UI / Frontend** | View tanımları platform tarafında, kurumsal frontend uygulamaları (mobil/web) ayrıdır |
 | **Hesap muhasebesi, core banking** | Core sistem entegre edilir, içselleştirilmez |
 | **CRM, ERP, ürün katalog** | Dış sistem olarak entegre edilir |
-| **AI/ML model eğitimi** | Modeller dışarıda eğitilir, vNext tahmin servislerini çağırır |
+| **AI/ML model eğitimi** | Modeller dışarıda eğitilir, vNext tahmin servislerini çağırır; AI sağlayıcısı pluggable'dır |
 | **Endüstri-özel iş mantığı** | Domain ekipleri kendi kurallarını tanımlar; platform genel motor sunar |
 | **Custom connector geliştirme** | Dapr ekosistemindeki connector'lar kullanılır; özel ihtiyaçlar HTTP task ile karşılanır |
 
@@ -116,15 +157,18 @@ Aşağıdaki sorumluluklar ürünün dışındadır ve **domain ekipleriyle birl
 
 ```mermaid
 graph LR
-    CD[Citizen Developer] -->|kullanır| DC[Dapr Connectors]
+    AI[AI-Native Tasarım] -->|güçlendirir| CD[Citizen Developer]
+    CD -->|kullanır| DC[Dapr Connectors]
     CD -->|barınır| SaaS[Cloud-Native SaaS]
     DC -->|standardize eder| SaaS
+    AI -->|ölçeklenir| SaaS
     SaaS -->|genişler| GS[Global Ölçek]
     GS -->|bölgesel uyum| SaaS
 ```
 
+- **AI-Native tasarım**, citizen developer'a flow çizmede eşlik eder
 - **Citizen developer**, hızlı süreç inşası için **Dapr connector**'larını kullanır
-- **SaaS** modeli, citizen developer'ların self-service çalışmasını mümkün kılar
+- **SaaS** modeli, citizen developer'ların self-service çalışmasını ve AI yeteneklerinin tüm tenant'lara ulaşmasını mümkün kılar
 - **Global ölçek**, SaaS işletim modelini uluslararası seviyeye taşır
 
 ## İlgili Sayfalar

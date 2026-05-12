@@ -23,9 +23,9 @@ graph LR
 
 | Faz | Tema | Birincil Kullanıcı |
 |-----|------|--------------------|
-| **Now (0-3 ay)** | Olgunlaşma ve standardizasyon | Mevcut kullanıcılar, platform ekibi |
-| **Next (3-6 ay)** | Geliştirici deneyimi ve SaaS olgunluğu | Geliştirici, citizen developer, SaaS müşterisi |
-| **Later (6+ ay)** | Global ölçek ve ekosistem | Çoklu coğrafya, kurumsal governance |
+| **Now (0-3 ay)** | Olgunlaşma, standardizasyon, AI temelleri | Mevcut kullanıcılar, platform ekibi |
+| **Next (3-6 ay)** | Geliştirici deneyimi, SaaS olgunluğu, AI flow copilot beta | Geliştirici, citizen developer, SaaS müşterisi |
+| **Later (6+ ay)** | Global ölçek, ekosistem, AI-native olgunlaşma | Çoklu coğrafya, kurumsal governance |
 
 ---
 
@@ -60,6 +60,8 @@ graph LR
 | Citizen Developer Kılavuzu | Onboarding paketi | 📋 Planlı |
 | Advanced Monitoring | Real-time instance izleme paneli | 🔄 Beta |
 | Improved Error Handling | Detaylı hata mesajları ve recovery | 🔄 Beta |
+| AI Kullanım Kılavuzu | "AI ile flow tasarımı" yaklaşım rehberi | 📋 Planlı |
+| Tek Kod Base Vakası | Mevcut kurumsal codebase çoğalmasının vNext ile konsolidasyon örnekleri | 📋 Planlı |
 
 ---
 
@@ -80,6 +82,18 @@ graph LR
 - Workflow doğrulama araçları (lint, dry-run, simülasyon)
 - Visual Workflow Designer (low-code tasarım arayüzü)
 
+### AI-Assisted Flow Design (İlk Aşama)
+
+vNext'in **AI-Native** ürün yönünün ilk somut adımları:
+
+- **Doğal dil → flow taslağı** — kullanıcı süreci doğal dilde anlatır, AI başlangıç akışı önerir
+- **Akış doğrulama copilot** — mevcut flow'da eksik adım, risk veya breaking change tespiti
+- **Şablondan flow üretimi** — yaygın senaryolar (onboarding, kredi, raporlama) için AI ile özelleştirme
+- **Pluggable AI sağlayıcı** — OpenAI, Anthropic, Azure OpenAI, açık modeller, kurum-içi modeller
+- **İnsan-onaylı pipeline** — AI üretimi her zaman review + test + audit'ten geçer
+
+> AI burada kodu yazan değil, **flow'u çizen** ve süreç sahibine eşlik eden bir partnerdir. Kod yazımı vNext runtime'ında sabitlenir; uygulama çeşitliliği **tanım çeşitliliği** ile elde edilir.
+
 ### SaaS için Tenant İzolasyonu ve Operasyonel Guardrail
 
 - Tenant bazlı kota ve rate limit
@@ -94,6 +108,8 @@ graph LR
 | CLI Geliştirme Araçları | Local dev / debug iyileştirmeleri | GA |
 | Tenant Guardrails | Kota, rate limit, izolasyon kontrolleri | GA |
 | Connector Pack | Dapr entegrasyon örnek paketleri | GA |
+| **AI Flow Copilot (Beta)** | Doğal dil → flow taslağı; akış doğrulama önerileri | Beta |
+| **AI Provider Plugin Modeli** | Çoklu AI sağlayıcı entegrasyonu | Beta |
 
 ---
 
@@ -120,8 +136,17 @@ graph LR
 - Policy-as-Code mekanizmaları
 - Otomatik audit ve uyumluluk raporları
 - Tenant ve domain lifecycle otomasyonu
-- AI-Assisted Flow Design — doğal dil ile akış oluşturma
-- Process Mining — mevcut süreçlerden otomatik akış çıkarımı
+
+### AI-Native Olgunlaşma (İleri Aşama)
+
+Next fazında temelleri atılan AI yetenekleri, Later'da kurumsal olgunluğa ulaşır:
+
+- **Process Mining** — mevcut süreç loglarından otomatik flow çıkarımı
+- **Doğal Dil Sorgulama** — "Şu an onayda kaç başvuru var?" → instance query
+- **AI-Driven Optimization** — performans verilerinden otomatik akış optimizasyonu önerileri
+- **Compliance AI Assistant** — düzenleyici değişikliklerin etkilediği akışların otomatik tespiti
+- **Multi-Modal Tasarım** — diyagram, doğal dil, sesli komut ile flow inşası
+- **Kurumsal AI Knowledge Base** — flow geçmişinden öğrenen, kurum-özel öneriler üreten AI
 
 ### Marketplace
 
@@ -133,8 +158,9 @@ graph LR
 |---------|---------------|
 | Multi-Cloud Support | AWS, Azure, GCP arasında taşınabilirlik |
 | Self-Service Tenant | Tam self-service SaaS onboarding |
-| AI-Assisted Design | Doğal dil → çalışan akış |
+| AI-Driven Optimization | Otomatik akış optimizasyonu önerileri |
 | Process Mining | Mevcut iş akışlarının otomatik tespiti |
+| Compliance AI Assistant | Düzenleyici değişiklik etki analizi |
 | Marketplace | Açık ekosistem |
 | Policy-as-Code | Kurumsal yönetişim otomasyonu |
 
@@ -181,10 +207,12 @@ gantt
     Visual Designer       :2026-Q3, 2026-Q4
     Template Library      :2026-Q3, 2027-Q1
     SaaS Guardrails       :2026-Q4, 2027-Q1
+    AI Flow Copilot Beta  :2026-Q4, 2027-Q1
 
     section Later
     Multi-Cloud           :2027-Q1, 2027-Q3
-    AI-Assisted Design    :2027-Q2, 2027-Q4
+    AI-Driven Optimization :2027-Q1, 2027-Q3
+    Process Mining        :2027-Q2, 2027-Q4
     Marketplace           :2027-Q2, 2027-Q4
 ```
 

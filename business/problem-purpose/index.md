@@ -18,9 +18,21 @@ Kurumsal süreçlerde workflow yönetimi genellikle aşağıdaki maliyetleri ür
 
 Sonuç: süreçler kurumun **görünmeyen işletim sistemidir** ama yönetimi pahalı, değişimi yavaş ve denetimi zordur.
 
+## AI Çağında Yeni Bir Paradigma İhtiyacı
+
+Yapay zekânın yazılım üretiminde temel bir rol aldığı bu dönemde, kurumların "her ekibe kendi kodunu yazdırmak" yaklaşımı sürdürülemez hâle gelmiştir:
+
+- AI ile **kod üretmek** bireysel olarak hızlandı; ama **kurum genelinde N adet ayrı codebase**'i yönetmek zorlaştı
+- Her uygulama kendi yığınını seçince **operasyonel tutarlılık** kayboldu
+- AI ürettikçe kod arttı; **kod arttıkça yönetim maliyeti büyüdü**
+
+**Bizim yaklaşımımız:** AI çağında doğru cevap "herkes daha hızlı kod yazsın" değil, **"herkes kod yazmasın — AI ile flow çizsin"**dir.
+
+Süreç sahibi AI ile birlikte **akışı tasarlar**; **kod tek bir yerde**, vNext runtime'ında yaşar. Sonuç: **tek kod base, N uygulama; merkezi yönetim, dağıtık sahiplik.**
+
 ## vNext'in İş Amacı
 
-vNext, bu maliyetleri azaltıp **süreç çevikliğini** artırmayı hedefler. Bunu üç temel hareketle yapar:
+vNext, bu maliyetleri azaltıp **süreç çevikliğini** artırmayı hedefler. Bunu dört temel hareketle yapar:
 
 ### 1. Süreçleri kod yerine **tanım** olarak ele alır
 
@@ -34,6 +46,17 @@ Her adım, her geçiş, her dış çağrı otomatik olarak loglanır, metrikleni
 
 REST API, mesaj kuyruğu, zamanlayıcı, state store ve sır yönetimi platform içinden Dapr building block'ları üzerinden kullanılır. Her ekip kendi adapter'ını yazmaz.
 
+### 4. **Tek kod base + AI destekli tasarım** modelini benimser
+
+Kurumdaki tüm süreç-yoğun uygulamalar **aynı vNext runtime'ını** paylaşır. AI, süreç sahibiyle birlikte flow tanımlarını üretir; kod yazımı platformun çekirdeğinde sabitlenir, **uygulama çeşitliliği tanım çeşitliliğiyle** elde edilir.
+
+| Geleneksel AI Kullanımı | vNext'in AI Yaklaşımı |
+|-------------------------|----------------------|
+| AI her ekibin kodunu daha hızlı yazmasını sağlar | AI, kod yerine **flow tasarımı** üretir |
+| N codebase × AI hızı = N kat yönetim yükü | 1 codebase × N flow = merkezi yönetim |
+| Tutarlılık kaybolur, herkes kendi yığınını seçer | Aynı runtime, aynı izleme, aynı güvenlik tüm uygulamalarda |
+| Süreç bilgisi kodda saklanır, kayıp olur | Süreç bilgisi **tanımda** birikir, AI bu birikimden öğrenir |
+
 ## Hangi Soruları Cevaplar?
 
 | Soru | vNext'in Yaklaşımı |
@@ -43,6 +66,8 @@ REST API, mesaj kuyruğu, zamanlayıcı, state store ve sır yönetimi platform 
 | "Bu hafta hangi adımlar en çok zaman aldı?" | Operasyonel metrikler + persistent metric storage |
 | "Yeni düzenleme geldi — hangi süreçler etkilenecek?" | Versiyonlama + bileşen bazlı etki analizi |
 | "Manuel KYC kontrolünü otomatikleştirebilir miyiz?" | HTTP task + condition task + sub-flow delegasyonu |
+| "Yeni bir uygulama için ayrı bir codebase mi açacağız?" | Hayır — aynı runtime üzerinde **yeni bir flow tanımı** |
+| "AI ile bu süreci hızlıca tasarlayabilir miyim?" | AI destekli tanım üretimi (roadmap) + hazır şablonlar |
 
 ## Hedef Sonuçlar
 
@@ -53,6 +78,8 @@ vNext'i benimseyen bir kurum şu sonuçları hedefler:
 - **BT ↔ iş birimi etkileşimi** azalır; iş birimi kendi süreçlerinde sahiplik alır
 - **Operasyonel maliyet** düşer; aynı altyapı çoklu alan için kullanılır
 - **Kurumsal risk** azalır; her işlem kaydedilir ve geri alınabilir
+- **Codebase çoğalması durur**; tek runtime ile N uygulama yönetilir
+- **AI üretkenliği kurum geneline ölçeklenir**; bireysel hız yerine kurumsal hız kazanılır
 
 ## İlgili Bölümler
 

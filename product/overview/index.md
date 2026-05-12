@@ -8,9 +8,19 @@ description: vNext platformunun ürün konumlandırması, hedef pazar ve diferan
 
 ## Ürün Tanımı
 
-**vNext; ekiplerin karmaşık iş akışlarını güvenilir, izlenebilir ve ölçeklenebilir biçimde modelleyip işletmesini sağlayan workflow platformudur.**
+**vNext; ekiplerin karmaşık iş akışlarını güvenilir, izlenebilir ve ölçeklenebilir biçimde modelleyip işletmesini sağlayan, AI çağı için tasarlanmış workflow platformudur.**
 
 Platform, bankacılık ve finans sektöründeki karmaşık iş akışlarını — kredi onayından müşteri onboarding'e, ödeme süreçlerinden düzenleyici raporlamaya — tek bir merkezi yapı ile yönetir. Sektörel odak bankacılık olmakla birlikte, model sigorta, telekom, kamu ve sağlık gibi süreç-yoğun sektörlere de uyarlanabilir.
+
+## AI Çağı İçin Tasarım Felsefesi
+
+vNext, AI çağında kurumların yazılım üretim biçimini yeniden tanımlamayı hedefler:
+
+- **Herkes kod yazmaz, AI ile flow çizer.** Süreç sahibi AI ile birlikte iş akışını tasarlar; kod yazımı platformun çekirdeğinde sabitlenir.
+- **Tek kod base, çoklu uygulama.** Kurumdaki tüm süreç-yoğun uygulamalar **aynı vNext runtime'ını** paylaşır; iş mantığı **flow tanımları** olarak yaşar.
+- **Merkezi yönetim, dağıtık sahiplik.** Altyapı tek noktada yönetilir; her domain kendi süreçlerinin sahibi olur.
+
+> **Sonuç:** AI'nın kazandırdığı verimlilik bireysel geliştiricilerde değil, **kurumun tamamında** birikir; codebase sayısı azalır, yönetim kalitesi artar.
 
 ## Konumlandırma
 
@@ -78,6 +88,9 @@ Güvenlik sonradan eklenen bir katman değil, platformun doğasında var.
 ### 6. Standards over Proprietary
 Açık standartlar (Dapr building blocks, OpenTelemetry, CloudEvents, semantic versioning) tercih edilir.
 
+### 7. AI-Native, Codebase-Lean
+AI destekli tasarım birinci sınıf yetenektir; kurum başına tek runtime felsefesi codebase çoğalmasını engeller.
+
 ## Ürün Hedefleri (2026)
 
 | Hedef | Metrik | Durum |
@@ -90,6 +103,8 @@ Açık standartlar (Dapr building blocks, OpenTelemetry, CloudEvents, semantic v
 | Self-service domain oluşturma | Yeni domain < 1 saat | 🔄 Devam ediyor |
 | Visual workflow designer | Low-code tanımlama arayüzü | 📋 Planlı |
 | Multi-tenant SaaS | Self-service onboarding + guardrail | 📋 Planlı |
+| AI-assisted flow design | Doğal dil → çalışan akış | 📋 Planlı |
+| Process mining | Mevcut süreçlerden akış çıkarımı | 💡 Araştırma |
 
 ## Başarı Metrikleri
 

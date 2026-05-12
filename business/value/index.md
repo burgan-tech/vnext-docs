@@ -10,7 +10,7 @@ description: vNext platformunun sunduğu iş değeri — hız, operasyonel güve
 
 Kurumsal yazılım dünyasında iş süreçleri geleneksel olarak **özel kod** ile geliştirilir. Her yeni süreç aylar süren analiz, geliştirme, test ve deploy döngüsüne girer. vNext, bu döngüyü kırarak iş süreçlerini **platformlaştırır** ve aşağıdaki dört temel değer eksenini sunar.
 
-## Dört Temel Değer Ekseni
+## Beş Temel Değer Ekseni
 
 ```mermaid
 graph LR
@@ -18,11 +18,13 @@ graph LR
     V2[Operasyonel Güven]
     V3[Ölçeklenebilir Yürütme]
     V4[Yönetişim]
+    V5[Tek Kod Base ve AI Destekli Tasarım]
     P[vNext Platformu]
     V1 --> P
     V2 --> P
     V3 --> P
     V4 --> P
+    V5 --> P
 ```
 
 ### 1. Daha Hızlı Süreç Tasarımı
@@ -114,6 +116,40 @@ Platform yönetişimi üç katmanda işler:
 - Field-level visibility ile hassas veri rol bazında korunur
 - Sırlar (credentials, API keys) Dapr secret store üzerinde merkezi yönetilir
 
+### 5. Tek Kod Base ve AI Destekli Tasarım
+
+**Kurum içindeki onlarca uygulama için onlarca codebase yerine, bir runtime üzerinde N flow.**
+
+AI çağında doğru cevap "her ekibe daha hızlı kod yazdırmak" değil; **kodu tek bir yerde sabitlemek ve uygulamaları flow tanımları olarak çeşitlendirmektir**. AI, kod üretmek yerine **flow tasarımına** yönlendirildiğinde kurum geneline değer üretir.
+
+#### Tek Kod Base'in İş Değeri
+
+| Boyut | Geleneksel (N codebase) | vNext (1 runtime + N flow) |
+|-------|-------------------------|---------------------------|
+| **Yönetim yükü** | Her uygulama ayrı CI/CD, izleme, güvenlik | Tek runtime, paylaşılan altyapı |
+| **Operasyonel tutarlılık** | Uygulamalar arası farklı stack'ler | Aynı izleme, aynı log, aynı güvenlik |
+| **Bilgi konsolidasyonu** | Süreç bilgisi kodda dağınık | Süreç bilgisi tanımda toplanır |
+| **Yeni uygulama maliyeti** | Yeni proje + yeni ekip + yeni stack | Yeni flow tanımı |
+| **Güvenlik güncellemesi** | N projeye N yama | Tek noktada uygulanır, herkese ulaşır |
+| **Onboarding** | Her uygulamanın kendi öğrenme eğrisi | Tek platform bilgisi, tüm uygulamalar |
+
+#### AI Destekli Tasarımın İş Değeri
+
+| Soru | AI'nın Rolü |
+|------|-------------|
+| "Yeni bir başvuru süreci tasarlamak istiyorum, nereden başlayayım?" | Şablon önerisi + ilk taslak flow üretimi |
+| "Bu akışta gözden kaçırdığım risk var mı?" | Otomatik akış analizi + breaking change tespiti |
+| "Mevcut süreci nasıl optimize ederim?" | Adım sürelerine göre öneri + paralel adım tespiti |
+| "Bu süreç düzenleyici uyumlu mu?" | Audit / data flow analizi |
+| "Doğal dilde yazdığım kuralı flow'a çevirebilir misin?" | Doğal dil ↔ tanım dönüşümü |
+
+**Sonuç:**
+
+- **Bireysel hız** yerine **kurumsal hız** — AI'nın kazandırdığı verimlilik tek tek geliştiricilerde değil, **kurumun tamamında** birikir
+- **Sürdürülebilir codebase** — AI ne kadar kod üretirse üretsin, yönetilen kod miktarı sabit kalır
+- **Citizen developer'a güç katma** — AI, teknik olmayan kullanıcıların flow tasarlamasına eşlik eder
+- **Bilgi kaybı azalır** — süreç bilgisi tanımlarda yaşar; ekip değişikliği veya rotasyon süreklilik riskini düşürmez
+
 ## Kimler İçin Değer Üretir?
 
 | Paydaş | Aldığı Değer |
@@ -122,8 +158,9 @@ Platform yönetişimi üç katmanda işler:
 | **İş Birimi Yöneticisi** | Bağımsız hareket edebilme, hızlı değişiklik |
 | **Operasyon Müdürü** | Uçtan uca görünürlük, otomatik izleme |
 | **Uyumluluk Sorumlusu** | Denetlenebilirlik, otomatik raporlama |
-| **BT Direktörü** | Standart platform, azalan bakım yükü |
-| **İş Analisti (Citizen Dev)** | Süreç sahipliği, fikirden uygulamaya hızlı yol |
+| **BT Direktörü** | Standart platform, azalan bakım yükü, **codebase çoğalması durur** |
+| **İş Analisti (Citizen Dev)** | Süreç sahipliği, fikirden uygulamaya hızlı yol, **AI ile flow tasarımı** |
+| **Mimar / Tech Lead** | Kurum geneline yayılan tutarlılık, **tek runtime governance** |
 
 ## ROI ve Maliyet Azaltma
 
