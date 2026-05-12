@@ -8,9 +8,19 @@ description: vNext platformunun ürün konumlandırması, hedef pazar ve diferan
 
 ## Ürün Tanımı
 
-**vNext**, kurumsal iş süreçlerini tanımlamak, çalıştırmak ve izlemek için tasarlanmış bir **workflow orchestration platformudur**.
+**vNext; ekiplerin karmaşık iş akışlarını güvenilir, izlenebilir ve ölçeklenebilir biçimde modelleyip işletmesini sağlayan, AI çağı için tasarlanmış workflow platformudur.**
 
-Platform, bankacılık ve finans sektöründeki karmaşık iş akışlarını — kredi onayından müşteri onboarding'e, ödeme süreçlerinden düzenleyici raporlamaya — tek bir merkezi yapı ile yönetmeyi hedefler.
+Platform, bankacılık ve finans sektöründeki karmaşık iş akışlarını — kredi onayından müşteri onboarding'e, ödeme süreçlerinden düzenleyici raporlamaya — tek bir merkezi yapı ile yönetir. Sektörel odak bankacılık olmakla birlikte, model sigorta, telekom, kamu ve sağlık gibi süreç-yoğun sektörlere de uyarlanabilir.
+
+## AI Çağı İçin Tasarım Felsefesi
+
+vNext, AI çağında kurumların yazılım üretim biçimini yeniden tanımlamayı hedefler:
+
+- **Herkes kod yazmaz, AI ile flow çizer.** Süreç sahibi AI ile birlikte iş akışını tasarlar; kod yazımı platformun çekirdeğinde sabitlenir.
+- **Tek kod base, çoklu uygulama.** Kurumdaki tüm süreç-yoğun uygulamalar **aynı vNext runtime'ını** paylaşır; iş mantığı **flow tanımları** olarak yaşar.
+- **Merkezi yönetim, dağıtık sahiplik.** Altyapı tek noktada yönetilir; her domain kendi süreçlerinin sahibi olur.
+
+> **Sonuç:** AI'nın kazandırdığı verimlilik bireysel geliştiricilerde değil, **kurumun tamamında** birikir; codebase sayısı azalır, yönetim kalitesi artar.
 
 ## Konumlandırma
 
@@ -29,19 +39,22 @@ Platform, bankacılık ve finans sektöründeki karmaşık iş akışlarını �
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**vNext'in konumu:** Custom code'un esnekliğini, BPM suite'lerin hızını ve bankacılık sektörünün domain bilgisini tek bir platformda birleştiren **sektör odaklı workflow platformu**.
+**vNext'in konumu:** Custom code'un esnekliğini, BPM suite'lerin hızını ve bankacılık sektörünün domain bilgisini tek bir platformda birleştiren **sektör odaklı, cloud-native workflow platformu**.
 
 ## Hedef Pazar
 
 ### Birincil Segment
+
 - **Bankacılık ve finans kurumları** — karmaşık iş süreçleri, yüksek düzenleme yükü, çoklu kanal
 - Orta-büyük ölçek (100+ çalışan BT ekibi)
 - Dijital dönüşüm sürecinde
 
 ### İkincil Segment
+
 - **Sigorta ve leasing şirketleri** — benzer workflow yoğunluğu
 - **Telekom** — müşteri yaşam döngüsü yönetimi
 - **Kamu** — e-devlet iş akışları
+- **Sağlık** — sevk, sigorta onayı, ödeme akışları
 
 ## Diferansiyasyon
 
@@ -51,8 +64,9 @@ Platform, bankacılık ve finans sektöründeki karmaşık iş akışlarını �
 | **Deployment bağımsızlığı** | Alan bazında ayrı deploy | Tek deploy, herkes etkilenir |
 | **Konfigürasyon yaklaşımı** | İş kuralları tanım bazlı | Kod + konfigürasyon karışık |
 | **Versiyonlama** | Bileşen bazında semantic version | Platform versiyonu |
-| **Entegrasyon** | Yerleşik task tipleri (HTTP, PubSub, Timer) | Connector/adapter geliştirme |
+| **Entegrasyon** | Dapr building blocks + yerleşik task tipleri | Connector/adapter geliştirme |
 | **Ölçeklendirme** | Domain bazında yatay | Genel platform bazında |
+| **Cloud-native** | Birinci sınıf vatandaş | Sonradan eklenen katman |
 
 ## Ürün Prensipleri
 
@@ -71,16 +85,26 @@ Her süreç adımı otomatik olarak izlenebilir. Ek enstrümantasyon gerekmez.
 ### 5. Secure by Design
 Güvenlik sonradan eklenen bir katman değil, platformun doğasında var.
 
+### 6. Standards over Proprietary
+Açık standartlar (Dapr building blocks, OpenTelemetry, CloudEvents, semantic versioning) tercih edilir.
+
+### 7. AI-Native, Codebase-Lean
+AI destekli tasarım birinci sınıf yetenektir; kurum başına tek runtime felsefesi codebase çoğalmasını engeller.
+
 ## Ürün Hedefleri (2026)
 
 | Hedef | Metrik | Durum |
 |-------|--------|-------|
 | Çoklu domain desteği | 5+ domain paralel çalışabilir | ✅ Tamamlandı |
 | Tam audit trail | Her işlem loglanıyor | ✅ Tamamlandı |
-| Event-driven entegrasyon | PubSub task desteği | ✅ Tamamlandı |
+| Event-driven entegrasyon | DaprPubSub task desteği | ✅ Tamamlandı |
 | Versiyonlama | SemVer ile bileşen yönetimi | ✅ Tamamlandı |
+| Operasyonel altyapı | Inbox/Outbox + retry yerleşik | ✅ Tamamlandı |
 | Self-service domain oluşturma | Yeni domain < 1 saat | 🔄 Devam ediyor |
 | Visual workflow designer | Low-code tanımlama arayüzü | 📋 Planlı |
+| Multi-tenant SaaS | Self-service onboarding + guardrail | 📋 Planlı |
+| AI-assisted flow design | Doğal dil → çalışan akış | 📋 Planlı |
+| Process mining | Mevcut süreçlerden akış çıkarımı | 💡 Araştırma |
 
 ## Başarı Metrikleri
 
@@ -91,3 +115,12 @@ Platform başarısını şu metriklerle ölçüyoruz:
 - **Uptime**: Platform erişilebilirlik oranı (%99.9+ hedef)
 - **Concurrent instances**: Eşzamanlı çalışan workflow instance sayısı
 - **Integration latency**: Dış sistem çağrılarının ortalama yanıt süresi
+- **Citizen developer onboarding süresi**: İş analistinin ilk akışı yayınlama süresi
+
+## İlgili Sayfalar
+
+- [Hedef Kullanıcılar (Persona)](../personas/) — Kim ne için kullanıyor?
+- [Feature Catalog](../features/) — Mevcut yeteneklerin detayı
+- [Ürün Yönü ve Sınırlar](../direction-scope/) — Ürünün gittiği yön ve net sınırlar
+- [Roadmap](../roadmap/) — Faz bazlı planlama
+- [Release Strategy](../release-strategy/) — Sürüm politikası

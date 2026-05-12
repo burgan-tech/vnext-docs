@@ -1,5 +1,5 @@
 ---
-sidebar_position: 5
+sidebar_position: 7
 title: Terimler Sözlüğü
 description: vNext platform terminolojisi — iş birimi ve teknik terimler arasında eşleştirme
 ---
@@ -9,6 +9,16 @@ description: vNext platform terminolojisi — iş birimi ve teknik terimler aras
 Bu sözlük, vNext platformu etrafında kullanılan terimleri **iş birimi perspektifinden** açıklar ve teknik karşılıklarıyla eşleştirir. Amaç, iş birimleri ile teknik ekipler arasında ortak bir dil oluşturmaktır.
 
 ## A
+
+### Audit Trail (Denetim İzi)
+
+Bir akışın her adımının, her geçişinin ve her dış çağrısının zaman damgalı kayıt altına alınması. Düzenleyici denetimlerde "kim, ne zaman, hangi veriyle?" sorularına cevap verir.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Geçen ay hangi başvuru hangi operatör tarafından onaylandı?" |
+| **Teknik karşılık** | Audit trail — transition + task execution kayıtları |
+| **İlgili sayfa** | [İş Riskleri ve Azaltım](../risks/) |
 
 ### Akış (Workflow)
 
@@ -40,7 +50,51 @@ Bir akışın içinden başka bir akışı tetiklemesi. Karmaşık süreçleri k
 | **Teknik karşılık** | Sub-Flow Task, Sub-Process Task |
 | **İlgili sayfa** | [ISubFlowMapping](/docs/components/interfaces#isubflowmapping) |
 
+## B
+
+### Breaking Change (Kırıcı Değişiklik)
+
+Bir bileşenin yeni sürümünün, mevcut kullanıcıları veya bağımlı süreçleri etkileyecek şekilde geriye uyumsuz davranış değişikliği yapması. vNext'te bu değişiklikler resmi olarak duyurulur ve migration adımları belgelenir.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Yeni sürüm geldi, KKB sorgusu artık ek alan döndürüyor — eski raporlar etkilenir mi?" |
+| **Teknik karşılık** | Breaking change — semantic versioning'de MAJOR sürüm artışı |
+| **İlgili sayfa** | [İş Riskleri ve Azaltım](../risks/), [Release Strategy](/product/release-strategy/) |
+
+## C
+
+### Citizen Developer
+
+Yazılım geliştirme arka planı olmadan veya az kod yazarak iş süreçleri inşa edebilen kişi. Tipik olarak iş analisti, süreç sahibi, operasyon uzmanı. vNext'in tanım-odaklı modeli bu rolü güçlendirmek için tasarlanmıştır.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Kredi onay eşiğini değiştirmek için BT bileti açmama gerek yok" |
+| **Teknik karşılık** | Low-code persona — workflow/task definition'larıyla doğrudan çalışan kullanıcı |
+| **İlgili sayfa** | [Manifesto](../manifesto/), [Ürün Yönü ve Sınırlar](/product/direction-scope/) |
+
+### Cloud-Native
+
+Uygulamaların başlangıçtan itibaren bulut ortamı (konteyner, orkestrasyon, mikroservis, dağıtık veri) için tasarlanması yaklaşımı. vNext cloud-native bir SaaS olarak tasarlanmıştır.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Ülke bazlı bölgesel kurulum, yük arttığında otomatik büyüme" |
+| **Teknik karşılık** | Cloud-native — konteynerleştirilmiş, ölçeklenebilir, dağıtık mimari |
+| **İlgili sayfa** | [Manifesto](../manifesto/) |
+
 ## D
+
+### Dapr (Distributed Application Runtime)
+
+Mikroservis uygulamaları için **building block** sağlayan açık kaynaklı runtime. vNext, dış sistem entegrasyonunu Dapr building block'ları üzerinden standartlaştırır: service invocation, pub/sub, bindings, state store, secrets.
+
+| | |
+|---|---|
+| **İş perspektifi** | "RabbitMQ'dan Kafka'ya geçmek istiyoruz, süreçlerimizi yeniden yazmamız gerekir mi?" → Hayır |
+| **Teknik karşılık** | Dapr — sidecar bazlı, sağlayıcı agnostik distributed runtime |
+| **İlgili sayfa** | [Yetenekler](../capabilities/) |
 
 ### Domain (İş Alanı)
 
@@ -74,6 +128,16 @@ Bir durumdan diğerine geçiş. Belirli koşullar sağlandığında otomatik vey
 
 ## E
 
+### Execution API
+
+vNext'in iç görev yürütümünden sorumlu API host'u. Task invoker'ları, background processing ve uzun süren işler bu servis üzerinde koşar.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Onay aşamasındayken sistem hangi servisi çağırıyor?" |
+| **Teknik karşılık** | BBT.Workflow.Execution.HttpApi.Host |
+| **İlgili sayfa** | [Architecture](/architecture/intro) |
+
 ### Entegrasyon (Integration)
 
 Platformun dış sistemlerle (core banking, bildirim, KYC vb.) bağlantı kurması.
@@ -94,6 +158,18 @@ Aynı veri üzerinde birden fazla kişinin eşzamanlı çalışması durumunda v
 | **Teknik karşılık** | ETag-based optimistic concurrency control |
 | **İlgili sayfa** | [Çekirdek Prensipler](/architecture/overview/principles) |
 
+## F
+
+### Function (Fonksiyon)
+
+Birden fazla workflow'da yeniden kullanılabilen, ortak iş mantığı parçası. Hesaplama, validasyon ve dönüşüm gibi yardımcı işler için kullanılır.
+
+| | |
+|---|---|
+| **İş perspektifi** | "TC kimlik doğrulama mantığı tüm akışlarda aynı çalışsın" |
+| **Teknik karşılık** | Function definition — workflow'ların `functions` dizisinde tanımlanır |
+| **İlgili sayfa** | [Architecture](/architecture/intro) |
+
 ## G
 
 ### Görev (Task)
@@ -105,6 +181,18 @@ Bir akış adımında gerçekleştirilen iş birimi. API çağrısı, karar verm
 | **İş perspektifi** | "Bu adımda KYC sorgusu yapılıyor", "Müşteriye SMS atılıyor" |
 | **Teknik karşılık** | Task — workflow step'te çalıştırılan işlem birimi |
 | **İlgili sayfa** | [Task Types](/docs/components/tasks/) |
+
+## I
+
+### Inbox / Outbox Pattern
+
+Olayların (event) ve mesajların kayıpsız ve tam-bir-kez işlenmesi için kullanılan dağıtık sistem deseni. **Outbox**: yayınlanacak mesajlar kalıcı saklanır ve worker tarafından gönderilir. **Inbox**: alınan olaylar idempotent olarak işlenir.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Sistem çökse bile yayınlanacak müşteri bildirimleri kaybolmasın" |
+| **Teknik karşılık** | Inbox/Outbox workers — `BBT.Workflow.Workers.Inbox/Outbox` |
+| **İlgili sayfa** | [Değer Önerisi](../value/), [İş Riskleri ve Azaltım](../risks/) |
 
 ## K
 
@@ -127,6 +215,18 @@ Akıştaki bir karar noktası. Veri durumuna göre farklı yollara dallanma sağ
 | **İş perspektifi** | "Onay eşiğini 50.000'den 75.000'e çıkar" — kod yazmadan |
 | **Teknik karşılık** | Workflow/Task definition — JSON/YAML bazlı tanım dosyaları |
 
+## M
+
+### Multi-Tenant (Çok Kiracılı)
+
+Tek bir platform örneğinin birden fazla müşteri/organizasyon (tenant) tarafından izole şekilde kullanılması. vNext SaaS hedefinde multi-tenant mimari benimser; verileri ve runtime'ları tenant bazında ayrıştırır.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Aynı vNext örneği farklı bankaları/şirketleri ayrı ayrı barındırabilir" |
+| **Teknik karşılık** | Multi-tenant — multi-schema, domain izolasyonu |
+| **İlgili sayfa** | [Ürün Yönü ve Sınırlar](/product/direction-scope/) |
+
 ## O
 
 ### Olay (Event)
@@ -139,7 +239,59 @@ Sistemde bir şey olduğunda yayınlanan bildirim. Diğer sistemler bu olayı di
 | **Teknik karşılık** | PubSub Event — Dapr pub/sub üzerinden yayınlanan mesaj |
 | **İlgili sayfa** | [DaprPubSub Task](/docs/components/tasks/dapr-pubsub) |
 
+### OpenTelemetry
+
+Distributed tracing, structured logging ve metrics için açık standart. vNext bileşenleri arasında uçtan uca takibi sağlayan korelasyon altyapısıdır.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Müşteri başvurusu hangi servisten geçti, hangi adımda yavaşladı?" |
+| **Teknik karşılık** | OpenTelemetry — traces, logs, metrics standardı |
+| **İlgili sayfa** | [Yetenekler](../capabilities/) |
+
+### Orchestration API
+
+vNext'in istemci-yönlü (client-facing) API host'u. Workflow başlatma, instance sorgulama, transition tetikleme gibi operasyonlar bu servis üzerinden yapılır.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Mobil uygulamadan başvuru başlatmak için hangi servise gidiyoruz?" |
+| **Teknik karşılık** | BBT.Workflow.Orchestration.HttpApi.Host |
+| **İlgili sayfa** | [Architecture](/architecture/intro) |
+
+## R
+
+### Release Notes
+
+Her sürümle yayımlanan, eklenen/değişen/kaldırılan özelliklerin ve migration notlarının yer aldığı dokümantasyon. vNext'te her sürüm için release notes standardı önerilir.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Bu sürümde benim için kritik değişiklik var mı?" |
+| **Teknik karşılık** | Release notes — semver ile uyumlu sürüm dokümantasyonu |
+| **İlgili sayfa** | [Release Strategy](/product/release-strategy/), [Blog / Release Notes](/blog) |
+
+### Retry Policy
+
+Geçici hatalarda işlemin idempotent şekilde belirli bir strateji (exponential backoff, sabit gecikme, sınır sayı vb.) ile yeniden denenmesi.
+
+| | |
+|---|---|
+| **İş perspektifi** | "KKB anlık cevap vermedi; sistem otomatik tekrar deneyecek mi?" |
+| **Teknik karşılık** | Retry policy — task ve worker düzeyinde tanımlı |
+| **İlgili sayfa** | [Değer Önerisi](../value/) |
+
 ## S
+
+### SaaS (Software-as-a-Service)
+
+Yazılımın bir ürün olarak değil, abonelik bazlı bir servis olarak sunulması. vNext'in cloud-native SaaS hedefi, self-service onboarding ve kullanım bazlı ölçeği içerir.
+
+| | |
+|---|---|
+| **İş perspektifi** | "Sunucu/bakım yükü olmadan vNext'i nasıl kullanırız?" |
+| **Teknik karşılık** | SaaS — multi-tenant, abonelik, self-service |
+| **İlgili sayfa** | [Ürün Yönü ve Sınırlar](/product/direction-scope/) |
 
 ### Şema (Schema)
 
