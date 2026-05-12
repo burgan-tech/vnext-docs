@@ -105,88 +105,86 @@ Domainler birbirinden izole olmasına rağmen, iş gereksinimleri doğrultusunda
 - Gevşek bağlılık (Loose coupling)
 - DaprPubSub Task kullanımı
 
-## C4 Context Diagram - Multi-Domain Architecture
+## Multi-Domain Architecture (Context Seviyesi)
 
-```plantuml
-@startuml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+C4 Context seviyesinde vNext platformunun farklı domain'leri, kullanıcılar ve dış sistemler arasındaki ilişki:
 
-LAYOUT_WITH_LEGEND()
+```mermaid
+flowchart TB
+    customer([Müşteri<br/>Mobil/Web])
+    employee([Çalışan<br/>Backoffice])
+    extapi[/Dış Sistemler<br/>Banka • Ödeme • KYC/]
 
-title vNext Platform - Multi-Domain Architecture (Context Level)
+    apigw{{API Gateway}}
+    eventbus{{Event Bus<br/>Dapr Pub/Sub}}
 
-Person(customer, "Müşteri", "Mobil/Web kullanıcısı")
-Person(employee, "Çalışan", "Backoffice kullanıcısı")
-System_Ext(external_api, "Dış Sistemler", "Banka, Ödeme, KYC sistemleri")
+    subgraph vnext [vNext Platform]
+        onb[Onboarding Domain<br/>vNext Runtime]
+        idm[IDM Domain<br/>vNext Runtime]
+        notif[Notification Domain<br/>vNext Runtime]
+        pay[Payment Domain<br/>vNext Runtime]
+    end
 
-System_Boundary(vnext_platform, "vNext Platform") {
-    System(onboarding_domain, "Onboarding Domain", "Müşteri kabul süreçleri\nvNext Runtime")
-    System(idm_domain, "IDM Domain", "Kimlik ve yetkilendirme\nvNext Runtime")
-    System(notification_domain, "Notification Domain", "Bildirim servisleri\nvNext Runtime")
-    System(payment_domain, "Payment Domain", "Ödeme süreçleri\nvNext Runtime")
-}
+    customer -->|HTTPS| apigw
+    employee -->|HTTPS| apigw
 
-System_Ext(api_gateway, "API Gateway", "Domain'lere erişim katmanı")
-System_Ext(event_bus, "Event Bus", "Domain'ler arası event iletişimi")
+    apigw -->|HTTP/REST| onb
+    apigw -->|HTTP/REST| idm
+    apigw -->|HTTP/REST| notif
+    apigw -->|HTTP/REST| pay
 
-Rel(customer, api_gateway, "Kullanır", "HTTPS")
-Rel(employee, api_gateway, "Kullanır", "HTTPS")
-Rel(api_gateway, onboarding_domain, "Yönlendirir", "HTTP/REST")
-Rel(api_gateway, idm_domain, "Yönlendirir", "HTTP/REST")
-Rel(api_gateway, notification_domain, "Yönlendirir", "HTTP/REST")
-Rel(api_gateway, payment_domain, "Yönlendirir", "HTTP/REST")
+    onb -->|Kimlik doğrulama<br/>HTTP/REST| idm
+    onb -->|Bildirim<br/>Event| eventbus
+    pay -->|SMS/Push<br/>Event| eventbus
+    eventbus -->|Event tüketir| notif
 
-Rel(onboarding_domain, idm_domain, "Kimlik doğrulama", "HTTP/REST")
-Rel(onboarding_domain, notification_domain, "Bildirim gönder", "Event")
-Rel(payment_domain, notification_domain, "SMS/Push bildirim", "Event")
-Rel(onboarding_domain, external_api, "KYC sorgulaması", "HTTPS")
-Rel(payment_domain, external_api, "Ödeme işlemi", "HTTPS")
-
-Rel(onboarding_domain, event_bus, "Event yayınlar", "PubSub")
-Rel(payment_domain, event_bus, "Event yayınlar", "PubSub")
-Rel(event_bus, notification_domain, "Event tüketir", "PubSub")
-
-@enduml
+    onb -->|KYC sorgu<br/>HTTPS| extapi
+    pay -->|Ödeme<br/>HTTPS| extapi
 ```
 
-## C4 Container Diagram - Domain İçi Yapı
+> **Not:** Mermaid C4 sözdiziminin Docusaurus desteği sınırlı olduğu için `flowchart` ile C4-benzeri sunum yapılır; semantik aynıdır.
 
-```plantuml
-@startuml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+## Single Domain Internal Structure (Container Seviyesi)
 
-LAYOUT_WITH_LEGEND()
+Bir domain içinde çalışan vNext bileşenleri:
 
-title Single Domain Internal Structure (Container Level)
+```mermaid
+flowchart TB
+    user([Kullanıcı<br/>Domain kullanıcısı])
 
-Person(user, "Kullanıcı", "Domain kullanıcısı")
+    subgraph domain [vNext Domain — örn: Onboarding]
+        orch[Orchestration API<br/>BBT.Workflow.Orchestration.HttpApi.Host<br/>:4201]
+        exec[Execution API<br/>BBT.Workflow.Execution.HttpApi.Host<br/>:4202]
+        wrkin[Inbox Worker<br/>BBT.Workflow.Workers.Inbox]
+        wrkout[Outbox Worker<br/>BBT.Workflow.Workers.Outbox]
+        init[Init Service<br/>Hot reload + seed]
 
-System_Boundary(domain, "vNext Domain (örn: Onboarding)") {
-    Container(orchestration, "vnext-app", "Orchestration Service", "Flow yönetimi, state machine, transition kontrolü")
-    Container(execution, "vnext-execution-app", "Execution Service", "Task çalıştırma, serverless worker")
-    Container(init, "vnext-init", "Seed Service", "İlk kurulum, system bileşenleri")
-    
-    ContainerDb(database, "Domain Database", "PostgreSQL", "Flow instance'ları, state, data")
-    ContainerDb(state_store, "State Store", "Redis/Dapr", "Distributed state, cache")
-    Container(pubsub, "PubSub", "RabbitMQ/Dapr", "Event messaging")
-}
+        db[(Domain Database<br/>PostgreSQL)]
+        state[(State Store<br/>Redis / Dapr)]
+        psub{{Pub/Sub<br/>RabbitMQ • Kafka • ASB<br/>via Dapr}}
+    end
 
-System_Ext(external_service, "Dış Servisler", "API'ler, webhooks")
+    extsvc[/Dış Servisler<br/>API • Webhook • SMTP/]
 
-Rel(user, orchestration, "Workflow yönetimi", "HTTPS/REST")
-Rel(orchestration, database, "Instance CRUD", "SQL")
-Rel(orchestration, execution, "Task çalıştır", "Dapr Service Invocation")
-Rel(orchestration, state_store, "State okur/yazar", "Dapr State API")
-Rel(orchestration, pubsub, "Event publish/subscribe", "Dapr PubSub API")
+    user -->|HTTPS REST| orch
+    orch -->|Dapr service invocation| exec
+    orch -->|Instance CRUD<br/>SQL| db
+    orch -->|State<br/>Dapr State API| state
+    orch -->|Event<br/>Dapr Pub/Sub| psub
 
-Rel(execution, external_service, "HTTP Task", "HTTPS")
-Rel(execution, database, "Data okur", "SQL")
-Rel(execution, state_store, "Cache kullanır", "Dapr State API")
+    exec -->|HTTP / SMTP / S3 task| extsvc
+    exec -->|Data okur/yazar<br/>SQL| db
+    exec -->|Cache<br/>Dapr State API| state
+    exec -->|outbox write<br/>SQL| db
 
-Rel(init, database, "Schema oluştur, seed data", "SQL")
-Rel(init, orchestration, "System flow'ları deploy", "Internal API")
+    wrkout -->|drain| db
+    wrkout -->|publish| psub
+    psub -->|consume| wrkin
+    wrkin -->|dedupe + apply<br/>SQL| db
 
-@enduml
+    init -.->|Schema + seed<br/>SQL| db
+    init -.->|System flow deploy<br/>Internal API| orch
+    init -.->|Hot reload| exec
 ```
 
 ## Domain Yönetimi Best Practices
@@ -244,5 +242,8 @@ Domain topolojisi, vNext Runtime platformunun ölçeklenebilir, esnek ve yöneti
 
 ## İlgili Dökümanlar
 
-- [Database Architecture](/architecture/data/database) - Domain seviyesinde veritabanı yapısı
-- [Persistence](/architecture/data/persistence) - Veri saklama stratejileri
+- [Database Architecture](/architecture/data/database) — Domain seviyesinde veritabanı yapısı
+- [Persistence](/architecture/data/persistence) — Veri saklama stratejileri, Inbox/Outbox
+- [Runtime](/architecture/runtime/) — Orchestration / Execution / Workers detayları
+- [Observability](/architecture/infrastructure/observability) — Domain bazlı izleme
+- [Çekirdek Prensipler — Domain-Driven](/architecture/overview/principles#2-domain-driven-architecture)
