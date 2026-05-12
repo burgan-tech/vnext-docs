@@ -23,25 +23,50 @@ vNext Runtime platformu, **Domain** kavramını temel alır. Domain, bir iş ala
 Bir kurumda domainler şu şekilde organize edilebilir:
 
 ### Ürün Grubu Bazlı Domain
-```
-Onboarding Domain
-├── vNext Runtime (onboarding)
-├── Database (onboarding_db)
-├── PubSub (onboarding_events)
-└── State Store (onboarding_state)
+
+```mermaid
+graph LR
+  OD["Onboarding Domain"]
+  OD --> RT["vNext Runtime<br/>(onboarding)"]
+  OD --> DB[("onboarding_db")]
+  OD --> PS["PubSub<br/>(onboarding_events)"]
+  OD --> SS["State Store<br/>(onboarding_state)"]
+
+  style OD fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style RT fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style DB fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style PS fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style SS fill:#fef3c7,stroke:#b45309,color:#1e293b
 ```
 
 **Örnek:** Müşteri kabul süreçlerini yöneten onboarding ekibinin kendi domain'i.
 
 ### Ekip Sorumluluğu Bazlı Domainler
-```
-Entegrasyon Ekibi
-├── IDM Domain (Kimlik yönetimi)
-│   ├── vNext Runtime (idm)
-│   └── Infrastructure
-└── Notification Domain (Bildirim servisleri)
-    ├── vNext Runtime (notification)
-    └── Infrastructure
+
+```mermaid
+graph LR
+  Team["Entegrasyon Ekibi"]
+
+  subgraph idm["IDM Domain"]
+    IDM_RT["vNext Runtime (idm)"]
+    IDM_INF["Infrastructure"]
+  end
+
+  subgraph notif["Notification Domain"]
+    NOT_RT["vNext Runtime (notification)"]
+    NOT_INF["Infrastructure"]
+  end
+
+  Team --> idm
+  Team --> notif
+
+  style Team fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style idm fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style notif fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style IDM_RT fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style IDM_INF fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style NOT_RT fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style NOT_INF fill:#f1f5f9,stroke:#475569,color:#1e293b
 ```
 
 **Örnek:** Entegrasyon ekibi, sorumluluğundaki IDM ve Notification sistemlerini ayrı domainler olarak yönetir.
@@ -77,11 +102,14 @@ Her domain kendi altyapı bileşenlerine sahiptir:
 Domainler birbirinden izole olmasına rağmen, iş gereksinimleri doğrultusunda iletişim kurabilirler:
 
 ### 1. API Gateway Üzerinden
-```
-┌─────────────┐      API Gateway      ┌─────────────┐
-│  Onboarding │◄──────────────────────►│     IDM     │
-│   Domain    │    REST/HTTP Calls     │   Domain    │
-└─────────────┘                        └─────────────┘
+
+```mermaid
+flowchart LR
+  OB["Onboarding<br/>Domain"] <-->|REST/HTTP| GW{{"API Gateway"}} <-->|REST/HTTP| IDM["IDM<br/>Domain"]
+
+  style OB fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style GW fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style IDM fill:#dbeafe,stroke:#1e40af,color:#1e293b
 ```
 
 - Senkron iletişim
@@ -89,15 +117,14 @@ Domainler birbirinden izole olmasına rağmen, iş gereksinimleri doğrultusunda
 - HTTP Task kullanımı
 
 ### 2. Event-Driven Yapılar
-```
-┌─────────────┐                        ┌─────────────┐
-│  Payments   │──┐                  ┌──│Notification │
-│   Domain    │  │  Event Bus       │  │   Domain    │
-└─────────────┘  │  (PubSub)        │  └─────────────┘
-                 │                  │
-                 ├─────────┬────────┤
-                 │         │        │
-                 └────────Event────┘
+
+```mermaid
+flowchart LR
+  PAY["Payments<br/>Domain"] -->|Publish| EB{{"Event Bus<br/>(PubSub)"}} -->|Subscribe| NOT["Notification<br/>Domain"]
+
+  style PAY fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style EB fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style NOT fill:#dbeafe,stroke:#1e40af,color:#1e293b
 ```
 
 - Asenkron iletişim
@@ -107,86 +134,87 @@ Domainler birbirinden izole olmasına rağmen, iş gereksinimleri doğrultusunda
 
 ## C4 Context Diagram - Multi-Domain Architecture
 
-```plantuml
-@startuml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+```mermaid
+flowchart TB
+  Customer["Musteri<br/><i>Mobil / Web</i>"]
+  Employee["Calisan<br/><i>Backoffice</i>"]
+  ExtSys["Dis Sistemler<br/><i>Banka, Odeme, KYC</i>"]
 
-LAYOUT_WITH_LEGEND()
+  GW{{"API Gateway"}}
+  EvBus{{"Event Bus<br/>(PubSub)"}}
 
-title vNext Platform - Multi-Domain Architecture (Context Level)
+  subgraph platform["vNext Platform"]
+    Onb["Onboarding Domain<br/><i>Musteri kabul surecleri</i>"]
+    IDM["IDM Domain<br/><i>Kimlik ve yetkilendirme</i>"]
+    Notif["Notification Domain<br/><i>Bildirim servisleri</i>"]
+    Pay["Payment Domain<br/><i>Odeme surecleri</i>"]
+  end
 
-Person(customer, "Müşteri", "Mobil/Web kullanıcısı")
-Person(employee, "Çalışan", "Backoffice kullanıcısı")
-System_Ext(external_api, "Dış Sistemler", "Banka, Ödeme, KYC sistemleri")
+  Customer -->|HTTPS| GW
+  Employee -->|HTTPS| GW
+  GW -->|HTTP/REST| Onb
+  GW -->|HTTP/REST| IDM
+  GW -->|HTTP/REST| Notif
+  GW -->|HTTP/REST| Pay
 
-System_Boundary(vnext_platform, "vNext Platform") {
-    System(onboarding_domain, "Onboarding Domain", "Müşteri kabul süreçleri\nvNext Runtime")
-    System(idm_domain, "IDM Domain", "Kimlik ve yetkilendirme\nvNext Runtime")
-    System(notification_domain, "Notification Domain", "Bildirim servisleri\nvNext Runtime")
-    System(payment_domain, "Payment Domain", "Ödeme süreçleri\nvNext Runtime")
-}
+  Onb -->|"Kimlik dogrulama"| IDM
+  Onb -->|"KYC sorgulamasi"| ExtSys
+  Pay -->|"Odeme islemi"| ExtSys
 
-System_Ext(api_gateway, "API Gateway", "Domain'lere erişim katmanı")
-System_Ext(event_bus, "Event Bus", "Domain'ler arası event iletişimi")
+  Onb -->|"Event yayinlar"| EvBus
+  Pay -->|"Event yayinlar"| EvBus
+  EvBus -->|"Event tuketir"| Notif
 
-Rel(customer, api_gateway, "Kullanır", "HTTPS")
-Rel(employee, api_gateway, "Kullanır", "HTTPS")
-Rel(api_gateway, onboarding_domain, "Yönlendirir", "HTTP/REST")
-Rel(api_gateway, idm_domain, "Yönlendirir", "HTTP/REST")
-Rel(api_gateway, notification_domain, "Yönlendirir", "HTTP/REST")
-Rel(api_gateway, payment_domain, "Yönlendirir", "HTTP/REST")
-
-Rel(onboarding_domain, idm_domain, "Kimlik doğrulama", "HTTP/REST")
-Rel(onboarding_domain, notification_domain, "Bildirim gönder", "Event")
-Rel(payment_domain, notification_domain, "SMS/Push bildirim", "Event")
-Rel(onboarding_domain, external_api, "KYC sorgulaması", "HTTPS")
-Rel(payment_domain, external_api, "Ödeme işlemi", "HTTPS")
-
-Rel(onboarding_domain, event_bus, "Event yayınlar", "PubSub")
-Rel(payment_domain, event_bus, "Event yayınlar", "PubSub")
-Rel(event_bus, notification_domain, "Event tüketir", "PubSub")
-
-@enduml
+  style Customer fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style Employee fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style ExtSys fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style GW fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style EvBus fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style platform fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style Onb fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style IDM fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Notif fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Pay fill:#e0f2fe,stroke:#0369a1,color:#1e293b
 ```
 
-## C4 Container Diagram - Domain İçi Yapı
+## C4 Container Diagram - Domain Ici Yapi
 
-```plantuml
-@startuml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+```mermaid
+flowchart TB
+  User["Kullanici<br/><i>Domain kullanicisi</i>"]
+  ExtSvc["Dis Servisler<br/><i>API, webhooks</i>"]
 
-LAYOUT_WITH_LEGEND()
+  subgraph domain["vNext Domain (orn: Onboarding)"]
+    Orch["vnext-app<br/><i>Orchestration Service</i>"]
+    Exec["vnext-execution-app<br/><i>Execution Service</i>"]
+    Init["vnext-init<br/><i>Seed Service</i>"]
+    DB[("Domain Database<br/><i>PostgreSQL</i>")]
+    State[("State Store<br/><i>Redis / Dapr</i>")]
+    PubSub["PubSub<br/><i>RabbitMQ / Dapr</i>"]
+  end
 
-title Single Domain Internal Structure (Container Level)
+  User -->|"HTTPS/REST"| Orch
+  Orch -->|"Instance CRUD (SQL)"| DB
+  Orch -->|"Task calistir (Dapr)"| Exec
+  Orch -->|"State okur/yazar"| State
+  Orch -->|"Event pub/sub"| PubSub
 
-Person(user, "Kullanıcı", "Domain kullanıcısı")
+  Exec -->|"HTTP Task"| ExtSvc
+  Exec -->|"Data okur (SQL)"| DB
+  Exec -->|"Cache kullanir"| State
 
-System_Boundary(domain, "vNext Domain (örn: Onboarding)") {
-    Container(orchestration, "vnext-app", "Orchestration Service", "Flow yönetimi, state machine, transition kontrolü")
-    Container(execution, "vnext-execution-app", "Execution Service", "Task çalıştırma, serverless worker")
-    Container(init, "vnext-init", "Seed Service", "İlk kurulum, system bileşenleri")
-    
-    ContainerDb(database, "Domain Database", "PostgreSQL", "Flow instance'ları, state, data")
-    ContainerDb(state_store, "State Store", "Redis/Dapr", "Distributed state, cache")
-    Container(pubsub, "PubSub", "RabbitMQ/Dapr", "Event messaging")
-}
+  Init -->|"Schema DDL, seed"| DB
+  Init -->|"System flow deploy"| Orch
 
-System_Ext(external_service, "Dış Servisler", "API'ler, webhooks")
-
-Rel(user, orchestration, "Workflow yönetimi", "HTTPS/REST")
-Rel(orchestration, database, "Instance CRUD", "SQL")
-Rel(orchestration, execution, "Task çalıştır", "Dapr Service Invocation")
-Rel(orchestration, state_store, "State okur/yazar", "Dapr State API")
-Rel(orchestration, pubsub, "Event publish/subscribe", "Dapr PubSub API")
-
-Rel(execution, external_service, "HTTP Task", "HTTPS")
-Rel(execution, database, "Data okur", "SQL")
-Rel(execution, state_store, "Cache kullanır", "Dapr State API")
-
-Rel(init, database, "Schema oluştur, seed data", "SQL")
-Rel(init, orchestration, "System flow'ları deploy", "Internal API")
-
-@enduml
+  style User fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style ExtSvc fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style domain fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style Orch fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Exec fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Init fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style DB fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style State fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style PubSub fill:#fef3c7,stroke:#b45309,color:#1e293b
 ```
 
 ## Domain Yönetimi Best Practices

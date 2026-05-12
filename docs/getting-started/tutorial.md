@@ -861,6 +861,8 @@ Bu sayede `manager-review` state'inde Data Function çağrıldığında talep sa
 
 ## Sonraki Adımlar
 
+- **[Tutorial: SubFlow ve SubProcess](./tutorial-subflow)** — SubFlow ile alt akış ve SubProcess ile bağımsız süreç kullanımı.
+- **[Tutorial: Views ve Extensions](./tutorial-views-extensions)** — Platforma özel view seçimi ve global/lokal extension kullanımı.
 - **[vNext Forge Studio](/docs/tools/forge-studio)** — Designer, Quick Run, CSX Editor ve deploy özelliklerinin tam kılavuzu.
 - **[Workflow Bileşenleri](/docs/components/workflow)** — State türleri, transition mekanizmaları ve gelişmiş özellikler.
 - **[Mappings](/docs/components/mappings)** — C# Roslyn script ile data dönüşümleri.

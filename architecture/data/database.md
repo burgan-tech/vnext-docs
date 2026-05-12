@@ -12,32 +12,32 @@ vNext Runtime platformunda her domain, kendi bağımsız veritabanına sahiptir.
 
 ### Veritabanı İzolasyonunun Prensipleri
 
-```
-┌──────────────────────────────────────────┐
-│         vNext Platform                   │
-├──────────────────────────────────────────┤
-│                                          │
-│  ┌────────────────┐  ┌────────────────┐ │
-│  │ Onboarding     │  │ IDM            │ │
-│  │ Domain         │  │ Domain         │ │
-│  │                │  │                │ │
-│  │ ┌────────────┐ │  │ ┌────────────┐ │ │
-│  │ │onboarding  │ │  │ │ idm_db     │ │ │
-│  │ │_db         │ │  │ │            │ │ │
-│  │ └────────────┘ │  │ └────────────┘ │ │
-│  └────────────────┘  └────────────────┘ │
-│                                          │
-│  ┌────────────────┐  ┌────────────────┐ │
-│  │ Notification   │  │ Payment        │ │
-│  │ Domain         │  │ Domain         │ │
-│  │                │  │                │ │
-│  │ ┌────────────┐ │  │ ┌────────────┐ │ │
-│  │ │notification│ │  │ │ payment_db │ │ │
-│  │ │_db         │ │  │ │            │ │ │
-│  │ └────────────┘ │  │ └────────────┘ │ │
-│  └────────────────┘  └────────────────┘ │
-│                                          │
-└──────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  subgraph platform["vNext Platform"]
+    subgraph onb["Onboarding Domain"]
+      onb_db[("onboarding_db")]
+    end
+    subgraph idm_d["IDM Domain"]
+      idm_db[("idm_db")]
+    end
+    subgraph notif_d["Notification Domain"]
+      notif_db[("notification_db")]
+    end
+    subgraph pay_d["Payment Domain"]
+      pay_db[("payment_db")]
+    end
+  end
+
+  style platform fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style onb fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style idm_d fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style notif_d fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style pay_d fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style onb_db fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style idm_db fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style notif_db fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style pay_db fill:#fae8ff,stroke:#86198f,color:#1e293b
 ```
 
 **Temel Prensipler:**
@@ -102,21 +102,30 @@ Flow başına veritabanı şemaları instance verisi ve geçmişi tutar. itibar�
 
 ### Deploy zamanı şema yaşam döngüsü
 
-```
-Flow / runtime deploy → DB-Migrator job çalışır → Şemalar oluşturulur veya migrate edilir → Runtime trafiği karşılar
+```mermaid
+flowchart LR
+  A["Flow / runtime<br/>deploy"] --> B["DB-Migrator<br/>job calisir"] --> C["Semalar olusturulur<br/>veya migrate edilir"] --> D["Runtime trafigi<br/>karsilar"]
+
+  style A fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style B fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style C fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style D fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 **Örnek:**
-```
-Deployment: customer-onboarding flow (v1.0.0)
-↓
-Deployment pipeline'da DB-Migrator job çalışır
-↓
-customer_onboarding şeması oluşturulur veya güncellenir
-↓
-Gerekli migration scriptleri çalıştırılır
-↓
-İlk iş start/transition'ından önce flow hazırdır
+
+```mermaid
+flowchart TB
+  S1["Deployment: customer-onboarding flow (v1.0.0)"] --> S2["DB-Migrator job calisir<br/>(deployment pipeline)"]
+  S2 --> S3["customer_onboarding semasi<br/>olusturulur veya guncellenir"]
+  S3 --> S4["Gerekli migration scriptleri<br/>calistirilir"]
+  S4 --> S5["Flow hazir<br/>(ilk start/transition oncesi)"]
+
+  style S1 fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style S2 fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style S3 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style S4 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style S5 fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 ## Otomatik Migration Sistemi
@@ -125,46 +134,53 @@ Gerekli migration scriptleri çalıştırılır
 
 ### İlk deploy
 
-```
-Flow ilk kez deploy edilir
-↓
-Şema henüz yok
-↓
-DB-Migrator job (veya eşdeğer deploy adımı) şemayı oluşturur
-↓
-Tablolar, index'ler ve seed uygulanır
-↓
-Instance start/transition artık migrate kontrolü tetiklemez
+```mermaid
+flowchart TB
+  D1["Flow ilk kez deploy edilir"] --> D2["Sema henuz yok"]
+  D2 --> D3["DB-Migrator job<br/>semayi olusturur"]
+  D3 --> D4["Tablolar, index'ler<br/>ve seed uygulanir"]
+  D4 --> D5["Instance start/transition<br/>migrate kontrolu tetiklemez"]
+
+  style D1 fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style D2 fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style D3 fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style D4 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style D5 fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 ### Sistem yükseltmesi
 
-```
-vNext Runtime yeni versiyon
-↓
-Deploy pipeline DB-Migrator çalıştırır (veya platform sys_schemas.migration_history kontrol eder)
-↓
-Eksik migration'lar tespit edilir
-↓
-Migration scriptleri çalıştırılır
-↓
-Şema başına migration history güncellenir
-↓
-Sistem güncel hale gelir
+```mermaid
+flowchart TB
+  U1["vNext Runtime<br/>yeni versiyon"] --> U2["Deploy pipeline<br/>DB-Migrator calistirir"]
+  U2 --> U3["Eksik migration'lar<br/>tespit edilir"]
+  U3 --> U4["Migration scriptleri<br/>calistirilir"]
+  U4 --> U5["Sema basina<br/>migration history guncellenir"]
+  U5 --> U6["Sistem guncel<br/>hale gelir"]
+
+  style U1 fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style U2 fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style U3 fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style U4 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style U5 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style U6 fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 ### Flow Versiyon Değişikliği
 
-```
-Flow v1.0.0 çalışıyor
-↓
-Flow v2.0.0 deploy edilir
-↓
-Şema değişikliği gerekli mi kontrol edilir
-↓
-Gerekirse migration çalıştırılır
-↓
-Her iki versiyon da desteklenir (Semantic Versioning)
+```mermaid
+flowchart TB
+  V1["Flow v1.0.0<br/>calisiyor"] --> V2["Flow v2.0.0<br/>deploy edilir"]
+  V2 --> V3{"Sema degisikligi<br/>gerekli mi?"}
+  V3 -->|Evet| V4["Migration<br/>calistirilir"]
+  V3 -->|Hayir| V5["Her iki versiyon da desteklenir<br/>(Semantic Versioning)"]
+  V4 --> V5
+
+  style V1 fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style V2 fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style V3 fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style V4 fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style V5 fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 ## Database Architecture Diagram
@@ -212,10 +228,10 @@ graph TB
     init -->|Create on first run| flow2
     init -->|Create on first run| flow3
     
-    style database fill:#e1f5ff
-    style system fill:#fff4e6
-    style flows fill:#f3e5f5
-    style services fill:#e8f5e9
+    style database fill:#dbeafe,stroke:#1e40af,color:#1e293b
+    style system fill:#fef3c7,stroke:#b45309,color:#1e293b
+    style flows fill:#fae8ff,stroke:#86198f,color:#1e293b
+    style services fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 

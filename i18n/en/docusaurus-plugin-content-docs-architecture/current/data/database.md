@@ -12,32 +12,32 @@ In the vNext Runtime platform, each domain has its own independent database. Thi
 
 ### Database Isolation Principles
 
-```
-┌──────────────────────────────────────────┐
-│         vNext Platform                   │
-├──────────────────────────────────────────┤
-│                                          │
-│  ┌────────────────┐  ┌────────────────┐ │
-│  │ Onboarding     │  │ IDM            │ │
-│  │ Domain         │  │ Domain         │ │
-│  │                │  │                │ │
-│  │ ┌────────────┐ │  │ ┌────────────┐ │ │
-│  │ │onboarding  │ │  │ │ idm_db     │ │ │
-│  │ │_db         │ │  │ │            │ │ │
-│  │ └────────────┘ │  │ └────────────┘ │ │
-│  └────────────────┘  └────────────────┘ │
-│                                          │
-│  ┌────────────────┐  ┌────────────────┐ │
-│  │ Notification   │  │ Payment        │ │
-│  │ Domain         │  │ Domain         │ │
-│  │                │  │                │ │
-│  │ ┌────────────┐ │  │ ┌────────────┐ │ │
-│  │ │notification│ │  │ │ payment_db │ │ │
-│  │ │_db         │ │  │ │            │ │ │
-│  │ └────────────┘ │  │ └────────────┘ │ │
-│  └────────────────┘  └────────────────┘ │
-│                                          │
-└──────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  subgraph platform["vNext Platform"]
+    subgraph onb["Onboarding Domain"]
+      onb_db[("onboarding_db")]
+    end
+    subgraph idm_d["IDM Domain"]
+      idm_db[("idm_db")]
+    end
+    subgraph notif_d["Notification Domain"]
+      notif_db[("notification_db")]
+    end
+    subgraph pay_d["Payment Domain"]
+      pay_db[("payment_db")]
+    end
+  end
+
+  style platform fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style onb fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style idm_d fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style notif_d fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style pay_d fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style onb_db fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style idm_db fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style notif_db fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style pay_db fill:#fae8ff,stroke:#86198f,color:#1e293b
 ```
 
 **Core Principles:**
@@ -102,21 +102,30 @@ Per-flow database schemas hold instance data and history. As of , schema **creat
 
 ### Deploy-time schema lifecycle
 
-```
-Flow / runtime deploy → DB-Migrator job runs → Schemas created or migrated → Runtime serves traffic
+```mermaid
+flowchart LR
+  A["Flow / runtime<br/>deploy"] --> B["DB-Migrator<br/>job runs"] --> C["Schemas created<br/>or migrated"] --> D["Runtime serves<br/>traffic"]
+
+  style A fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style B fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style C fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style D fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 **Example:**
-```
-Deployment: customer-onboarding flow (v1.0.0)
-↓
-DB-Migrator job runs in the deployment pipeline
-↓
-Schema customer_onboarding is created or brought up to date
-↓
-Migration scripts run as needed
-↓
-Flow is ready before first business start/transition
+
+```mermaid
+flowchart TB
+  S1["Deployment: customer-onboarding flow (v1.0.0)"] --> S2["DB-Migrator job runs<br/>(deployment pipeline)"]
+  S2 --> S3["customer_onboarding schema<br/>created or updated"]
+  S3 --> S4["Migration scripts<br/>run as needed"]
+  S4 --> S5["Flow is ready<br/>(before first start/transition)"]
+
+  style S1 fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style S2 fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style S3 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style S4 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style S5 fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 ## Automatic Migration System
@@ -125,32 +134,36 @@ Schema changes are applied in a controlled way via the **migrator** and **`sys_s
 
 ### First deployment
 
-```
-Flow is deployed for the first time
-↓
-Schema does not exist yet
-↓
-DB-Migrator job (or equivalent deploy step) creates the schema
-↓
-Tables, indexes, and seeds are applied
-↓
-Instance start/transition no longer triggers migrate checks (v0.0.42+)
+```mermaid
+flowchart TB
+  D1["Flow deployed<br/>for the first time"] --> D2["Schema does<br/>not exist yet"]
+  D2 --> D3["DB-Migrator job<br/>creates the schema"]
+  D3 --> D4["Tables, indexes<br/>and seeds applied"]
+  D4 --> D5["start/transition no longer<br/>triggers migrate checks"]
+
+  style D1 fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style D2 fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style D3 fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style D4 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style D5 fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 ### System upgrade
 
-```
-vNext Runtime new version
-↓
-Deploy pipeline runs DB-Migrator (or platform checks sys_schemas.migration_history)
-↓
-Missing migrations are detected
-↓
-Migration scripts are executed
-↓
-Migration history is updated per schema
-↓
-System is up to date
+```mermaid
+flowchart TB
+  U1["vNext Runtime<br/>new version"] --> U2["Deploy pipeline<br/>runs DB-Migrator"]
+  U2 --> U3["Missing migrations<br/>detected"]
+  U3 --> U4["Migration scripts<br/>executed"]
+  U4 --> U5["Migration history<br/>updated per schema"]
+  U5 --> U6["System is<br/>up to date"]
+
+  style U1 fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style U2 fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style U3 fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style U4 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style U5 fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style U6 fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 ## Database Architecture Diagram
@@ -198,10 +211,10 @@ graph TB
     init -->|Create on first run| flow2
     init -->|Create on first run| flow3
     
-    style database fill:#e1f5ff
-    style system fill:#fff4e6
-    style flows fill:#f3e5f5
-    style services fill:#e8f5e9
+    style database fill:#dbeafe,stroke:#1e40af,color:#1e293b
+    style system fill:#fef3c7,stroke:#b45309,color:#1e293b
+    style flows fill:#fae8ff,stroke:#86198f,color:#1e293b
+    style services fill:#dcfce7,stroke:#15803d,color:#1e293b
 ```
 
 ## Conclusion

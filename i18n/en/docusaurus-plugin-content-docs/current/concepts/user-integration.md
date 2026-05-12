@@ -12,59 +12,41 @@ The **Backend-Driven View** approach **minimizes** mobile/web platform release c
 
 ## Interaction Loop
 
-```
-Instance Start
-       │
-       ▼
-┌──────────────────────────┐
-│ State Function           │ ── client long-polling
-│ (status query)           │
-└──────────────────────────┘
-       │
-   status.code
-   ┌───┴────────┐
-   │            │
-status="A"   status="C"
-(Active)     (Completed)
-   │            │
-   ▼            ▼
-View needed?   Process done
-   │
-   ▼
-┌──────────────────────────┐
-│ View Function            │
-│ (fetch view definition)  │
-└──────────────────────────┘
-       │
-       ▼
-┌──────────────────────────┐
-│ Data Function            │
-│ (if data is needed)      │
-└──────────────────────────┘
-       │
-       ▼
-   Render UI
-       │
-       ▼
-   User triggers a transition
-       │
-   ┌───┴─────────────┐
-   │ Transition view │
-   │ exists?         │
-   └───┬─────────────┘
-       │
-   ┌───┴────────┐
-  yes          no
-   │           │
-   ▼           ▼
-Modal/Popup   Submit directly
-   │           │
-   └───┬───────┘
-       ▼
-   Submit transition
-       │
-       ▼
-   (loop continues until status="C")
+```mermaid
+flowchart TD
+  Start(["Instance Start"]) --> StateFn["State Function<br/><i>client long-polling</i>"]
+
+  StateFn --> StatusCheck{"status.code?"}
+  StatusCheck -->|"A (Active)"| ViewCheck{"View needed?"}
+  StatusCheck -->|"C (Completed)"| Done(["Process done"])
+
+  ViewCheck -->|Yes| ViewFn["View Function<br/><i>fetch view definition</i>"]
+  ViewCheck -->|No| Render
+
+  ViewFn --> DataFn["Data Function<br/><i>if data is needed</i>"]
+  DataFn --> Render["Render UI"]
+
+  Render --> UserAction["User triggers a transition"]
+  UserAction --> TransCheck{"Transition view<br/>exists?"}
+
+  TransCheck -->|Yes| Modal["Modal / Popup"]
+  TransCheck -->|No| Submit
+
+  Modal --> Submit["Submit transition"]
+  Submit -->|"Loop"| StateFn
+
+  style Start fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style Done fill:#dcfce7,stroke:#15803d,color:#1e293b
+  style StateFn fill:#dbeafe,stroke:#1e40af,color:#1e293b
+  style StatusCheck fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style ViewCheck fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style TransCheck fill:#f1f5f9,stroke:#475569,color:#1e293b
+  style ViewFn fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style DataFn fill:#e0f2fe,stroke:#0369a1,color:#1e293b
+  style Render fill:#fae8ff,stroke:#86198f,color:#1e293b
+  style UserAction fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style Modal fill:#fef3c7,stroke:#b45309,color:#1e293b
+  style Submit fill:#dbeafe,stroke:#1e40af,color:#1e293b
 ```
 
 ## Step by Step
