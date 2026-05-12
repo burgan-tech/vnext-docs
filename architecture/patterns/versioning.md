@@ -99,7 +99,7 @@ HTTP/1.1 304 Not Modified
 |-------|----------|
 | Versiyon serbestliği | Geliştirici geliştirme ortamında istediği seviyede versiyon numarası verebilir (Major.Minor.Patch) |
 | İçerik güncelleme | Versiyon güncellemesi yapmadan içerik güncellenebilir |
-| Çoklu versiyon | Bir artifact runtime üstünde iki farklı versiyon hizmet verecekse **major** arttırılmış bir kopyası daha yaratılır |
+| Çoklu versiyon | Bir artifact runtime üstünde iki farklı versiyon hizmet verecekse **major** arttırılmış bir kopyası daha yaratılır. Yan yana çalışan sürüm garantisinin iş karşılığı için: [Business / Risks — Migration ve Geriye Uyumluluk](/business/risks/) |
 | Paket dağıtımı | Local ya da remote runtime üzerine dağıtım paket ile yapılır |
 | Bağımlılık yönetimi | Geliştirme sürecinde ihtiyaç duyulan referans paketler npm ile yönetilir |
 
@@ -267,6 +267,9 @@ Content-Type: application/json
 
 ## İlgili Dokümantasyon
 
-- [📄 Referans Şeması](/architecture/patterns/references) - Bileşenler arası referans yönetimi
-- [📄 Persistance](/architecture/data/persistence) - Veri saklama ve Dual-Write Pattern
-- [📄 Workflow Tanımlaması](/docs/components/workflow) - İş akışı tanımlaması ve geliştirme rehberi
+- [Referans Şeması](/architecture/patterns/references) — Bileşenler arası referans yönetimi
+- [Persistence](/architecture/data/persistence) — Veri saklama ve Dual-Write Pattern
+- [Workflow Tanımlaması](/docs/components/workflow) — İş akışı tanımlaması ve geliştirme rehberi
+- [Product / Sürümleme ve Değişiklik Politikası](/product/release-strategy/) — Breaking changes disiplini, release notes standardı, dağıtım kadansı
+- [Business / İş Riskleri ve Azaltım](/business/risks/) — Migration, geriye uyumluluk ve breaking change risklerinin iş karşılığı
+- [Çekirdek Prensipler — Semantic Versioning](/architecture/overview/principles#5-semantic-versioning) — SemVer'in mimari gerekçesi
