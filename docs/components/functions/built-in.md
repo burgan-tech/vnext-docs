@@ -16,8 +16,8 @@ Function API'leri, workflow instance'ları için sistem seviyesi operasyonlar sa
 4. [View Fonksiyonu](#view-fonksiyonu)
 5. [Schema Fonksiyonu](#schema-fonksiyonu)
 6. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
-7. [En İyi Uygulamalar](#en-iyi-uygulamalar)
-8. [İlgili Dökümanlar](#ilgili-dökümanlar)
+7. [En iyi Uygulamalar](#en-iyi-uygulamalar)
+8. [Ilgili Dökümanlar](#ilgili-dökümanlar)
 
 ## Genel Bakış
 
@@ -259,7 +259,7 @@ Body döndürülmez, bu da bant genişliği ve işlem süresinden tasarruf sağl
 
 | Alan | Tip | Açıklama |
 |------|-----|----------|
-| `data` | `object` | Mevcut instance verisi (camelCase özellikler); Master şemada roleGrant kullanıldığında [Alan bazlı görünürlük](#master-şema-alan-bazlı-görünürlük-v039) bölümüne bakın |
+| `data` | `object` | Mevcut instance verisi (camelCase özellikler); Master şemada roleGrant kullanıldığında [Alan bazlı görünürlük](#master-şema-alan-bazlı-görünürlük) bölümüne bakın |
 | `eTag` | `string` | Cache doğrulama için ETag |
 | `extensions` | `object` | Kayıtlı extension'lardan ek veriler |
 
@@ -752,7 +752,7 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/autho
 | `functionKey` | Kontrol edilecek fonksiyon (function seviye roles). |
 | `queryRoles` | true ise instance'ın mevcut state'i için flow ve state queryRoles kontrol edilir (subflow bağlamı varsa ona göre). |
 
-## En İyi Uygulamalar
+## En iyi Uygulamalar
 
 ### 1. Long-Polling'i Verimli Kullanın
 
@@ -798,7 +798,7 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/autho
 - Client tarafında rate limiting uygulayın
 - İstek takibi için correlation ID'leri kullanın
 
-## İlgili Dökümanlar
+## Ilgili Dökümanlar
 
 - [Custom Functions](/docs/components/functions/custom) - Kullanıcı tanımlı fonksiyonlar
 - [Instance Filtreleme](/docs/how-to/instance-filtering) - GraphQL-stil filtreleme kılavuzu

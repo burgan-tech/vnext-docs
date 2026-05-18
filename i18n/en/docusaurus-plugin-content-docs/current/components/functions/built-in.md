@@ -256,7 +256,7 @@ No body is returned, saving bandwidth and processing time.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `data` | `object` | Current instance data (camelCase properties); see [Field-level visibility](#master-schema-field-level-visibility-v039) when Master schema uses roleGrant |
+| `data` | `object` | Current instance data (camelCase properties); see [Field-level visibility](#master-schema-field-level-visibility) when Master schema uses roleGrant |
 | `eTag` | `string` | ETag for cache validation |
 | `extensions` | `object` | Additional data from registered extensions |
 

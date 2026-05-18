@@ -14,10 +14,9 @@ In the platform, **Mapping** is used to associate data to be passed to tasks and
 3. [ScriptContext Class](#scriptcontext-class)
 4. [ScriptResponse Class](#scriptresponse-class)
 5. [ScriptBase Usage](#scriptbase-usage)
-6. [Implementation Examples](#implementation-examples)
-7. [Timer Mapping Examples](#timer-mapping-examples)
-8. [Best Practices](#best-practices)
-9. [Error Management](#error-management)
+6. [ITransitionMapping Implementation](#itransitionmapping-implementation)
+7. [Best Practices](#best-practices)
+8. [Common Patterns](#common-patterns)
 
 ## Mapping Types
 

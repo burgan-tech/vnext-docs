@@ -28,6 +28,7 @@ description: vNext View component — Backend-Driven UI tanımları
   "attributes": {
     "type": 1,
     "display": "full-page",
+    "renderer": "pseudo-ui",
     "content": {
       "type": "form",
       "title": {
@@ -109,6 +110,7 @@ Detaylı akış için: [User Integration (kavramsal)](/docs/concepts/user-integr
 | `content` | string / object / array | **Evet** | View içeriği. Kabul edilen tip, `type` değerine bağlıdır (aşağıda) |
 | `display` | string | Hayır | Gösterim modu — aşağıdaki enum tablosuna bakın |
 | `labels` | array | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`) |
+| `renderer` <sup>New</sup> | string | Hayır | UI SDK render motoru belirleyicisi. Yalnızca `type: 1` (JSON) için geçerlidir — aşağıdaki enum tablosuna bakın |
 | `_comment` | string | Hayır | Açıklama / yorum |
 
 ### `attributes.type` Enum Değerleri
@@ -132,6 +134,21 @@ Detaylı akış için: [User Integration (kavramsal)](/docs/concepts/user-integr
 | `top-sheet` | Üst sayfa (top sheet) |
 | `drawer` | Yan menü / çekmece |
 | `inline` | Sayfa içi gömülü görünüm |
+
+### `renderer` Enum Değerleri <sup>New</sup>
+
+Yalnızca `type: 1` (JSON) view'lar için geçerlidir. Client SDK'nın hangi render motoruyla içeriği yorumlayacağını belirtir.
+
+| Değer | Açıklama |
+|-------|----------|
+| `pseudo-ui` | Pseudo UI renderer (schema-driven form generation) |
+| `flutter` | Flutter renderer |
+| `angular` | Angular renderer |
+| `vue` | Vue.js renderer |
+| `react` | React renderer |
+| `react-native` | React Native renderer |
+| `native-ios` | Native iOS renderer |
+| `native-android` | Native Android renderer |
 
 ---
 
@@ -158,4 +175,5 @@ Client SDK platform header'ını okuyarak doğru variant'ı render eder.
 - [User Integration](/docs/concepts/user-integration) — kullanıcı etkileşim döngüsü
 - [User Integration](/docs/concepts/user-integration) — view loop akışı
 - [Schema component](/docs/components/schema) — form validation entegrasyonu
+- [Pseudo UI Rehberi](/docs/how-to/view-consept) — view.json yapısı, schema binding ve tasarımcı rehberi
 - Schema kaynağı: [vnext-schema (GitHub)](https://github.com/burgan-tech/vnext-schema)

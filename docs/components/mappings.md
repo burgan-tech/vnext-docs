@@ -17,8 +17,9 @@ Bu doküman, workflow betikleriyle **girdi/çıktı haritalaması** yapmayı ve 
 5. [ScriptResponse Kullanımı](#scriptresponse-kullanımı)
 6. [ScriptBase Kullanımı](#scriptbase-kullanımı)
 7. [Implementasyon Örnekleri](#implementasyon-örnekleri)
-8. [Best Practices](#best-practices)
-9. [Hata Yönetimi](#hata-yönetimi)
+8. [Notification Mapping](#notification-mapping)
+9. [Best Practices](#best-practices)
+10. [Hata Yönetimi](#hata-yönetimi)
 
 ## Mapping Nedir?
 
@@ -771,6 +772,8 @@ TimerSchedule.Immediate();
 
 Mapping yoksa geçiş gövdesi doğrudan instance verisine birleştirilir. Transition mapping ile dönüşümü siz kontrol edersiniz (`ITransitionMapping` — detay [Interfaces](./interfaces)).
 
+> **Davranış Değişikliği** <sup>New</sup>: Transition mapping tanımlı olduğunda, mapping output değeri artık **transition history**'ye de yazılır. Önceki davranışta mapping output yalnızca instance data'ya aktarılırken, transition history ham (raw) payload'ı kaydediyordu. Yeni davranış ile her iki hedefte de **mapping çıktısı** kullanılır.
+
 ```csharp
 public class OrderApprovalTransitionMapping : ScriptBase, ITransitionMapping
 {
@@ -881,6 +884,107 @@ public async Task<dynamic> Handler(ScriptContext context)
 4. Dönüşümde **camelCase** kullanın.
 5. Ağır iş yükünden kaçının; odak veri şekillendirmedir.
 6. Beklenen payload’ı kodda/yorumda kısaca dokümante edin.
+
+
+### Notification mapping
+
+Notification Task (`type: 14`) çok kanallı bildirim gönderir. Kanal bazında mesaj üretimi `INotificationMapping` ile, state kanalı metadata zenginleştirme ise opsiyonel `IStateNotificationMapping` ile yapılır. Arabirim detayları için [Interfaces](./interfaces#inotificationmapping) sayfasına bakın.
+
+#### Kanal bazlı mesaj üretimi
+
+`ChannelHandler` her kanal için ayrı çağrılır; `channel` parametresine göre dallanma yapılabilir:
+
+```csharp
+public class NotifyMapping : INotificationMapping
+{
+    public Task<NotificationMessage?> ChannelHandler(string channel, ScriptContext context)
+    {
+        var instance = context.Instance;
+
+        return Task.FromResult<NotificationMessage?>(new NotificationMessage
+        {
+            Data = new
+            {
+                instanceId = instance?.Id.ToString(),
+                state = instance?.CurrentState,
+                channel
+            },
+            Metadata = new Dictionary<string, string>
+            {
+                ["X-Correlation-Id"] = instance?.Id.ToString() ?? string.Empty
+            }
+        });
+    }
+}
+```
+
+#### Koşullu kanal atlama
+
+Belirli koşullarda bir kanalı atlamak için `null` döndürülür:
+
+```csharp
+public class ConditionalNotifyMapping : INotificationMapping
+{
+    public Task<NotificationMessage?> ChannelHandler(string channel, ScriptContext context)
+    {
+        var instance = context.Instance;
+
+        if (channel == "sms" && !InstanceStatus.Completed.Equals(instance?.Status))
+            return Task.FromResult<NotificationMessage?>(null);
+
+        return Task.FromResult<NotificationMessage?>(new NotificationMessage
+        {
+            Data = new { instanceId = instance?.Id.ToString(), channel }
+        });
+    }
+}
+```
+
+#### State kanalı metadata zenginleştirme
+
+`state` kanalının verisi platform tarafından üretilir; `IStateNotificationMapping` yalnızca ek metadata eklemek için kullanılır:
+
+```csharp
+public class StateEnrichMapping : IStateNotificationMapping
+{
+    public Task<StateNotificationMetadata> EnrichAsync(ScriptContext context)
+    {
+        var headers = (IDictionary<string, object?>)context.Headers;
+        var metadata = new Dictionary<string, string>();
+
+        if (headers.TryGetValue("X-Device-Id", out var deviceId) && deviceId is not null)
+            metadata["X-Device-Id"] = deviceId.ToString()!;
+
+        if (headers.TryGetValue("X-Token-Id", out var tokenId) && tokenId is not null)
+            metadata["X-Token-Id"] = tokenId.ToString()!;
+
+        return Task.FromResult(new StateNotificationMetadata
+        {
+            Metadata = metadata
+        });
+    }
+}
+```
+
+:::tip
+`INotificationMapping` ve `IStateNotificationMapping` **aynı `.csx` dosyasında** tek bir sınıf içinde implement edilebilir:
+
+```csharp
+public class FullNotifyMapping : INotificationMapping, IStateNotificationMapping
+{
+    public Task<NotificationMessage?> ChannelHandler(string channel, ScriptContext context)
+    {
+        // sms, email vb. kanallar için mesaj üret
+    }
+
+    public Task<StateNotificationMetadata> EnrichAsync(ScriptContext context)
+    {
+        // state kanalı metadata zenginleştirme
+    }
+}
+```
+:::
+
 
 ## Best Practices
 

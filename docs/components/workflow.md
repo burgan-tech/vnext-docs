@@ -398,6 +398,7 @@ flowchart TD
 | `onExecutionTasks` | array | Hayır | Transition sırasında çalıştırılacak task listesi |
 | `mapping` | object \| null | Hayır | Transition input mapping betiği |
 | `roles` | array | Hayır | Yetkilendirme rolleri. DENY her zaman ALLOW'u geçersiz kılar |
+| `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata. Platform annotations değerlerini yorumlamaz (passthrough). Çakışmaları önlemek için namespace'li key'ler kullanın (örn. `ui/visible-in`, `ui/priority`) |
 
 ### `triggerType` Enum Değerleri
 
@@ -439,6 +440,7 @@ flowchart TD
 | `onExecutionTasks` | array | Hayır | Başlangıçta çalıştırılacak task'lar |
 | `mapping` | object \| null | Hayır | Input mapping betiği |
 | `roles` | array | Hayır | Yetkilendirme rolleri |
+| `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 
 ---
 
@@ -455,6 +457,7 @@ flowchart TD
 | `labels` | array | **Evet** | Çoklu dil etiketleri |
 | `availableIn` | string[] | Hayır | Cancel'ın geçerli olduğu state'ler |
 | `view`, `schema`, `mapping`, `onExecutionTasks`, `roles` | — | Hayır | Standart transition alanları |
+| `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 
 Alt akışları varsa onlara da **cancel** bildirisi yayınlar. Alt akışlarda cancel tanımı **yoksa** bypass edilir.
 
@@ -472,7 +475,8 @@ Birden fazla state'den erişilebilen **ortak transition**'lardır. Standart tran
 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
-| `availableIn` | string[] | **Koşullu** | `triggerType: 0` (manual) ise **zorunlu**. Transition'ın geçerli olduğu state key'leri |
+| `availableIn` <sup>New</sup> | string[] | Hayır | Transition'ın geçerli olduğu state key'leri. Tanımlanmazsa **tüm state'lerden** erişilebilir |
+| `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 
 ---
 
