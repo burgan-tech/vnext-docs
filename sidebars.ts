@@ -78,6 +78,17 @@ const sidebars: SidebarsConfig = {
         'how-to/instance-filtering',
         'how-to/view-selection',
         'how-to/async-sync',
+        {
+          type: 'category',
+          label: 'Pseudo UI (View Concept)',
+          link: { type: 'doc', id: 'how-to/view-consept/giris' },
+          items: [
+            'how-to/view-consept/tasarimci-rehberi',
+            'how-to/view-consept/view-yapisi',
+            'how-to/view-consept/schema-tanimi',
+            'how-to/view-consept/data-akisi',
+          ],
+        },
       ],
     },
     {
@@ -87,6 +98,7 @@ const sidebars: SidebarsConfig = {
         'configuration/url-templates',
         'configuration/service-discovery',
         'configuration/server-timeout',
+        'configuration/header-limits',
       ],
     },
     {

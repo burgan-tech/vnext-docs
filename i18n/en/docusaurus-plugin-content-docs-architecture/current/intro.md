@@ -15,6 +15,5 @@ This section covers the **architectural aspects** of the vNext platform — doma
 2. **[Domain Model](./domain-model/)** — multi-domain structure, bounded contexts
 3. **[Runtime](./runtime/)** — orchestration ↔ execution ↔ worker flow
 4. **[Data](./data/)** — DB topology, persistence patterns
-5. **[Infrastructure](./infrastructure/)** — Docker, Dapr, Vault, Redis, PostgreSQL
+5. **[Infrastructure / Observability](./infrastructure/observability)** — OpenTelemetry, persistent metrics, health endpoints
 6. **[Patterns](./patterns/)** — dual-write, semantic versioning, reference resolution
-7. **[Decisions](./decisions/)** — Architecture Decision Records (ADRs)

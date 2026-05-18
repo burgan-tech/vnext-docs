@@ -286,6 +286,8 @@ Arabirimin `Handler` metodunda **varsayılan gövde** vardır: boş bir nesne d�
 
 **Dönüş:** `Task<dynamic>` — geçiş sonucunda downstream task veya durumlara iletilebilir veri. Tanım **yoksa** payload çoğu senaryoda **olduğu gibi** instance datasına yazılır; mapping ile özelleştirilmiş dönüşüm, doğrulama veya süzme yapılabilir.
 
+> <sup>New</sup> Mapping output değeri artık hem instance data'ya hem de **transition history**'ye yazılır. Önceki davranışta transition history ham payload'ı tutuyordu.
+
 ### ITransitionMapping ve IConditionMapping karşılaştırması
 
 | | `ITransitionMapping` | `IConditionMapping` |
@@ -313,9 +315,87 @@ Arabirimin `Handler` metodunda **varsayılan gövde** vardır: boş bir nesne d�
 
 ---
 
+## INotificationMapping
+
+**Notification Task** (`type: 14`) tarafından `state` dışındaki her kanal için çağrılan arabirimdir. Kanal bazında bildirim mesajı üretir veya `null` döndürerek ilgili kanalı atlar.
+
+### Tanım
+
+```csharp
+public interface INotificationMapping
+{
+    Task<NotificationMessage?> ChannelHandler(string channel, ScriptContext context);
+}
+```
+
+### `ChannelHandler(string channel, ScriptContext context)`
+
+**Parametreler:**
+
+| Parametre | Tip | Açıklama |
+|---|---|---|
+| `channel` | `string` | Hedef kanal adı (`"sms"`, `"email"`, `"push"` vb.). `"state"` kanalı bu metoda **asla** iletilmez. |
+| `context` | `ScriptContext` | Workflow durumu, instance verisi, header, body erişimi. |
+
+**Dönüş:** `Task<NotificationMessage?>`
+
+| Değer | Anlamı |
+|---|---|
+| `NotificationMessage` nesnesi | Kanal dispatch edilir |
+| `null` | Kanal atlanır (koşullu gönderim) |
+
+### Uygulama yönergeleri
+
+- Her kanal için ayrı ayrı çağrılır; `channel` parametresine göre dallanma yapılabilir.
+- `null` döndürmek ilgili kanalı tamamen atlar — hata değildir.
+- `"state"` kanalı bu arabirime **gelmez**; state için bkz. [IStateNotificationMapping](#istatenotificationmapping).
+- `INotificationMapping` ve `IStateNotificationMapping` aynı `.csx` dosyasında tek sınıfta implement edilebilir.
+
+---
+
+## IStateNotificationMapping
+
+**Notification Task** (`type: 14`) içindeki `state` kanalı için **opsiyonel** metadata zenginleştirme arabirimidir. State kanalının verisi platform tarafından üretildiği için bu arabirim yalnızca ek metadata ve operation override'ı sağlar.
+
+### Tanım
+
+```csharp
+public interface IStateNotificationMapping
+{
+    Task<StateNotificationMetadata> EnrichAsync(ScriptContext context);
+}
+```
+
+### `EnrichAsync(ScriptContext context)`
+
+**Parametreler:**
+
+| Parametre | Tip | Açıklama |
+|---|---|---|
+| `context` | `ScriptContext` | Workflow durumu, instance verisi, header erişimi. |
+
+**Dönüş:** `Task<StateNotificationMetadata>` — Ek metadata ve opsiyonel operation override.
+
+### Uygulama yönergeleri
+
+- Bu arabirimin implementasyonu **zorunlu değildir**. Implement edilmezse platform varsayılan metadata ile (`instanceId`, `state`) dispatch yapar.
+- Hata durumunda (`EnrichAsync` exception fırlatırsa) platform varsayılan metadata ile devam eder.
+- Tipik kullanım: istek header'larından (`X-Device-Id`, `X-Token-Id` vb.) ek bilgi taşımak.
+
+### INotificationMapping ve IStateNotificationMapping karşılaştırması
+
+| | `INotificationMapping` | `IStateNotificationMapping` |
+|---|---|---|
+| Kapsam | `state` dışı tüm kanallar | Yalnızca `state` kanalı |
+| Zorunluluk | Evet (state dışı kanal varsa) | Hayır (opsiyonel) |
+| Ürettiği | Tam mesaj (`NotificationMessage`) | Yalnızca metadata (`StateNotificationMetadata`) |
+| Veri kaynağı | Script üretir | Platform üretir, script zenginleştirir |
+
+---
+
 ## Modeller
 
-Mapping arabirimlerinin paylaştığı **`ScriptResponse`**, **`StandardTaskResponse`** ve **`ScriptContext`** tipleri.
+Mapping arabirimlerinin paylaştığı **`ScriptResponse`**, **`StandardTaskResponse`**, **`NotificationMessage`**, **`StateNotificationMetadata`** ve **`ScriptContext`** tipleri.
 
 ### ScriptResponse
 
@@ -378,6 +458,42 @@ public sealed class StandardTaskResponse
 | `Metadata` | `Dictionary<string,object>?` | Ek yürütme metadata'sı. |
 | `ExecutionDurationMs` | `long?` | Süre (ms). |
 | `TaskType` | `string?` | Örn. `HttpTask`, `ScriptTask`. |
+
+### NotificationMessage
+
+`INotificationMapping.ChannelHandler` tarafından döndürülen bildirim mesaj modelidir. Dapr binding'e gönderilecek payload, metadata ve operasyonu taşır.
+
+```csharp
+public sealed class NotificationMessage
+{
+    public required object Data { get; init; }
+    public Dictionary<string, string> Metadata { get; init; } = [];
+    public string Operation { get; init; } = "create";
+}
+```
+
+| Property | Tip | Açıklama |
+|---|---|---|
+| `Data` | `object` | Dapr binding body'si olarak gönderilen payload. JSON serialize edilir. **Zorunlu.** |
+| `Metadata` | `Dictionary<string, string>` | Dapr binding metadata'sı. HTTP binding'lerde header olarak gönderilir. Varsayılan boş. |
+| `Operation` | `string` | Dapr binding operasyonu. `"create"` → POST, `"get"` → GET. Varsayılan `"create"`. |
+
+### StateNotificationMetadata
+
+`IStateNotificationMapping.EnrichAsync` tarafından döndürülen metadata zenginleştirme modelidir. State kanalının verisi platform tarafından üretildiği için bu model yalnızca ek metadata ve operation override'ı taşır.
+
+```csharp
+public sealed class StateNotificationMetadata
+{
+    public Dictionary<string, string> Metadata { get; init; } = [];
+    public string Operation { get; init; } = "create";
+}
+```
+
+| Property | Tip | Açıklama |
+|---|---|---|
+| `Metadata` | `Dictionary<string, string>` | Platform varsayılan metadata'sına eklenen ek header'lar. |
+| `Operation` | `string` | Dapr binding operasyonu override'ı. Varsayılan `"create"`. |
 
 ### ScriptContext
 

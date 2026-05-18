@@ -14,10 +14,9 @@ The Notification Task is a system-defined task that sends workflow state informa
 2. [Task Definition](#task-definition)
 3. [How It Works](#how-it-works)
 4. [Configuration](#configuration)
-5. [Dapr Binding Setup](#dapr-binding-setup)
-6. [Usage Examples](#usage-examples)
-7. [Best Practices](#best-practices)
-8. [Troubleshooting](#troubleshooting)
+5. [Usage Examples](#usage-examples)
+6. [Best Practices](#best-practices)
+7. [Related Documentation](#related-documentation)
 
 ## Overview
 

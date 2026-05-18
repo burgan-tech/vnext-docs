@@ -16,7 +16,7 @@ description: Kullanıcı tanımlı fonksiyonlar ve C# scripting
 4. [Tüketim Noktaları](#tüketim-noktaları)
 5. [Sistem Fonksiyonları](#sistem-fonksiyonları)
 6. [Kullanım Örnekleri](#kullanım-örnekleri)
-7. [En İyi Uygulamalar](#en-iyi-uygulamalar)
+7. [En iyi Uygulamalar](#en-iyi-uygulamalar)
 
 ---
 
@@ -539,7 +539,7 @@ public class GetUserInfoMapping : IMapping
 
 ---
 
-## En İyi Uygulamalar
+## En iyi Uygulamalar
 
 ### 1. Fonksiyon Tasarımı
 

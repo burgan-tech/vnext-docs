@@ -6,7 +6,11 @@ description: Docker Compose ile vNext runtime'ı local makinada çalıştırma
 
 # Local Development
 
-Bu rehber, vnext platformunu **local makinanda** docker-compose üzerinden çalıştırmak için gerekli tüm adımları içerir. `vnext-runtime` repo'su bu kurulum için hazır template'lerle gelir.
+Bu rehber, vnext platformunu **local makinanda** docker-compose üzerinden çalıştırmak için gerekli tüm adımları içerir. [`vnext-runtime`](https://github.com/burgan-tech/vnext-runtime) repo'su bu kurulum için hazır template'lerle gelir.
+
+:::info[Tavsiye Edilen Kurulum: Multi-Domain]
+vNext Runtime **multi-domain** mimarisini destekler. Yeni projelere başlarken doğrudan [Multi-Domain Kurulumu](./multi-domain) rehberini takip etmenizi öneriyoruz. Multi-domain yapı, birden fazla domain'i aynı altyapı üzerinde izole çalıştırmanıza olanak tanır ve ölçeklenebilir bir geliştirme deneyimi sunar.
+:::
 
 :::tip
 Tek başlangıç için: **`make dev`** komutu environment'ı kurar, network oluşturur, PostgreSQL'i başlatır, vnext-app + init + component-publisher servislerini sırasıyla healthy hale getirir.
@@ -17,6 +21,36 @@ Tek başlangıç için: **`make dev`** komutu environment'ı kurar, network olu�
 - Docker Desktop (veya eşdeğer Docker Engine + Compose)
 - Make
 - Git
+
+## Repo'yu Edinme
+
+[`vnext-runtime`](https://github.com/burgan-tech/vnext-runtime) GitHub'da **public template** repo olarak sunulmaktadır. Projeyi klonlayarak başlayabilirsiniz:
+
+```bash
+git clone https://github.com/burgan-tech/vnext-runtime.git
+cd vnext-runtime
+```
+
+Kendi organizasyonunuz altında bağımsız bir repo oluşturmak isterseniz, GitHub'daki **"Use this template"** butonunu kullanarak yeni bir repo türetebilirsiniz.
+
+### Değişiklikleri Kaydetme (Check-in)
+
+Lokal ortamda yaptığınız konfigürasyon değişikliklerini versiyon kontrolünde tutmak için standart Git akışını kullanın:
+
+```bash
+# Değişiklikleri staging'e ekle
+git add .
+
+# Commit oluştur
+git commit -m "feat: domain konfigürasyonu güncellendi"
+
+# Uzak repo'ya gönder
+git push origin main
+```
+
+:::warning
+`vnext/docker/domains/` altında oluşan domain konfigürasyon dosyaları varsayılan olarak `.gitignore` kapsamındadır. Ekip ile paylaşmak istediğiniz domain konfigürasyonlarını `.gitignore` dosyasından çıkararak versiyon kontrolüne dahil edebilirsiniz.
+:::
 
 ## Environment Konfigürasyonu
 
@@ -289,4 +323,4 @@ make shell-postgres
 
 ---
 
-*Bu sayfa [`vnext-runtime/README.tr.md`](https://github.com/burgan-tech/vnext-runtime/blob/main/README.tr.md)'den distil edilmiştir. Multi-domain detayları için [Multi-Domain Setup](./multi-domain) sayfasına bakın.*
+*Kaynak repo: [`burgan-tech/vnext-runtime`](https://github.com/burgan-tech/vnext-runtime) — Bu sayfa [`README.tr.md`](https://github.com/burgan-tech/vnext-runtime/blob/main/README.tr.md)'den distil edilmiştir. Multi-domain detayları için [Multi-Domain Kurulumu](./multi-domain) sayfasına bakın.*

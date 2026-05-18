@@ -12,6 +12,31 @@ vNext Runtime, **aynı altyapı üzerinde birden fazla domain'i eş zamanlı ça
 Her domain'in kendi orchestration, execution, worker-inbox, worker-outbox ve init container'ı vardır; ancak **paylaşılan altyapı** (DB, Redis, Vault, Dapr) tek instance olarak çalışır.
 :::
 
+## Repo'yu Edinme
+
+[`vnext-runtime`](https://github.com/burgan-tech/vnext-runtime) GitHub'da **public template** repo olarak sunulmaktadır. Henüz klonlamadıysanız:
+
+```bash
+git clone https://github.com/burgan-tech/vnext-runtime.git
+cd vnext-runtime
+```
+
+Kendi organizasyonunuz altında bağımsız bir repo oluşturmak isterseniz, GitHub'daki **"Use this template"** butonunu kullanarak yeni bir repo türetebilirsiniz.
+
+### Değişiklikleri Kaydetme (Check-in)
+
+Domain konfigürasyonlarınızı ve özelleştirmelerinizi versiyon kontrolünde tutmak için standart Git akışını kullanın:
+
+```bash
+git add .
+git commit -m "feat: sales domain konfigürasyonu eklendi"
+git push origin main
+```
+
+:::warning
+`vnext/docker/domains/` altında oluşan domain konfigürasyon dosyaları varsayılan olarak `.gitignore` kapsamındadır. Ekip ile paylaşmak istediğiniz domain konfigürasyonlarını `.gitignore` dosyasından çıkararak versiyon kontrolüne dahil edebilirsiniz.
+:::
+
 ## Klasör Yapısı
 
 ```
@@ -93,7 +118,6 @@ make up-vnext DOMAIN=discovery
 
 # 3. Kendi domain'ini oluştur ve başlat (offset 10 veya üstü kullan)
 make create-domain DOMAIN=sales PORT_OFFSET=10
-make db-create DOMAIN=sales
 make up-vnext DOMAIN=sales
 
 # 4. Tüm çalışan servisleri görüntüle
@@ -157,4 +181,4 @@ Bu komut tüm domain ile ilgili ayarları günceller ancak **birden fazla domain
 
 ---
 
-*Bu sayfa [`vnext-runtime/README.tr.md`](https://github.com/burgan-tech/vnext-runtime/blob/main/README.tr.md)'den distil edilmiştir.*
+*Kaynak repo: [`burgan-tech/vnext-runtime`](https://github.com/burgan-tech/vnext-runtime) — Bu sayfa [`README.tr.md`](https://github.com/burgan-tech/vnext-runtime/blob/main/README.tr.md)'den distil edilmiştir.*

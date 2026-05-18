@@ -194,6 +194,7 @@ Aynı `views` dizi formatı transition'larda da kullanılabilir:
 ## İlgili Dokümantasyon
 
 - [View](/docs/components/view) - View tanımı ve referans şeması
+- [Pseudo UI Rehberi](/docs/how-to/view-consept) — View JSON yapısı ve bileşenler
 - [Function API'leri](/docs/components/functions/built-in) - View function endpoint ve seçim mantığı
 - [Instance Filtreleme](/docs/how-to/instance-filtering) - Query parametre kullanımı
 - [Mapping Rehberi](/docs/components/mappings) - ScriptContext ve mapping arayüzleri
