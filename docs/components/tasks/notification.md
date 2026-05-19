@@ -13,9 +13,16 @@ Notification Task, iş akışı içinde birden fazla kanal üzerinden (SMS, e-po
 ```json
 {
   "key": "notify-status-change",
-  "type": "10",
-  "channels": ["sms", "email"],
-  "includeStateChannel": true
+  "version": "1.0.0",
+  "domain": "core",
+  "flow": "sys-tasks",
+  "flowVersion": "1.0.0",
+  "tags": ["notify", "state"],
+  "config": {
+      "type": "10",
+      "channels": ["sms", "email"],
+      "includeStateChannel": true
+  }
 }
 ```
 
@@ -53,6 +60,19 @@ Eşleme formatı:
 
 Varsayılan prefix `vnext-notification` olup `appsettings.json` üzerinden değiştirilebilir.
 
+Configuration:
+```json
+{
+  "Dapr": {
+    "Notification":  {
+      "BindingPrefix": "vnext-notification",
+      "DefaultOperation": "create",
+      "TimeoutSeconds": 30
+    }
+  }
+}
+```
+
 ## Kanal Tipleri
 
 | Tip | Mesaj Kaynağı | Mapping Gerekli mi? |
@@ -74,9 +94,16 @@ State kanalı yalnızca platform tarafından üretilen bildirimler içindir. Har
 ```json
 {
   "key": "notify-state-only",
-  "type": "10",
-  "channels": [],
-  "includeStateChannel": true
+  "version": "1.0.0",
+  "domain": "core",
+  "flow": "sys-tasks",
+  "flowVersion": "1.0.0",
+  "tags": ["notify", "state"],
+  "config": {
+      "type": "10",
+      "channels": [],
+      "includeStateChannel": true
+  }
 }
 ```
 
