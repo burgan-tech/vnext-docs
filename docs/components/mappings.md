@@ -888,7 +888,7 @@ public async Task<dynamic> Handler(ScriptContext context)
 
 ### Notification mapping
 
-Notification Task (`type: 14`) çok kanallı bildirim gönderir. Kanal bazında mesaj üretimi `INotificationMapping` ile, state kanalı metadata zenginleştirme ise opsiyonel `IStateNotificationMapping` ile yapılır. Arabirim detayları için [Interfaces](./interfaces#inotificationmapping) sayfasına bakın.
+Notification Task (`type: 10`) çok kanallı bildirim gönderir. Kanal bazında mesaj üretimi `INotificationMapping` ile, state kanalı metadata zenginleştirme ise opsiyonel `IStateNotificationMapping` ile yapılır. Arabirim detayları için [Interfaces](./interfaces#inotificationmapping) sayfasına bakın.
 
 #### Kanal bazlı mesaj üretimi
 
