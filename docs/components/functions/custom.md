@@ -98,6 +98,7 @@ Her fonksiyon bir task çalıştırabilir ve task sonucundaki veri mapping ile i
 | `output` | `object` | **Koşullu** | Çıktı mapping betiği; `onExecutionTasks` tanımlıysa **zorunlu**. `IOutputHandler` uygular |
 | `labels` | `array` | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`) |
 | `roles` | `array` | Hayır | Yetkilendirme rolleri. Her öğe: `role` (string) + `grant` (`allow` / `deny`). DENY her zaman ALLOW'u geçersiz kılar |
+| `rawResponse` | `boolean` | Hayır | `true`: mapped rawData doğrudan response olarak döndürülür. `false` (varsayılan): platform kendi pattern modeli üzerinden çıktı verir. Legacy API'lerden vnext'e geçiş senaryolarında kullanılır |
 
 ### Scope Değerleri
 
@@ -220,7 +221,10 @@ GET /api/v1/{domain}/functions
 **Belirli bir fonksiyonun sonucunu döndürür:**
 
 ```http
-GET /api/v1/{domain}/functions/{function}
+GET    /api/v1/{domain}/functions/{function}
+POST   /api/v1/{domain}/functions/{function}
+PATCH  /api/v1/{domain}/functions/{function}
+DELETE /api/v1/{domain}/functions/{function}
 ```
 
 ### Instance Seviyesi Fonksiyonlar
@@ -228,8 +232,15 @@ GET /api/v1/{domain}/functions/{function}
 **Belirli bir instance için fonksiyonu çalıştırır:**
 
 ```http
-GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}
+GET    /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}
+POST   /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}
+PATCH  /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}
+DELETE /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}
 ```
+
+:::info BFF Maliyeti
+POST, PATCH ve DELETE verb desteği, function endpoint'lerinin tam CRUD operasyonlarını karşılamasına olanak tanır. Bu sayede ayrı BFF katmanı geliştirme ihtiyacı minimize edilir.
+:::
 
 ---
 

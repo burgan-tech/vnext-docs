@@ -425,6 +425,45 @@ flowchart TD
 | `Minor` | Minor versiyon artırımı |
 | `Major` | Major versiyon artırımı |
 
+### Annotations
+
+`annotations` alanı, platform tarafından yorumlanmayan serbest key-value metadata'dır. UI SDK'ları ve istemci uygulamaları transition'ları filtrelemek, gruplamak veya koşullu render etmek için kullanır. Çakışmaları önlemek için namespace'li key'ler kullanılması önerilir.
+
+#### Tanımlı Key'ler
+
+| Key | Tip | Açıklama |
+|-----|-----|----------|
+| `ui/visibility-channel` | string | Pipe (`\|`) ile ayrılmış kanal listesi. Yalnızca belirtilen kanallarda gösterilir |
+| `ui/priority` | integer (string) | Sıralama önceliği. Düşük değer = yüksek öncelik |
+| `ui/intent` | string | Görsel davranış ipucu |
+
+#### `ui/visibility-channel` Değerleri
+
+| Değer | Kanal |
+|-------|-------|
+| `IbWeb` | İnternet Bankacılığı |
+| `backoffice` | Backoffice |
+| `IbIvnApp` | Call Center |
+
+#### `ui/intent` Değerleri
+
+| Değer | Açıklama |
+|-------|----------|
+| `cancel` | İptal aksiyonu |
+| `destructive` | Geri alınamaz / yıkıcı aksiyon |
+| `close` | Ekran veya modal kapatma |
+| `confirm` | Onay gerektiren aksiyon |
+
+#### Örnek
+
+```json
+"annotations": {
+  "ui/visibility-channel": "IbIvnApp|backoffice",
+  "ui/priority": "1",
+  "ui/intent": "cancel"
+}
+```
+
 ---
 
 ## StartTransition Yapısı

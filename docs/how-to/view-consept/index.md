@@ -91,6 +91,51 @@ UI tasarımcısı şu view'ı tanımlar:
 
 Renderer bu iki dosyayı birleştirerek ekranda bir ad alanı gösterir — label, validasyon ve hata mesajlarıyla birlikte.
 
+## Workflow Bağlamında View Rolü
+
+vNext iş akışlarında view'lar, bağlandıkları yere göre iki farklı rol üstlenir: **State View** ve **Transition View**.
+
+### State View
+
+State tanımına bağlı view'lar read-only ekranlardır. Kullanıcıya mevcut instance durumunu özetler, bilgilendirici içerik sunar ya da ilerleyeceği yönü gösteren bir arayüz oluşturur. Kullanıcıdan veri alınmaz; bu ekranlar yalnızca gösterim amacıyla tasarlanır.
+
+### Transition View
+
+Transition tanımına bağlı view'lar genellikle form ekranlarıdır. Kullanıcıdan girdi alan ya da onay süreçlerini yöneten submit ekranlardır. Kullanıcı formu doldurduktan sonra ilgili transition tetiklenerek iş akışı ilerler.
+
+### Önerilen Etkileşim Modeli
+
+Bu ayrım bir zorunluluk değildir; ancak platform tarafından önerilen tasarım örüntüsüdür.
+
+```
+State View gösterilir (read-only)
+    ↓
+Kullanıcı bir transition butonuna tıklar
+    ↓
+Workflow Manager (client), View Function'a sorgu yapar:
+  "Bu transition'ın view'ı nedir?"
+  (State Function yanıtındaki transition için hasView: true ise)
+    ↓
+Transition View render edilir
+    ↓
+Kullanıcı formu doldurur
+    ↓
+"İptal / Çıkış" veya "<Transition Adı>" butonlarından biri seçilir
+    ↓
+Submit → Gerçek transition tetiklenir → İş akışı ilerler
+```
+
+State Function yanıtında her transition için `hasView` alanı bulunur. İstemci bu bilgiyle doğrudan transition'ı mı göndereceğine yoksa önce View Function'ı mı çağıracağına karar verir.
+
+Transition View'ın eylem butonları bu modelde şöyle yapılandırılır:
+
+| Buton | `action` | Açıklama |
+|-------|----------|----------|
+| İptal / Çıkış | `cancel` veya `exit` | Transition view'dan ayrılır, kullanıcı state view'a döner |
+| Submit | `submit` | Transition tetiklenir; label olarak transition'ın görüntü adı kullanılır |
+
+---
+
 ## Bu Dökümantasyon Hakkında
 
 Bu belge UI tasarımcılarına yönelik yazılmıştır. Schema yazmak Backend'in sorumluluğundadır, ancak tasarımcının schema'yı okuyup anlaması beklenir.
