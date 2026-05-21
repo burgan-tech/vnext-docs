@@ -14,8 +14,8 @@ description: vNext Function component — cross-domain BFF ve dış entegrasyon
 
 Function'lar üç çağırma şekli sağlar:
 
-1. **Domain-level**: `/api/v1/{domain}/functions/{function}` — workflow bağımsız.
-2. **Instance-level**: `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}` — instance context'inde çalışır.
+1. **Domain-level**: `/api/v1/{domain}/functions/{function}` — workflow bağımsız. `GET`, `POST`, `PATCH`, `DELETE` destekler.
+2. **Instance-level**: `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}` — instance context'inde çalışır. `GET`, `POST`, `PATCH`, `DELETE` destekler.
 3. **Built-in**: State, Data, View — sistem tarafından sağlanan üç sabit function (bkz. [Built-in Functions](/docs/components/functions/built-in)).
 
 ## Tanım JSON Örneği
@@ -35,6 +35,7 @@ Function'lar üç çağırma şekli sağlar:
   "_comment": "Müşteri detay bilgisini döndüren function",
   "attributes": {
     "scope": "I",
+    "rawResponse": false,
     "task": {
       "order": 1,
       "task": {
@@ -144,6 +145,7 @@ Function'lar üç çağırma şekli sağlar:
 | `output` | object | **Koşullu** | Output mapping. `onExecutionTasks` tanımlıysa **zorunlu** |
 | `labels` | array | Hayır | Çoklu dil etiketleri (`label` + `language`) |
 | `roles` | array | Hayır | Yetkilendirme rolleri (`role` + `grant`). DENY her zaman ALLOW'u geçersiz kılar |
+| `rawResponse` | boolean | Hayır | `true`: mapped rawData doğrudan response olarak döndürülür. `false` (varsayılan): platform kendi pattern modeli üzerinden çıktı verir. Legacy API'lerden vnext'e geçiş için |
 
 ### `scope` Enum Değerleri
 

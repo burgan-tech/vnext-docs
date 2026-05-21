@@ -15,6 +15,15 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Deployment',
+      link: { type: 'doc', id: 'deployment/index' },
+      items: [
+        'deployment/helm-chart',
+        'deployment/release-viewer',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Developer Tools',
       link: { type: 'doc', id: 'tools/index' },
       items: [

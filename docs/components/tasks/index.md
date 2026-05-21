@@ -53,7 +53,7 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 
 ## Görev Türleri
 
-`task-definition.schema.json` toplamda **15 task türü** tanımlar:
+`task-definition.schema.json` toplamda **16 task türü** tanımlar:
 
 | # | Görev Türü | Açıklama | Detay |
 |---|---|---|---|
@@ -72,6 +72,7 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 | 13 | **GetInstanceDataTask** | Tek bir instance'ın verisini çekme | [Trigger](./trigger) |
 | 14 | **SubProcessTask** | SubProcess çalıştırma | [Trigger](./trigger) |
 | 15 | **GetInstancesTask** | Filtre ile birden fazla instance çekme | [GetInstances](./get-instances) |
+| 16 | **SoapTask** | SOAP 1.1 / 1.2 web servis çağrısı | [Soap](./soap) |
 
 ## Görev Kullanımı
 

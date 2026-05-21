@@ -16,6 +16,12 @@ Bu doküman, workflow betikleriyle **girdi/çıktı haritalaması** yapmayı ve 
 4. [ScriptContext Kullanımı](#scriptcontext-kullanımı)
 5. [ScriptResponse Kullanımı](#scriptresponse-kullanımı)
 6. [ScriptBase Kullanımı](#scriptbase-kullanımı)
+   - [Secret yönetimi](#secret-yönetimi)
+   - [Property yardımcıları](#property-yardımcıları)
+   - [Koleksiyon ve dynamic nesne yardımcıları](#koleksiyon-ve-dynamic-nesne-yardımcıları)
+   - [XML yardımcıları](#xml-yardımcıları)
+   - [Loglama](#loglama)
+   - [Konfigürasyon](#konfigürasyon)
 7. [Implementasyon Örnekleri](#implementasyon-örnekleri)
 8. [Notification Mapping](#notification-mapping)
 9. [Best Practices](#best-practices)
@@ -451,6 +457,54 @@ var codes = ListSelect<string>(active, x => (string)x.productCode);
 > var items = AsList(context.Instance.Data.items);
 > var hasPending = ListAny(items, x => x.status == "pending");
 > ```
+
+### XML yardımcıları
+
+SOAP Task ve XML tabanlı entegrasyonlarda ham XML verisini parse etmek veya `XmlDocument`'ı stringe çevirmek için kullanılır.
+
+| Metod | Dönüş | Açıklama |
+|-------|-------|----------|
+| `ParseXml(string? xmlString)` | `XmlDocument?` | XML stringini parse eder. Boş/null input veya parse hatası durumunda `null` döner, asla fırlatmaz |
+| `XmlToString(XmlDocument? xmlDoc)` | `string?` | `XmlDocument`'ı XML stringine çevirir. `null` input için `null` döner |
+
+```csharp
+public Task<ScriptResponse> OutputHandler(ScriptContext context)
+{
+    var rawXml = context.Body?.data?.ToString();
+
+    var doc = ParseXml(rawXml);
+    if (doc == null)
+    {
+        return Task.FromResult(new ScriptResponse
+        {
+            Key = "xml-parse-error",
+            Data = new { error = "Geçersiz XML yanıtı" }
+        });
+    }
+
+    var ns = new XmlNamespaceManager(doc.NameTable);
+    ns.AddNamespace("soap", "http://schemas.xmlsoap.org/soap/envelope/");
+
+    var fault = doc.SelectSingleNode("//soap:Fault", ns);
+    if (fault != null)
+    {
+        return Task.FromResult(new ScriptResponse
+        {
+            Key = "soap-fault",
+            Data = new { error = fault.InnerText }
+        });
+    }
+
+    // Gerekirse belgeyi tekrar stringe çevir
+    var resultXml = XmlToString(doc);
+
+    return Task.FromResult(new ScriptResponse
+    {
+        Key = "soap-success",
+        Data = new { xml = resultXml }
+    });
+}
+```
 
 ### Loglama
 

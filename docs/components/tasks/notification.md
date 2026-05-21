@@ -18,10 +18,12 @@ Notification Task, iş akışı içinde birden fazla kanal üzerinden (SMS, e-po
   "flow": "sys-tasks",
   "flowVersion": "1.0.0",
   "tags": ["notify", "state"],
-  "config": {
-      "type": "10",
+  "attributes": {
+    "type": "10",
+    "config": {
       "channels": ["sms", "email"],
       "includeStateChannel": true
+    }
   }
 }
 ```
@@ -99,10 +101,12 @@ State kanalı yalnızca platform tarafından üretilen bildirimler içindir. Har
   "flow": "sys-tasks",
   "flowVersion": "1.0.0",
   "tags": ["notify", "state"],
-  "config": {
-      "type": "10",
+  "attributes": {
+    "type": "10",
+    "config": {
       "channels": [],
       "includeStateChannel": true
+    }
   }
 }
 ```
