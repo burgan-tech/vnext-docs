@@ -82,7 +82,7 @@ description: vNext View component — Backend-Driven UI tanımları
 
 State veya transition seviyesinde view tanımları yapılır. **vNext Client Workflow Manager SDK** state ve transition döngülerinde **doğru view'ı** kullanıcıya döner. View, gerekli data'yı Data Function'dan talep ederek **render** edilir.
 
-Detaylı akış için: [User Integration (kavramsal)](/docs/concepts/user-integration).
+Önerilen modelde **State view** mevcut durumu özetleyen read-only ekran, **Transition view** ise onay, form veya veri girişi alınan submit ekranıdır. Detaylı tasarım yaklaşımı için [Pseudo UI Rehberi](/docs/how-to/view-consept), genel etkileşim döngüsü için [User Integration (kavramsal)](/docs/concepts/user-integration) sayfasına bakın.
 
 ---
 
@@ -165,8 +165,8 @@ Client SDK platform header'ını okuyarak doğru variant'ı render eder.
 
 ## Tipik Kullanım Senaryoları
 
-- **State view**: state'e gelindiğinde render edilen ana ekran
-- **Transition view**: transition öncesi popup/modal onay mekanizması
+- **State view**: state'e gelindiğinde render edilen, mevcut durumu özetleyen read-only ana ekran
+- **Transition view**: transition öncesi onay, form veya veri girişi ekranı
 - **Form rendering**: Schema ile birlikte form generation
 - **Backend-driven UI**: ekran değişikliklerinin sadece backend deploy ile yapılması
 

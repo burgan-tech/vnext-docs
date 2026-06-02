@@ -161,6 +161,8 @@ public sealed class ScriptContext
     public Definitions.Workflow Workflow { get; private set; }
     public Transition Transition { get; private set; }
 
+    public InstanceMutations Mutations { get; }
+
     public IRuntimeInfoProvider Runtime { get; private set; }
     public Dictionary<string, dynamic> Definitions { get; private set; }
     public Dictionary<string, dynamic?> TaskResponse { get; private set; }
@@ -229,6 +231,29 @@ var userInfo = context.Instance.Data.userInfo;
 var paymentSchedule = context.Instance.Data.paymentSchedule;
 var currentLogin = context.Instance.Data.login.currentLogin;
 ```
+
+### Mutations
+
+`context.Mutations`, script'lerin `Instance` üzerinde değiştirmesine izin verilen alanları kontrollü şekilde biriktirir. Mutasyonlar script çalışması sırasında kaydedilir, script tamamlandıktan sonra platform tarafından atomik olarak uygulanır.
+
+`Stage` bilgisini bir mapping içinde güncellemek için:
+
+```csharp
+public class AccountCreationMapping : ScriptBase, IMapping
+{
+    public Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext context)
+    {
+        context.Mutations.SetStage("Account Created");
+
+        return Task.FromResult(new ScriptResponse());
+    }
+
+    public Task<ScriptResponse> OutputHandler(ScriptContext context) =>
+        Task.FromResult(new ScriptResponse());
+}
+```
+
+Bu kullanım, `Instance` üzerindeki platform tarafından yönetilen alanlara doğrudan müdahale etmeden, iş akışının belirli adımlarında `stage` bilgisini güncellemeyi sağlar. `Stage`, instance start veya transition request gövdesinden alınarak da güncellenebilir; script içinden yapılacak güncellemelerde önerilen yol `context.Mutations.SetStage(...)` çağrısıdır.
 
 ### TaskResponse
 

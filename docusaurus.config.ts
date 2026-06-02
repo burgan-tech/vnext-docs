@@ -190,7 +190,7 @@ const config: Config = {
     announcementBar: {
       id: 'v0_0_54_release',
       content:
-        '🚀 vNext <b>v0.0.54</b> yayınlandı — <a href="/vnext-docs/blog/release-v0-0-54">Release Notes</a>',
+        '🚀 vNext <b>v0.0.58</b> yayınlandı — <a href="/vnext-docs/blog/release-v0-0-58">Release Notes</a>',
       backgroundColor: '#2563eb',
       textColor: '#ffffff',
       isCloseable: true,

@@ -278,7 +278,7 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 | `labels` | array | **Evet** | Çoklu dil etiketleri (`minItems: 1`) |
 | `view` | object \| null | Hayır | State view tanımı: `view` (reference), `loadData` (boolean), `extensions` (string[]) |
 | `subFlow` | object \| null | Hayır | SubFlow state için alt akış tanımı: `type` (`S`/`P`), `process` (reference), `mapping` |
-| `transitions` | array | Hayır | Bu state'den çıkan transition'lar. Wizard state (`stateType: 5`) için `maxItems: 1` |
+| `transitions` | array | Hayır | Bu state'den çıkan transition'lar. Wizard state (`stateType: 5`) için yalnızca **bir manuel transition** tanımlanabilir |
 | `onEntries` | array | Hayır | State'e girildiğinde çalıştırılacak task'lar |
 | `onExits` | array | Hayır | State'den çıkılırken çalıştırılacak task'lar |
 | `errorBoundary` | object \| null | Hayır | State seviyesi hata yönetimi |
@@ -292,7 +292,17 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 | `2` | **Intermediate** | Ara state |
 | `3` | **Final** | Bitiş state'i |
 | `4` | **SubFlow** | Alt akış çağıran state |
-| `5` | **Wizard** | Wizard (sihirbaz) state. En fazla 1 transition'a sahip olabilir |
+| `5` | **Wizard** | Wizard (sihirbaz) state. Yalnızca bir manuel transition'a sahip olabilir |
+
+### Wizard State ve View Davranışı
+
+Wizard state, kullanıcı girdisini transition tabanlı modellemek için kullanılan özel state tipidir. Bir Wizard state içinde yalnızca bir manuel transition tanımlanabilir; input, seçim ve onay gibi kullanıcı etkileşimleri state view içinde data alanı olarak değil, bu transition'ın view'ı üzerinden alınmalıdır.
+
+State Function aktif state'in tipini Wizard olarak değerlendirdiğinde önce authorization/role evaluation sonrasında kullanılabilir transition listesini belirler. Kullanılabilir manuel transition varsa View Function, state view yerine bu transition'ın view'ını döndürür. Transition üzerinde view tanımlı değilse state'de tanımlı view fallback olarak kullanılır.
+
+Loop oluşmaması için State Function yanıtındaki kullanılabilir transition listesinde ilgili transition'ın `hasView` bilgisi `false` döner. Bu sayede client, state aşamasında zaten gösterilen transition view için tekrar transition view kontrolü yapmaz.
+
+Örneğin hesap açılışı akışında "hesap türü seçimi" state'inde kullanıcıdan vadeli/vadesiz seçimi alınacaksa bu seçim state view içinde veri alanı olarak modellenmemelidir. Seçim transition routing perspektifiyle tasarlanır; böylece her seçim ayrı transition görünürlüğü, loglama ve raporlama katkısı sağlar.
 
 ### `stateSubType` Enum Değerleri
 

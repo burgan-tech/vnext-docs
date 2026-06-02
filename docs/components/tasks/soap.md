@@ -174,4 +174,4 @@ SOAP servisler hata durumunda genellikle HTTP 500 üzerinden SOAP Fault döner. 
 
 - [HTTP Task](./http) — REST API çağrıları
 - [Script Task](./script) — C# Roslyn script çalıştırma
-- [Task Genel Bakış](./index) — Tüm task türleri
+- [Task Genel Bakış](./) — Tüm task türleri

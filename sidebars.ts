@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
         'tools/forge-studio',
         'tools/workflow-cli',
         'tools/template-cli',
+        'tools/ai-assisted-development',
       ],
     },
     {
@@ -45,6 +46,7 @@ const sidebars: SidebarsConfig = {
           link: { type: 'doc', id: 'components/tasks/index' },
           items: [
             'components/tasks/http',
+            'components/tasks/soap',
             'components/tasks/script',
             'components/tasks/trigger',
             'components/tasks/get-instances',
