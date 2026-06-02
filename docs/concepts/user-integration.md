@@ -49,12 +49,18 @@ flowchart TD
   style Submit fill:#dbeafe,stroke:#1e40af,color:#1e293b
 ```
 
+:::note[Wizard state davranışı]
+Normal akışta state view render edilir; kullanıcı bir transition seçtiğinde transition view submit öncesi alınır. Aktif state bir Wizard state ise State Function, authorization/role evaluation sonrasında kullanılabilir tek manuel transition'ı dikkate alır ve input odaklı view'ı state aşamasında gösterebilir. Transition view tanımlıysa o döner; tanımlı değilse state view fallback olarak kullanılır.
+
+Bu modelde ilgili transition, tekrar transition view sorgusu yapılmaması için kullanılabilir transition listesinde `hasView: false` döner. Amaç kullanıcı deneyimini hızlandırmak, yönlendirmeyi data içindeki değerlere değil transition seviyesine taşımaktır.
+:::
+
 ## Adım Adım
 
 1. **Instance başlatılır**: `POST /api/v1/{domain}/workflows/{wf}/instances/start` (genelde `sync=false`)
 2. **Long-polling**: Client `GET /functions/state` çağırarak `status.code = "A"` (Active) olana kadar bekler
-3. **State response**: Active state'e ulaşıldığında response, mevcut state'i ve view ihtiyacı bilgisini içerir
-4. **View talebi**: View var ise client `GET /functions/view` ile view tanımını çeker
+3. **State response**: Active state'e ulaşıldığında response, mevcut state'i ve view ihtiyacı bilgisini içerir. Wizard state için bu view ihtiyacı, kullanılabilir tek manuel transition'ın view'ına işaret edebilir
+4. **View talebi**: View var ise client `GET /functions/view` ile view tanımını çeker. Wizard state'te transition view tanımlıysa bu view döner; yoksa state view döner
 5. **Data talebi**: View'in data ihtiyacı varsa client `GET /functions/data` ile veri çeker
 6. **Render**: View, data ile birlikte render edilir
 7. **Transition önce kontrolü**: Kullanıcı bir transition'ı submit etmeden önce, transition'a özel view var mı kontrol edilir (popup/modal onay)
@@ -67,6 +73,12 @@ flowchart TD
 - **Schema** tanımları varsa form validation **annotation**'larını client kullanır
 - Ön uçta real-time validation; backend'de submit'te re-validation
 - Bkz. [Schema component](/docs/components/schema)
+
+## Transition Tabanlı Yönlendirme
+
+State view'lar kullanıcıdan girdi almak için değil, mevcut süreci bilgilendirmek ve özetlemek için kullanılmalıdır. Girdi alma, onay ve seçim adımları transition view üzerinden tasarlanır.
+
+Hesap açılışı akışında "hesap türü seçimi" adımına gelindiğinde kullanıcı vadeli veya vadesiz hesap seçebilir. Bu seçim state view içindeki data alanı olarak değil, transition routing yaklaşımıyla modellenmelidir. Böylece vadeli ve vadesiz hesap açılışları ayrı transition'lar üzerinden loglanabilir, izlenebilir ve raporlanabilir. Data seviyesine gömülü seçim değerleriyle aynı sonuç teknik olarak mümkün olsa da platformun konsept yaklaşımı transition tabanlı görünürlük ve raporlamayı tercih eder.
 
 ## İlgili
 

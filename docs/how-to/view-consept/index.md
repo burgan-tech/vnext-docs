@@ -93,19 +93,35 @@ Renderer bu iki dosyayı birleştirerek ekranda bir ad alanı gösterir — labe
 
 ## Workflow Bağlamında View Rolü
 
-vNext iş akışlarında view'lar, bağlandıkları yere göre iki farklı rol üstlenir: **State View** ve **Transition View**.
+vNext iş akışlarında platform seviyesinde iki view bağlamı bulunur: **State View** ve **Transition View**. İkisi de aynı view altyapısını kullanır; ancak Workflow Manager açısından farklı anlarda ve farklı amaçlarla devreye girer.
+
+:::note[Önerilen kullanım modeli]
+Bu ayrım platform tarafından zorunlu tutulmaz. Yine de önerilen yaklaşım, state view'ları bilgilendirme ve özetleme ekranları; transition view'ları ise onay, form ve veri girişi ekranları olarak tasarlamaktır.
+:::
 
 ### State View
 
-State tanımına bağlı view'lar read-only ekranlardır. Kullanıcıya mevcut instance durumunu özetler, bilgilendirici içerik sunar ya da ilerleyeceği yönü gösteren bir arayüz oluşturur. Kullanıcıdan veri alınmaz; bu ekranlar yalnızca gösterim amacıyla tasarlanır.
+State tanımına bağlı view'lar genellikle read-only ekranlardır. Kullanıcıya mevcut instance durumunu özetler, bilgilendirici içerik sunar ya da sürecin hangi noktaya geldiğini gösterir.
+
+Workflow Manager'ın çalışma modelinde state'ler birer durak noktasıdır: süreç belirli bir noktaya gelmiştir ve kullanıcıya bu noktanın bağlamı gösterilir. State View, bu state bilgisini UI açısından besler; kullanıcının mevcut durumu anlamasını ve uygun transition seçeneklerini görmesini sağlar.
 
 ### Transition View
 
-Transition tanımına bağlı view'lar genellikle form ekranlarıdır. Kullanıcıdan girdi alan ya da onay süreçlerini yöneten submit ekranlardır. Kullanıcı formu doldurduktan sonra ilgili transition tetiklenerek iş akışı ilerler.
+Transition tanımına bağlı view'lar genellikle onay, form veya veri girişi ekranlarıdır. Kullanıcıdan alınan veri veya onay, ilgili transition tetiklendiğinde sürece aktarılır.
+
+Workflow Manager açısından transition'lar submit/trigger noktalarıdır: kullanıcı bir aksiyon alır, gerekiyorsa Transition View üzerinden veri girer ve ardından transition başlatılır. Bu nedenle Transition View, girdiyi toplayan ve süreci ilerleten UI adımı olarak konumlandırılır.
+
+### Wizard State View Davranışı
+
+Wizard state (`stateType: 5`), input odaklı adımları transition üzerinden daha doğrudan göstermek için kullanılır. State Function aktif state'in Wizard olduğunu gördüğünde, önce authorization/role evaluation sonrasında kullanılabilir transition listesini değerlendirir. Kullanılabilir manuel transition varsa View Function bu transition'ın view'ını döndürür; transition üzerinde view tanımlı değilse state'de tanımlı view fallback olarak kullanılır.
+
+Bu davranışta State Function yanıtındaki ilgili transition için `hasView: false` döner. Böylece client, zaten state aşamasında dönen transition view'ı için tekrar View Function çağırıp aynı ekrana dönmez.
+
+Wizard state tasarımında State View bilgilendirme ve özetleme içindir; kullanıcı girdisi Transition View üzerinden alınmalıdır. Hesap açılışı örneğinde "hesap türü seçimi" state view içinde veri alan bir form olarak modellenmemelidir. Vadeli/vadesiz gibi seçimler transition routing perspektifiyle tasarlanmalıdır. Bu sayede seçimler loglama, izlenebilirlik ve raporlama tarafında transition seviyesinde görünür olur; data alanının içine gömülü değerleri ayrıca analiz etme ihtiyacı azalır.
 
 ### Önerilen Etkileşim Modeli
 
-Bu ayrım bir zorunluluk değildir; ancak platform tarafından önerilen tasarım örüntüsüdür.
+Bu ayrım bir validasyon kuralı değil, platform tarafından önerilen tasarım örüntüsüdür.
 
 ```
 State View gösterilir (read-only)

@@ -487,6 +487,8 @@ Hangi transition'ın view'ının alınacağını belirtir:
 - **Sağlandı**: O belirli transition için tanımlanan view'ı döndürür (varsa)
 - **Sağlanmadı**: State view'ını döndürür
 
+Bu seçim, önerilen View Concept modelindeki ayrımı takip eder: `transitionKey` olmadan mevcut state'i anlatan **State View**, `transitionKey` ile ilgili aksiyonu başlatmaya hazırlayan **Transition View** alınır. Detay için [Pseudo UI Rehberi](/docs/how-to/view-consept) sayfasına bakın.
+
 **Örnek:**
 ```http
 GET /core/workflows/account-opening/instances/123/functions/view?transitionKey=confirm-creation
