@@ -67,7 +67,7 @@ description: vNext Schema component — workflow ve transition data validation, 
 
 ## Master Schema Davranışı
 
-Master schema, flow'un kendisine tanımlanır ve **instance data'nın şablon yapısını** belirler. Amacı yalnızca doğrulama değil; aynı zamanda `x-lookup`, `x-encrypt` gibi vNext özelliklerini ve **instance filtering**'i etkin kılmaktır. Bir instance data merge uygulandığında flow'da master schema tanımlıysa runtime bunu valide eder; uygun değilse isteği **reject** eder.
+Master schema, flow'un kendisine tanımlanır ve **instance data'nın şablon yapısını** belirler. Amacı yalnızca doğrulama değil; aynı zamanda `x-roles` (alan bazlı yetkilendirme), `x-encryption`, `x-lookup` gibi vNext özelliklerini ve **instance filtering**'i etkin kılmaktır. Bir instance data merge uygulandığında flow'da master schema tanımlıysa runtime bunu valide eder; uygun değilse isteği **reject** eder.
 
 :::caution[required kullanmayın, additionalProperties: true olmalı]
 Instance data her state'de merge ile **genişler** ve farklı seviyelerde yeni alanlar kazanır. Bu nedenle master schema'da:
@@ -84,7 +84,30 @@ Buna karşılık master schema'da **`pattern`**, ana omurga şablonu, vocabulary
 
 Data Function veriyi response ederken master schema **aktif rol alır**. [Instance filtering](/docs/how-to/instance-filtering) sırasında, instance data gibi dinamik alanların **tiplerini şemadan çözerek** gelişmiş (advance) filtre esnekliği kazandırır. Master schema olmadan dinamik alanlarda tip-duyarlı filtreleme mümkün olmaz.
 
-Alan bazlı görünürlük (roleGrant) de master şema property'lerinde tanımlanır; bkz. [Yetkilendirme → Master Şema Alan Görünürlüğü](/docs/concepts/authorization#master-şema-alan-bazlı-görünürlük).
+Alan bazlı görünürlük, master şema property'lerinde **`x-roles`** keyword'ü ile tanımlanır (aşağıda); bkz. [Yetkilendirme → Master Şema Alan Görünürlüğü](/docs/concepts/authorization#master-şema-alan-bazlı-görünürlük).
+
+### Alan Bazlı Yetkilendirme: `x-roles`
+
+`x-roles`, bir JSON Schema property'sine (instance data field'ı) **rol değerlendirmesi (role evaluation)** ile yetkilendirme uygulayan vocabulary keyword'üdür. Özellikle **master şemada** önem kazanır: hangi field'ların kime görünür olacağını `x-roles` belirler — yani **alan (column) seviyesinde güvenlik** sağlar. Data Function ve veri dönen endpoint'ler authorize katmanını çalıştırıp yalnızca çağıranın görmesine izinli alanları döndürür.
+
+```json
+{
+  "x-roles": [
+    { "role": "morph-idm.initiator", "grant": "allow" },
+    { "role": "$userBehalfOf.$.context.Instance.Data.initial.customer.ownerUserId", "grant": "deny" }
+  ]
+}
+```
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `x-roles` | array | — | Property için rol grant listesi (`minItems: 1`). Tanımlı değilse field tüm yetkili çağıranlara görünür |
+| `role` | string | **Evet** | Domain-qualified rol adı (ör. `morph-idm.initiator`) **veya** dinamik JSONPath ifadesi (ör. `$userBehalfOf.$.context...`) |
+| `grant` | string | **Evet** | `allow` veya `deny`. **DENY her zaman ALLOW'u geçersiz kılar** |
+
+`role` değeri statik bir ad ya da JSONPath ifadesi olabilir; sistem rolleri (`$InstanceStarter` vb.) ve JSONPath grant prefiksleri (`$user.` / `$userBehalfOf.` / `$role.`) burada da geçerlidir. Bu kalıpların çözümleme semantiği için bkz. [Yetkilendirme](/docs/concepts/authorization).
+
+`x-encryption` de aynı alan-yönetişim kapsamındadır; bir field'ın şifreleme tipini (`persisted` / `transport`) belirtir. Tüm property seviyesi `x-*` uzantılarının ayrıntısı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 
 ### View ile Kullanımı
 
@@ -156,6 +179,8 @@ vNext vocabulary'sinin (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-enc
 | `minItems` / `maxItems` | integer | Hayır | Array eleman sayısı aralığı |
 | `const` | any | Hayır | Sabit değer |
 | `default` | any | Hayır | Varsayılan değer |
+
+Standart JSON Schema alanlarına ek olarak, property seviyesinde vNext **`x-*` vocabulary uzantıları** desteklenir — alan bazlı yetkilendirme (`x-roles`), şifreleme (`x-encryption`), etiketleme (`x-labels`), LOV (`x-lov`), lookup (`x-lookup`), koşullu görünürlük (`x-conditional`) vb. Tam liste ve örnekler için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 
 ---
 

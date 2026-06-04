@@ -281,9 +281,32 @@ Yalnızca alt bileşen (nested component) schema'larında kullanılır. Üst bil
 
 ---
 
+### `x-roles` — Alan Bazlı Yetkilendirme
+
+Bir alanın **rol değerlendirmesi (role evaluation)** ile yetkilendirilmesini sağlar. Özellikle **master şemada** önemlidir: hangi alanların kime görünür olacağını `x-roles` belirler — yani **alan (column) seviyesinde güvenlik** sağlar. Tanımı olmayan alanlar tüm yetkili çağıranlara görünür.
+
+```json
+"customerSecret": {
+  "type": "string",
+  "x-roles": [
+    { "role": "morph-idm.initiator", "grant": "allow" },
+    { "role": "$userBehalfOf.$.context.Instance.Data.initial.customer.ownerUserId", "grant": "deny" }
+  ]
+}
+```
+
+| Alan | Açıklama |
+|------|----------|
+| `role` | Statik rol adı (ör. `morph-idm.initiator`) **veya** dinamik JSONPath ifadesi (ör. `$userBehalfOf.$.context...`) |
+| `grant` | `allow` veya `deny` — **DENY her zaman ALLOW'u geçersiz kılar** |
+
+Rol değerlendirme semantiği (sistem rolleri, `$user` / `$userBehalfOf` / `$role` prefiksleri) için bkz. [Yetkilendirme](/docs/concepts/authorization).
+
+---
+
 ### `x-encryption` — Şifreleme (Bilgi Amaçlı)
 
-Tasarımcı bu alanı değiştirmez; ancak ekranda göreceğiniz bazı alanlarda şifreleme tipi belirtilmiş olabilir.
+`x-roles` ile aynı alan-yönetişim kapsamındadır. Tasarımcı bu alanı değiştirmez; ancak ekranda göreceğiniz bazı alanlarda şifreleme tipi belirtilmiş olabilir.
 
 ```json
 "tckn": {
