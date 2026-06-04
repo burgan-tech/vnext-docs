@@ -283,6 +283,7 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 | `onExits` | array | Hayır | State'den çıkılırken çalıştırılacak task'lar |
 | `errorBoundary` | object \| null | Hayır | State seviyesi hata yönetimi |
 | `queryRoles` | array | Hayır | State seviyesi sorgu rolleri. Root `queryRoles`'u override eder |
+| `alias` | array | Hayır | State için rol bazlı alternatif çoklu-dil etiketleri. Tanımlıysa State Function `state` değerini role göre maskeler |
 
 ### `stateType` Enum Değerleri
 
@@ -315,6 +316,62 @@ Loop oluşmaması için State Function yanıtındaki kullanılabilir transition 
 | `4` | Suspended | Geçici askıya alınmış |
 | `5` | Busy | Meşgul |
 | `6` | Human | İnsan müdahalesi gerektiren |
+
+### State Alias (Rol Tabanlı State Maskeleme)
+
+`alias`, bir state'in dış dünyaya nasıl görüneceğini **role göre** maskelemek için kullanılır. Bir süreç client tarafında başlayıp backoffice'te devam ederken, arka planda Fraud, Limit, KPS gibi kontrol state'leri çalışır. Client durumu [State Function](/docs/components/functions/custom#state-function) ile sorduğunda normalde ham `state.key` döner — bu da iç süreç adımlarının client'a sızmasına ve bir güvenlik açığına yol açar.
+
+`alias` ile aynı state'e rol bazlı alternatif çoklu-dil etiketleri tanımlanabilir: client `"Değerlendirme Aşamasında"` gibi maskelenmiş bir değer görürken, backoffice aktörleri kendi rollerine uygun alias'ı (örn. `"Operasyon İncelemesinde"`) görür.
+
+`alias` bir dizidir; her öğe aşağıdaki alanlara sahiptir:
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `name` | string | **Evet** | Alias adı. İstek diline uygun bir `label` bulunamazsa fallback olarak döner |
+| `roles` | array | **Evet** | Bu alias'ın geçerli olduğu roller (`minItems: 1`) |
+| `labels` | array | **Evet** | Alias'ın çoklu-dil etiketleri (`minItems: 1`) |
+
+**`roles` alanları:**
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `role` | string | **Evet** | Rol adı |
+| `grant` | string | **Evet** | `allow` veya `deny`. DENY her zaman ALLOW'u geçersiz kılar |
+
+**`labels` alanları:**
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `label` | string | **Evet** | Etiket metni |
+| `language` | string | **Evet** | Dil kodu (pattern: `^[a-z]{2}(-[A-Z]{2})?$`, örn. `tr`, `en`, `tr-TR`) |
+
+**Örnek:**
+
+```json
+{
+  "alias": [
+    {
+      "name": "Değerlendirme Aşamasında",
+      "roles": [
+        { "role": "backoffice.operator", "grant": "allow" }
+      ],
+      "labels": [
+        { "label": "Operasyon İncelemesinde", "language": "tr" },
+        { "label": "Under Operational Review", "language": "en" }
+      ]
+    }
+  ]
+}
+```
+
+**Çözümleme Davranışı:**
+
+State Function `state` değerini döndürürken aşağıdaki sırayı izler:
+
+1. State'te `alias` tanımı **yoksa** → `state.key` döner (mevcut davranış).
+2. `alias` tanımı **varsa** → istek yapan aktörün rolleri her alias'ın `roles` listesine göre değerlendirilir (DENY her zaman ALLOW'u geçersiz kılar).
+3. Eşleşen bir alias bulunursa → istek diline (Accept-Language) uygun `label` döner; o dilde label yoksa `alias.name` döner.
+4. Hiçbir alias rolü eşleşmezse → `state.key` fallback olarak döner.
 
 ---
 
@@ -592,7 +649,11 @@ Workflow (global), state ve task seviyesinde tanımlanabilir. Öncelik sırası:
 
 ### MasterSchema
 
-`attributes.schema` alanı, workflow'un **instance data** ana yapısını belirler. Gelişmiş filtreleme ve instance data'nın her değişim noktasında **tutarlılık kontrolü** sağlar. Bkz. [Schema component](/docs/components/schema).
+`attributes.schema` alanı, workflow'un **instance data** ana yapısını belirler. Gelişmiş filtreleme ve instance data'nın her değişim noktasında **tutarlılık kontrolü** sağlar.
+
+:::caution
+Instance data her state'de merge ile genişlediğinden master schema'da **`required` kullanılmamalı** ve **`additionalProperties: true`** olmalıdır. Davranış kuralları, filtering ve view kullanımı için bkz. [Schema → Master Schema Davranışı](/docs/components/schema#master-schema-davranışı).
+:::
 
 ### Functions ve Extensions
 

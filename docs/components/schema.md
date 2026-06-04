@@ -65,6 +65,36 @@ description: vNext Schema component — workflow ve transition data validation, 
 
 ---
 
+## Master Schema Davranışı
+
+Master schema, flow'un kendisine tanımlanır ve **instance data'nın şablon yapısını** belirler. Amacı yalnızca doğrulama değil; aynı zamanda `x-lookup`, `x-encrypt` gibi vNext özelliklerini ve **instance filtering**'i etkin kılmaktır. Bir instance data merge uygulandığında flow'da master schema tanımlıysa runtime bunu valide eder; uygun değilse isteği **reject** eder.
+
+:::caution[required kullanmayın, additionalProperties: true olmalı]
+Instance data her state'de merge ile **genişler** ve farklı seviyelerde yeni alanlar kazanır. Bu nedenle master schema'da:
+
+- **`required` kullanılmamalıdır** — aksi halde henüz oluşmamış alanlar erken merge'lerde reddedilir.
+- **`additionalProperties: true` olmalıdır** — verinin genişlemesine izin verecek şekilde.
+
+Zorunluluk ve sıkı doğrulama, master schema'da değil **transition schema**'larında (request body validation) yapılmalıdır.
+:::
+
+Buna karşılık master schema'da **`pattern`**, ana omurga şablonu, vocabulary tanımları (`x-*`) ve filtering tanımları kıymetlidir ve korunmalıdır.
+
+### Filtering ve Data Function'daki Rolü
+
+Data Function veriyi response ederken master schema **aktif rol alır**. [Instance filtering](/docs/how-to/instance-filtering) sırasında, instance data gibi dinamik alanların **tiplerini şemadan çözerek** gelişmiş (advance) filtre esnekliği kazandırır. Master schema olmadan dinamik alanlarda tip-duyarlı filtreleme mümkün olmaz.
+
+Alan bazlı görünürlük (roleGrant) de master şema property'lerinde tanımlanır; bkz. [Yetkilendirme → Master Şema Alan Görünürlüğü](/docs/concepts/authorization#master-şema-alan-bazlı-görünürlük).
+
+### View ile Kullanımı
+
+- **Read-only view** (girdi yoksa): master schema doğrudan view'a `dataSchema` olarak verilebilir; mevcut durumu özetleyen ekranlar için yeterlidir.
+- **Girdi içeren view**: girdi alınan kısımlarda master schema değil, **transition'a özel schema** kullanılmalıdır.
+
+vNext vocabulary'sinin (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-encryption` vb.) ayrıntılı anlatımı için bkz. [Pseudo UI → Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+
+---
+
 ## Properties
 
 ### Top-Level Alanlar
@@ -146,5 +176,8 @@ Schema'lar **Ajv2019** ile doğrulanır. Front-end'de form validation için anno
 
 - [Instance Data](/docs/concepts/instance-data) — instance veri yapısı
 - [Workflow component](/docs/components/workflow) — `attributes.schema` master schema referansı
+- [Pseudo UI → Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) — vNext vocabulary (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-encryption`)
+- [Yetkilendirme](/docs/concepts/authorization) — master şema alan bazlı görünürlük
+- [Instance Filtering](/docs/how-to/instance-filtering) — master schema ile tip-duyarlı filtreleme
 - [Mappings](/docs/components/mappings) — transition ve mapping kullanımı
 - Schema kaynağı: [vnext-schema (GitHub)](https://github.com/burgan-tech/vnext-schema)

@@ -1,168 +1,198 @@
 ---
 sidebar_position: 5
 title: AI Destekli Geliştirme
-description: vNext flow geliştiricilerinin Claude Code, Cursor ve diğer AI araçlarından maksimum fayda alması için skill, reference ve agent yapılandırması rehberi
+description: vNext AI Toolkit — vNext workflow-domain bileşenlerini schema-first ve agent-güdümlü biçimde üreten resmi Claude Code plugin'inin kurulumu, kullanımı ve komut setleri
 ---
 
 # AI Destekli Geliştirme
 
-vNext bileşenleri — workflow, task, schema, view, function, extension — JSON ve `.csx` dosyaları olarak yazılır. Bu yapı, AI kodlama asistanları (Claude Code, Cursor, Codex vb.) için son derece uygundur: kontratlar nettir, kurallar deterministiktir ve `npm run validate` ile her değişiklik doğrulanabilir.
+**vNext AI Toolkit**, vNext workflow-domain bileşenlerini (`schema`, `workflow`, `task`, `view`, `function`, `extension`) AI yardımıyla üretmek için geliştirilmiş resmi bir **Claude Code plugin**'idir. Bir isteği analiz eder, tasarlar, JSON'unu yazar, doğrular, güvenlik incelemesinden geçirir ve dökümante eder — hepsi proje içinde, rehberli bir akışla.
 
-Ancak AI asistanı **bağlam olmadan** vNext'in kurallarını bilemez: bileşen path'lerinin `vnext.config.json`'dan çözülmesi gerektiğini, auto-transition'ların çiftler hâlinde gelmesi gerektiğini veya view renderer kararının kullanıcıya sorulması gerektiğini tahmin edemez. İşte bu bağlamı asistana taşıyan üç yapı vardır: **agent yapılandırma dosyaları**, **skill'ler** ve **reference'lar**.
+> Plugin kaynağı: [`burgan-tech/vnext-ai-toolkit`](https://github.com/burgan-tech/vnext-ai-toolkit)
 
-Bu sayfa, [`burgan-tech/vnext-example`](https://github.com/burgan-tech/vnext-example) referans projesindeki AI yapılandırmasını örnek alarak, kendi domain reponuzda aynı kurulumu nasıl yapacağınızı anlatır. Amaç dosyaları birebir kopyalamak değil — hangi yapıların var olduğunu, geliştiriciye nasıl fayda sağladığını ve kendi reponuza nasıl uyarlayacağınızı göstermektir.
+## Amaç
 
-## Neden önemli?
+vNext platformunda bir domain, her biri bir JSON Schema'ya göre doğrulanan JSON bileşen dosyalarından oluşur. Bunları elle yazmak; çapraz referansları takip etmeyi, enum değerlerini doğru vermeyi, `.csx` mapping dosyalarını doğru C# arayüzlerine göre yazmayı ve her değişikliği `npm run validate`'ten geçirmeyi gerektirir. Toolkit, bu işi domain projeniz içinde **rehberli, agent-güdümlü** bir akışa dönüştürür.
 
-| AI bağlamı olmadan | AI bağlamı ile |
-|--------------------|----------------|
-| Asistan path'leri tahmin eder, yanlış klasöre dosya yazar | Path'ler `vnext.config.json`'dan çözülür |
-| Schema'lar validation'dan geçmez, alanlar uydurulur | Skill önce kullanıcıdan alan/validation/rol bilgisini toplar |
-| Tek başına auto-transition gibi geçersiz yapılar üretilir | Critical Rules ihlal edilmeden üretilir |
-| `.csx` mapping'lerde double-wrap / raw response hataları tekrarlar | Reference, doğru kontratı baştan dayatır |
-| Güncel olmayan eğitim verisinden çalışır | Context7 MCP ile güncel runtime dökümanı sorgulanır |
+:::tip[Schema-first yaklaşım]
+Toolkit'in en temel kuralı: **hardcoded enum yok, varsayılan zorunlu alan yok, tahmini JSON yapısı yok.** Her bileşen, projenizin `package.json`'ında sabitlenmiş (`pinned`) [`@burgan-tech/vnext-schema`](https://github.com/burgan-tech/vnext-schema) içindeki JSON Schema'lara göre yazılır — varsayıma göre değil.
+:::
 
-## Üç temel yapı
+Plugin şunları getirir:
 
-```mermaid
-graph TB
-    Config["Agent Yapılandırma Dosyaları<br/>CLAUDE.md · AGENTS.md · .cursor/rules"]
-    Skills["Skills<br/>.claude/skills · .cursor/skills"]
-    Refs["References<br/>.claude/references"]
-    Context7["Context7 MCP<br/>güncel runtime dökümanı"]
+- **Sekiz uzman agent** — bir build pipeline'ı oluşturan yedi agent (`analyst → architect → component-author → validator → security-reviewer + doc-writer`, ayrıca PR kontrolü için `reviewer`) ve uçtan uca tasarım orkestratörü `vnext-architect`.
+- **Dokuz skill** — bir şemsiye referans skill'i (`authoring-vnext-components`) ve sekiz odaklı yazım skill'i.
+- **Beş slash command** — giriş noktaları olarak `vnext-init`, `new-component`, `vnext-design-process`, `validate`, `build`.
 
-    Config -->|"her oturumda yüklenir"| Agent["AI Asistanı"]
-    Skills -->|"göreve göre tetiklenir"| Agent
-    Refs -->|"skill'ler tarafından okunur"| Agent
-    Context7 -->|"talep üzerine sorgulanır"| Agent
+## Neden?
+
+| Elle yazım | vNext AI Toolkit ile |
+|------------|----------------------|
+| Bileşen path'leri tahmin edilir, yanlış klasöre yazılır | Path'ler `vnext.config.json`'dan çözülür (domain-agnostic) |
+| Enum/zorunlu alanlar uydurulur, validation'dan geçmez | Bileşenler pinned schema'ya göre, **ilk seferde** `npm run validate`'ten geçecek şekilde yazılır |
+| `.csx` mapping'lerde double-wrap / yanlış kontrat hataları tekrarlar | `authoring-vnext-components` skill'i doğru `.csx` kontratını dayatır |
+| Güvenlik ve dokümantasyon manuel/atlanır | Pipeline'da `security-reviewer` + `doc-writer` otomatik çalışır |
+| Güncel olmayan eğitim verisinden çalışılır | Pinned schema → Context7 → vnext-docs sırasıyla güncel kaynak sorgulanır |
+
+## Önkoşullar
+
+Plugin, bir **vNext domain projesinin içinde** çalışır:
+
+- **Claude Code** kurulu olmalı.
+- Kökte **`vnext.config.json`** bulunan, [`@burgan-tech/vnext-template`](https://github.com/burgan-tech)'ten oluşturulmuş bir domain projesi.
+- `node_modules` içinde sabitlenmiş **`@burgan-tech/vnext-schema`**.
+
+Henüz bir projeniz yoksa, `/vnext-ai-toolkit:vnext-init` komutu temel projeyi (template üzerinden) ve toolkit dosyalarını sizin için kurar. Sıfırdan proje oluşturmak için ayrıca bkz. [Template CLI](./template-cli).
+
+## Kurulum
+
+Marketplace üzerinden kurun:
+
+```bash
+claude plugin marketplace add burgan-tech/vnext-ai-toolkit
+claude plugin install vnext-ai-toolkit@burgan-tech
 ```
 
-- **Agent yapılandırma dosyaları** her oturumda otomatik yüklenir — projenin "anayasası"dır.
-- **Skill'ler** belirli bir göreve girişildiğinde devreye girer — "bunu şu adımlarla yap" rehberidir.
-- **Reference'lar** skill'ler tarafından gerektiğinde okunan derin kalıp dökümanlarıdır.
+Daha sonra güncellemek için:
 
----
+```bash
+claude plugin marketplace update burgan-tech
+```
 
-## 1. Agent yapılandırma dosyaları
+Geliştirme amaçlı doğrudan klonlamak isterseniz:
 
-Bunlar projenin kök dizinindeki, AI asistanının **her oturumda** okuduğu dosyalardır. Bileşen yapısını, dizin kurallarını, kritik kuralları ve bilgi erişim stratejisini içerirler.
+```bash
+git clone https://github.com/burgan-tech/vnext-ai-toolkit.git ~/.claude/plugins/vnext-ai-toolkit
+```
 
-| Dosya | Kimin için | Rolü |
-|-------|------------|------|
-| [`CLAUDE.md`](https://github.com/burgan-tech/vnext-example/blob/master/CLAUDE.md) | Claude Code | Bileşen envelope'u, path çözümü, flow zihinsel modeli, kritik kurallar, skill kataloğu |
-| [`AGENTS.md`](https://github.com/burgan-tech/vnext-example/blob/master/AGENTS.md) | Codex / diğer ajanlar | `CLAUDE.md` ile **senkron** ikiz — aynı kuralları farklı ajan için tutar |
-| [`.cursor/rules/cursorrules.mdc`](https://github.com/burgan-tech/vnext-example/blob/master/.cursor/rules/cursorrules.mdc) | Cursor | `alwaysApply: true` MDC kuralı — bileşen yapısı ve flow tipleri her promptta enjekte edilir |
+## Hızlı Başlangıç
 
-vnext-example'daki `CLAUDE.md` şu bölümleri kapsar (kendi reponuz için iyi bir iskelet):
+```bash
+# 1. Workspace'i kur veya tazele. vnext.config.json yoksa temel projeyi
+#    @burgan-tech/vnext-template ile iskeleler, ardından toolkit dosyalarını
+#    (docker-compose + MockLab, CLAUDE.md, entegrasyon testleri ...) ekler.
+#    Üzerine yazmadan önce diff gösterir.
+claude /vnext-ai-toolkit:vnext-init
 
-- **Commands** — `npm run validate`, build, local dev sunucuları
-- **Component path resolution** — bileşenlere dokunmadan önce `vnext.config.json`'ın nasıl okunacağı
-- **Standard component JSON envelope** — `key`, `version`, `domain`, `flow`, `attributes` kabuğu
-- **Component creation map** — hangi bileşen tipi hangi klasöre, hangi şablonla
-- **Flow execution mental model** — state / transition / task çalışma sırası
-- **Knowledge access strategy** — önce Context7, sonra repo örnekleri
-- **Critical Rules** — ihlal edilmemesi gereken deterministik kurallar (aşağıda)
-- **Skills** — hangi görevde hangi skill'in çağrılacağı
+# 2a. Tek bir bileşeni agent pipeline'ı üzerinden uçtan uca iskeleler
+#     (analyst → architect → component-author → validator, sonra security-reviewer + doc-writer)
+claude /vnext-ai-toolkit:new-component workflow account-opening "Yeni vadesiz hesap aç"
 
-:::tip Senkron tutun
-`CLAUDE.md` ve `AGENTS.md` aynı kuralları farklı ajanlar için anlatır. Birini değiştirdiğinizde diğerini de güncelleyin — yoksa Claude ve Codex farklı kurallarla çalışır.
+# 2b. ...veya tüm bir workflow'u architect orkestratörü ile uçtan uca tasarla
+claude /vnext-ai-toolkit:vnext-design-process "Hesap açılışı"
+
+# 3. Her şeyi doğrula (ve hataları düzeltmeyi öner)
+claude /vnext-ai-toolkit:validate
+
+# 4. Domain paketini build et
+claude /vnext-ai-toolkit:build
+```
+
+## Komut Setleri
+
+Plugin beş slash command sunar; hepsi `/vnext-ai-toolkit:` namespace'i altındadır.
+
+| Komut | Ne yapar |
+|-------|----------|
+| `/vnext-ai-toolkit:vnext-init` | Workspace'i kurar veya tazeler. `vnext.config.json` yoksa temel projeyi `@burgan-tech/vnext-template` (npx) ile iskeler, sonra toolkit dosyalarını (docker-compose + MockLab, `CLAUDE.md`/`AGENTS.md`, `.claude/references`, entegrasyon testleri) ekler — üzerine yazmadan önce **diff** gösterir. `runtimeVersion`/`schemaVersion` yükseltmeyi önerir. |
+| `/vnext-ai-toolkit:new-component <type> <key> [desc]` | Bir bileşeni agent pipeline'ı üzerinden uçtan uca iskeler. `<type>` ∈ `schema \| workflow \| task \| view \| function \| extension`. |
+| `/vnext-ai-toolkit:vnext-design-process [name]` | `vnext-architect` orkestratörü ile çok-turlu, uçtan uca workflow tasarımı (discovery → state'ler → bileşenler → testler). |
+| `/vnext-ai-toolkit:validate` | `npm run validate` çalıştırır, hataları dosya bazında ihlal edilen schema kuralıyla özetler ve düzeltmeyi önerir. |
+| `/vnext-ai-toolkit:build [runtime\|reference] [flags]` | Domain paketini `npm run build` / `build:reference` ile derler. |
+
+## Agent Pipeline
+
+`/vnext-ai-toolkit:new-component` agent'ları sırayla orkestre eder; istenirse her biri doğrudan da çağrılabilir.
+
+```mermaid
+flowchart LR
+    A[analyst] --> B[architect]
+    B --> C[component-author]
+    C --> D[validator]
+    D --> E[security-reviewer]
+    D --> F[doc-writer]
+    R[reviewer<br/>PR kontrolü]
+```
+
+`validator` geçtikten sonra `security-reviewer` ve `doc-writer` **paralel** çalışır — çakışmazlar (doc-writer `docs/` altına yazar, security-reviewer yalnızca okur).
+
+| Agent | Rolü | JSON yazar mı? |
+|-------|------|:---:|
+| `analyst` | Docs-first. `docs/<Type>/<key>.md`'yi kontrol eder, kapsamı netleştirir, kabul kriterleri ve sıralı görev listesi üretir. | Hayır |
+| `architect` | Analizi teknik tasarıma çevirir — klasör yerleşimi, state/transition modeli, task/function bağlantıları, referanslar, export'lar. | Hayır |
+| `component-author` | Tasarımı schema-valid bileşen JSON'u ve `.csx` mapping'leri olarak uygular. | **Evet** |
+| `validator` | Bağımsız QA — `npm run validate` ve `npm test` çalıştırır, build'i kontrol eder. | Hayır |
+| `security-reviewer` | Sızan secret, güvenilmeyen referans host'u, aşırı geniş export, güvensiz task/function/extension config avlar. | Hayır |
+| `doc-writer` | `docs/<Type>/<key>.md` (bileşen başına bir dosya) ve `CHANGELOG.md` girdisini yazar/günceller. | Yalnız docs |
+| `reviewer` | PR-kontrol rolü — schema uyumu, isim/versiyon kuralları, referans bütünlüğü, config/export doğruluğu. | Hayır |
+
+Bileşen-bazlı pipeline'ın ötesinde, **`vnext-architect`** *tüm bir workflow*'u uçtan uca tasarlamak için çok-turlu bir orkestratördür (`/vnext-ai-toolkit:vnext-design-process` ile çağrılır). Discovery → state machine → bileşenler → testler yolunu yürür ve aşağıdaki skill'lere delege eder.
+
+## Skill'ler
+
+- **`authoring-vnext-components`** — çekirdek referans: ortak bileşen envelope'u, tipe özgü `attributes`, `.csx` `scriptCode` yapısı, transition trigger tipleri ve validate-fix döngüsü. Agent'lar ve komutlar alan kuralları için buna dayanır.
+- **`workflow-scaffold`** — state/transition grafiğini planlar; workflow JSON + `.csx` mapping'leri + `.http` test dosyasını iskeler.
+- **`view-design`** — renderer seçimi (pseudo-ui önerilir), vocabulary yükleme, view ağacı üretimi.
+- **`schema-design`** — lokalizasyon (`x-labels`) ve rol bazlı erişimle interaktif alan toplama; JSON Schema draft 2020-12 üretir.
+- **`component-task`** — schema enum'ından sürülen task `type` + tipe özgü `config`, `.csx` mapping, MockLab seed önerisi.
+- **`component-function`** — scope `D`/`I`, tek vs çok task kompozisyonu, `IMapping`/`IOutputHandler` `.csx`.
+- **`component-extension`** — performans uyarılarıyla type × scope matrisi.
+- **`integration-test`** — `VNext.Testing.Sdk`'ya karşı xUnit sınıfı (projeyi resmi `VNext.Testing.Template` ile iskeler); workflow yaşam döngüsünü doğrular.
+- **`validate-and-fix`** — `npm run validate` çalıştırır, hataları kategorize eder, uygulamadan önce schema-referanslı düzeltmeler önerir.
+
+## Tasarım Felsefesi
+
+### Schema-first
+
+Tek en önemli kural: **hardcoded enum yok, varsayılan zorunlu alan yok, tahmini JSON yapısı yok.** Agent'lar ve skill'ler, bir bileşeni yazmadan/düzenlemeden önce projenizde sabitlenmiş yetkili schema'yı okur:
+
+```
+node_modules/@burgan-tech/vnext-schema/schemas/<component>-definition.schema.json
+```
+
+Schema veya platform davranışı yerel schema ve mevcut bileşenlerden net değilse, bilgi erişim sırası şudur: **pinned local schema → Context7 MCP** (`/burgan-tech/vnext-docs`, `/burgan-tech/vnext-example`) **→ vnext-docs sitesinin `WebFetch`'i**. Pinned schema ile çelişen bir docs iddiası kazanmaz — **schema kazanır**.
+
+### Domain-agnostic
+
+Plugin bir domain adı varsaymaz. `domain` ve `paths.*` değerlerini `vnext.config.json`'dan okur ve her bileşen klasörünü oradan çözer. `payments`, `lending`, `core` veya başka bir domain'de aynı şekilde çalışır.
+
+### Schema-driven, schema-validated
+
+Bileşenler `npm run validate`'i ilk seferde geçecek şekilde yazılır — çünkü yazan (author) ve doğrulayan (validator) tek bir doğruluk kaynağını, sabitlenmiş `@burgan-tech/vnext-schema`'yı paylaşır.
+
+## `new-component` sonrası ne elde edersiniz?
+
+`/vnext-ai-toolkit:new-component workflow <key>` sonrası tipik bir workflow için (path'ler `vnext.config.json`'dan çözülür):
+
+- `Workflows/<key>.json` — state machine (zorunlu master payload schema referansıyla)
+- `Workflows/.../src/*.csx` — C# mapping'ler (`IMapping`), auto-transition kuralları (`IConditionMapping`), timer'lar (`ITimerMapping`)
+- `Workflows/<key>.http` — REST Client probe dosyası
+- `Views/<key>-view.json`, `Schemas/<key>.json`, `Tasks/<key>.json`, `Functions/<key>.json`, `Extensions/<key>.json` — tasarımın gerektirdiği destekleyici bileşenler
+- `docs/Workflows/<key>.md` — bileşen dokümantasyonu
+- bir `CHANGELOG.md` girdisi
+
+Hepsi `npm run validate`'ten geçer.
+
+## Uyumluluk
+
+| AI ajanı | Durum |
+|----------|-------|
+| Claude Code | Birincil hedef |
+| Codex (`AGENTS.md` ile) | Destekleniyor — her `CLAUDE.md`, `AGENTS.md`'ye yansıtılır |
+| Cursor (`.cursor/rules/*.mdc`) | Planlanıyor |
+
+Plugin, projenizin `package.json`'ında sabitlediğiniz `@burgan-tech/vnext-schema` versiyonunu takip eder — vNext yeni bir state tipi veya task tipi eklediğinde, plugin bunu bir sonraki okumada görür; burada değişiklik gerekmez.
+
+:::tip[Context7 ile güncel bilgi]
+Bu docs portalı da Context7'ye kayıtlıdır ([`context7.com/burgan-tech/vnext-docs`](https://context7.com/burgan-tech/vnext-docs)). Böylece AI asistanları bu sayfaları da güncel runtime bilgi kaynağı olarak sorgulayabilir.
 :::
-
-### Kritik kurallar örneği
-
-`CLAUDE.md`'nin en değerli bölümü, asistanın asla ihlal etmemesi gereken deterministik kurallardır. vnext-example'dan birkaç örnek:
-
-- Her workflow'un **tam olarak bir** initial state'i olmalı (`startTransition.target`).
-- Auto transition'lar (`triggerType: 1`) birbirini dışlayan koşullarla **çiftler hâlinde** gelmeli; tek başına auto transition yalnızca koşulu her zaman `true` dönerse geçerlidir.
-- Tüm bileşen referansları `{domain}/{component-type}/{key}/{version}` formatında.
-- Her değişiklikten sonra `npm run validate` çalıştır.
-- Bileşen klasör path'lerini **asla** sabit kodlama — daima `vnext.config.json`'dan çöz.
-- View oluşturmadan önce **daima** kullanıcıya `renderer` sor.
-
-Bu kurallar, AI'ın "makul görünen ama geçersiz" çıktılar üretmesini engeller.
-
----
-
-## 2. Skills (Skill'ler)
-
-Skill'ler, belirli bir görev için adım adım çalışma talimatlarıdır. Kullanıcı "bir workflow oluştur" dediğinde asistan serbest doğaçlama yapmak yerine ilgili skill'i çağırır ve onun adımlarını izler.
-
-vnext-example'daki [`.claude/skills/`](https://github.com/burgan-tech/vnext-example/tree/master/.claude/skills) altında dört skill bulunur:
-
-| Skill | Ne zaman tetiklenir | Geliştiriciye faydası |
-|-------|---------------------|------------------------|
-| [`workflow-scaffold`](https://github.com/burgan-tech/vnext-example/blob/master/.claude/skills/workflow-scaffold/SKILL.md) | Yeni bir workflow uçtan uca oluşturulurken | State/transition grafiğini planlar; workflow JSON + `.csx` mapping + `.http` test dosyasını birlikte iskeleler; gerektiğinde `view-design` ve `schema-design`'a zincirler |
-| [`schema-design`](https://github.com/burgan-tech/vnext-example/blob/master/.claude/skills/schema-design/SKILL.md) | Schema bileşeni oluşturulurken/düzenlenirken | Önce kullanıcıdan alan, tip, validation, lokalizasyon (`x-labels`) ve rol bazlı erişimi (`roles[]`) toplar; ardından doğru path'e JSON Schema draft 2020-12 üretir |
-| [`view-design`](https://github.com/burgan-tech/vnext-example/blob/master/.claude/skills/view-design/SKILL.md) | View bileşeni oluşturulurken/düzenlenirken | İlk ve en kritik kararı — `renderer` — sorar; pseudo-ui ise JSON üretmeden önce vocabulary yükler |
-| [`validate-and-fix`](https://github.com/burgan-tech/vnext-example/blob/master/.claude/skills/validate-and-fix/SKILL.md) | Doğrulama istenince / commit öncesi | `npm run validate` çalıştırır, hataları kategorize eder, ilgili dökümanı sorgular ve onay alarak hedefli düzeltmeler önerir — validation'ı asla bypass etmeden |
-
-**Skill'lerin ortak deseni:** Hepsi önce `vnext.config.json`'dan path'leri çözer, sonra eksik bilgiyi kullanıcıdan toplar, ancak ondan sonra JSON üretir. Bu "önce sor, sonra üret" yaklaşımı, validation'dan geçmeyen tahmin tabanlı çıktıları önler.
-
-:::info Skill anatomisi
-Her skill bir `SKILL.md` dosyasıdır: `name` ve `description` içeren frontmatter + adım adım talimatlar. `description` alanı asistanın skill'i ne zaman çağıracağına karar vermesini sağlar — bu yüzden net ve tetikleyici olmalıdır.
-:::
-
----
-
-## 3. References (Reference'lar)
-
-Reference'lar, skill'lerin gerektiğinde okuduğu derin kalıp dökümanlarıdır. Tekrar eden hataları önlemeye odaklanırlar. vnext-example'daki [`.claude/references/`](https://github.com/burgan-tech/vnext-example/tree/master/.claude/references) altında üç tane vardır:
-
-| Reference | Kapsam | Önlediği hata |
-|-----------|--------|----------------|
-| [`function-mapping-pattern.md`](https://github.com/burgan-tech/vnext-example/blob/master/.claude/references/function-mapping-pattern.md) | `sys-functions` için `.csx` mapping yazımı | "Function double-wrapped / raw `StandardTaskResponse` döndürüyor" hatası; GET vs POST için doğru input kaynağının seçimi |
-| [`view-author-guide.md`](https://github.com/burgan-tech/vnext-example/blob/master/.claude/references/view-author-guide.md) | Pseudo-ui view + schema yapısı | Yanlış action vocabulary, hatalı expression namespace, yanlış view/schema eşleşmesi |
-| [`mocklab-seed-format.md`](https://github.com/burgan-tech/vnext-example/blob/master/.claude/references/mocklab-seed-format.md) | MockLab mock endpoint seed JSON formatı | Hatalı seed layout, kural semantiği, Scriban helper ve dapr invocation hataları |
-
-Skill'lerle farkı: skill bir **görev akışıdır** ("şu adımları izle"), reference bir **kalıp kataloğudur** ("bu desende şöyle yazılır"). Skill içinden reference'a yönlendirme yapılır.
-
----
-
-## 4. Cursor entegrasyonu
-
-Cursor kullanıcıları için vnext-example iki yapı sunar:
-
-- [`.cursor/rules/cursorrules.mdc`](https://github.com/burgan-tech/vnext-example/blob/master/.cursor/rules/cursorrules.mdc) — `alwaysApply: true` ile her promptta enjekte edilen kural seti (bileşen yapısı, flow tipleri, bilgi kaynakları).
-- [`.cursor/skills/vnext-features/SKILL.md`](https://github.com/burgan-tech/vnext-example/blob/master/.cursor/skills/vnext-features/SKILL.md) — **repo-geneli** domain referansı. Tek bir workspace'e bağlı değildir; monorepo'nun veya hedef domain repolarının her yerinde vNext bileşeni (JSON veya `.csx`) oluşturulurken/düzenlenirken tetiklenir. Workflow, state, transition, task, schema, view, function, extension kavramlarını, JSON yapılarını ve C# mapping/rule kalıplarını kompakt biçimde özetler.
-
----
-
-## 5. Context7 — güncel runtime bilgisi
-
-AI asistanlarının eğitim verisi her zaman güncel runtime davranışını yansıtmaz. Bu boşluğu **Context7 MCP** kapatır: asistan, vNext runtime dökümanını talep üzerine sorgular.
-
-vnext-example'ın bilgi erişim stratejisi şu sırayı izler:
-
-1. **Önce Context7** — bileşen yapısı, şema örnekleri, runtime kavramları için güncel resmi dökümanı sorgula.
-2. **Sonra repo örnekleri** — `core/` altındaki çalışan JSON ve `.csx` dosyalarını kanonik örnek olarak kullan.
-3. **Son olarak** — yerel kurallar (`CLAUDE.md` / reference'lar).
-
-Bu docs portalı da Context7'ye kayıtlıdır ([`context7.com/burgan-tech/vnext-docs`](https://context7.com/burgan-tech/vnext-docs)), yani AI asistanları bu sayfaları da güncel bilgi kaynağı olarak kullanabilir.
-
----
-
-## Kendi domain reponuza uyarlama
-
-vnext-example'ı kalıp alarak kendi domain reponuzda aynı kurulumu adım adım kurabilirsiniz:
-
-1. **`vnext.config.json`** zaten reponuzun kökünde olmalı — tüm path çözümü buna dayanır.
-2. **`CLAUDE.md` oluşturun** — vnext-example'ı şablon alın; bölümleri kendi domain'inize göre uyarlayın (komutlar, path'ler, kritik kurallar, skill kataloğu). Birebir kopyalamayın — kendi domain'inizin bileşen haritasını ve kurallarını yazın.
-3. **`AGENTS.md`'yi senkronlayın** — Codex de kullanıyorsanız `CLAUDE.md` ile aynı içeriği tutun.
-4. **Cursor kullanıyorsanız** `.cursor/rules/*.mdc` ekleyin.
-5. **Skill'leri uyarlayın** — `.claude/skills/` altına ihtiyacınız olan görev akışlarını koyun. vnext-example'ın dört skill'i çoğu domain için iyi bir başlangıçtır.
-6. **Tekrar eden hatalarınızı reference'a dönüştürün** — ekibinizin sürekli yaptığı bir hatayı fark ettiğinizde `.claude/references/` altına bir kalıp dökümanı yazın.
-7. **Context7 MCP'yi bağlayın** — asistanın güncel runtime dökümanına erişmesi için.
-
-:::tip Altın kural
-AI yapılandırması "yaz ve unut" değildir. Asistanın tekrar tekrar yaptığı bir hatayı gördüğünüzde, onu düzeltmek yerine **kuralı yapılandırma dosyasına ekleyin**. Böylece bağlam zamanla zenginleşir ve asistan giderek daha isabetli çalışır.
-:::
-
----
 
 ## İlgili
 
-- [Developer Tools](./index.md) — Forge Studio, Workflow CLI, Template CLI
-- [vNext Forge Studio](./forge-studio) — görsel tasarımcı; CSX mapping editörü ve Quick Run
-- [Workflow CLI](./workflow-cli) — `npm run validate` ve deploy
+- [`burgan-tech/vnext-ai-toolkit`](https://github.com/burgan-tech/vnext-ai-toolkit) — plugin'in kaynağı
+- [`burgan-tech/vnext-example`](https://github.com/burgan-tech/vnext-example) — her bileşen tipinin çalışan örneklerini içeren referans domain
+- [`burgan-tech/vnext-schema`](https://github.com/burgan-tech/vnext-schema) — kanonik JSON Schema'lar + vocabulary'ler (plugin'in kontrat kaynağı)
+- [`burgan-tech/mocklab`](https://github.com/burgan-tech/mocklab) — HTTP task geliştirmede kullanılan mock API
+- [`burgan-tech/vnext-integration-test`](https://github.com/burgan-tech/vnext-integration-test) — entegrasyon test SDK'sı + proje şablonu
+- [Template CLI](./template-cli) — domain projesi oluşturma · [Workflow CLI](./workflow-cli) — `npm run validate` ve deploy
 - [Workflow bileşeni](../components/workflow) — state machine kontratı
-- [`burgan-tech/vnext-example`](https://github.com/burgan-tech/vnext-example) — tüm AI yapılandırmasının kanonik kaynağı

@@ -67,7 +67,9 @@ description: vNext View component — Backend-Driven UI tanımları
   "attributes": {
     "type": 4,
     "display": "popup",
-    "content": "myapp://otp-verify?flow=account-opening",
+    "content": {
+      "href": "on-burgan//onboarding/${param}"
+    },
     "labels": [
       { "label": "OTP Verification", "language": "en-US" },
       { "label": "OTP Doğrulama", "language": "tr-TR" }
@@ -124,6 +126,23 @@ State veya transition seviyesinde view tanımları yapılır. **vNext Client Wor
 | `5` | **Http** | string, object veya array | HTTP URL yönlendirmesi |
 | `6` | **URN** | string, object veya array | URN tabanlı içerik referansı |
 
+### İçerik Tipleri: Http / Deeplink / URN
+
+`type` değeri `4` (Deeplink), `5` (Http) veya `6` (URN) olduğunda `content`, ileride yeni alanlarla genişletilebilmesi için **obje** olarak tanımlanır. Http ve Deeplink bir `href`, URN ise bir `urn` taşır:
+
+```jsonc
+// Http (type: 5)
+{ "href": "https://example.com/detail?id=${param}" }
+
+// Deeplink (type: 4) — şu an yalnızca full path desteklenir
+{ "href": "on-burgan//onboarding/${param}" }
+
+// URN (type: 6)
+{ "urn": "urn:vnext:flow:transition:onboarding:kyc-main-flow:${param}:approved" }
+```
+
+Üç yapı da `${param}` **binding**'i destekler; çalışma zamanında bağlamdaki değerle doldurulur. URN segment yapısı ve binding kuralları için bkz. [URN Kataloğu ve Binding](/docs/components/urn-catalog).
+
 ### `display` Enum Değerleri
 
 | Değer | Açıklama |
@@ -176,4 +195,5 @@ Client SDK platform header'ını okuyarak doğru variant'ı render eder.
 - [User Integration](/docs/concepts/user-integration) — view loop akışı
 - [Schema component](/docs/components/schema) — form validation entegrasyonu
 - [Pseudo UI Rehberi](/docs/how-to/view-consept) — view.json yapısı, schema binding ve tasarımcı rehberi
+- [URN Kataloğu ve Binding](/docs/components/urn-catalog) — Http / Deeplink / URN content shape'leri ve `${param}` binding
 - Schema kaynağı: [vnext-schema (GitHub)](https://github.com/burgan-tech/vnext-schema)

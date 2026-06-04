@@ -259,7 +259,7 @@ Body döndürülmez, bu da bant genişliği ve işlem süresinden tasarruf sağl
 
 | Alan | Tip | Açıklama |
 |------|-----|----------|
-| `data` | `object` | Mevcut instance verisi (camelCase özellikler); Master şemada roleGrant kullanıldığında [Alan bazlı görünürlük](#master-şema-alan-bazlı-görünürlük) bölümüne bakın |
+| `data` | `object` | Mevcut instance verisi (camelCase özellikler); Master şemada roleGrant kullanıldığında [Alan bazlı görünürlük](/docs/concepts/authorization#master-şema-alan-bazlı-görünürlük) bölümüne bakın |
 | `eTag` | `string` | Cache doğrulama için ETag |
 | `extensions` | `object` | Kayıtlı extension'lardan ek veriler |
 
@@ -670,60 +670,13 @@ Accept: application/json
 
 Workflow'larda fonksiyon, flow, state ve transition seviyesinde **roles** ve **queryRoles** tanımlanabilir. Aşağıdaki sistem fonksiyon endpoint'leri yetki bilgilerini ve yetkilendirme kontrolünü sunar.
 
-### Ön tanımlı sistem rolleri
+### Sistem rolleri ve JSONPath grant'ları
 
-Instance yetkilendirmesi için (örn. transition roles, state/flow queryRoles veya Master şema alan görünürlüğünde) iki statik sistem rolü kullanılabilir:
+Instance yetkilendirmesi (transition `roles`, state/flow `queryRoles`, master şema alan görünürlüğü) dört statik sistem rolü (`$InstanceStarter`, `$PreviousUser`, `$InstanceBehalfOfStarter`, `$PreviousBehalfOfUser`) ve `$user.` / `$userBehalfOf.` / `$role.` JSONPath grant'ları üzerinden yürür. Bu kalıplar **available transition** ve **data** yetkilendirmesinin geçerli olduğu her yerde (master şema alan görünürlüğü dahil) değerlendirilir.
 
-| Rol | Açıklama |
-|-----|----------|
-| **$InstanceStarter** | Instance'ı başlatan actor |
-| **$PreviousUser** | Bir önceki transition'ı tetikleyen actor |
+State Function'ın döndürdüğü `transitions` dizisi de bu grant'lara göre filtrelenir: yalnızca çağıranın izinli olduğu transition'lar yanıta dahil edilir.
 
-Transition veya roleGrant örneği:
-
-```json
-{
-  "roles": [
-    { "role": "$InstanceStarter", "grant": "allow" },
-    { "role": "$PreviousUser", "grant": "allow" }
-  ]
-}
-```
-
-### Instance verisi JSONPath yetkilendirmesi
-
-**roleGrant** içindeki **role** değerleri **JSONPath tarzı** ifadeler kullanabilir; runtime **token** değerlerini **ScriptContext**'ten ( **`Instance.Data`** dahil) okunan değerlerle karşılaştırır:
-
-| Prefix | Karşılaştırılan token | Karşılaştırılan bağlam değeri |
-|------|------------------------|---------------|
-| `$user.<jsonpath>` | **Actor** | Bağlamdaki `<jsonpath>` değeri |
-| `$role.<jsonpath>` | **Rol** | Bağlamdaki `<jsonpath>` değeri |
-| `$userBehalfOf.<jsonpath>` | **Subject** (adına işlem) | Bağlamdaki `<jsonpath>` değeri |
-
-**Adına işlem** anlamları için ek **sistem rolleri**:
-
-| Rol | Açıklama |
-|-----|----------|
-| `$InstanceBehalfOfStarter` | Instance'ı **başlatan** subject (adına işlem yapılan token) |
-| `$PreviousBehalfOfUser` | **Bir önceki** transition'ı tetikleyen subject (adına işlem yapılan token) |
-
-**Örnek yollar** (workflow veri şemanıza uymalıdır):
-
-```text
-$user.$.context.Instance.Data.customer.ownerUserId
-$user.$.context.Instance.Data.assignedUsers[*].userId
-$userBehalfOf.$.context.Instance.Data.customer.behalfOfUserId
-$role.$.context.Instance.Data.permissions.requiredRole
-$role.$.context.Transition.Key
-```
-
-Bu kalıplar **available transition** ve **data** yetkilendirmesinin geçerli olduğu her yerde değerlendirilir (**Master** şema alan görünürlüğü dahil).
-
-> **Referans:** [#469](https://github.com/burgan-tech/vnext/issues/469)
-
-### Master şema alan bazlı görünürlük
-
-Flow **Master şeması**, şema property'lerinde **roleGrant** (`roles`) özelliği ile **alan bazlı görünürlük** tanımlayabilir. Data fonksiyonu ve veri dönen endpoint'ler (Get Instance, GetInstances vb.) authorize katmanını çalıştırır ve yalnızca çağıranın görmesine izinli olduğu alanları döndürür. `roles` tanımı olmayan property'ler tüm yetkili çağıranlara görünür. Vocabulary ve araç uyumluluğu için [roles-vocab.json](https://unpkg.com/@burgan-tech/vnext-schema@0.0.37/vocabularies/roles-vocab.json) kullanılabilir.
+> **Tam referans:** Claim'ler (`sub`/`act_sub`), sistem rolü tabloları, JSONPath örnek yolları ve master şema alan görünürlüğü için bkz. [Yetkilendirme (Authorization)](/docs/concepts/authorization).
 
 ### Flow Authorize
 

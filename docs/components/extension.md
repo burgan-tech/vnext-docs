@@ -10,6 +10,22 @@ description: vNext Extension component — instance data zenginleştirme mekaniz
 
 > **Schema:** [`vnext-schema/extension-definition.schema.json`](https://github.com/burgan-tech/vnext-schema)
 
+## Extension Stratejisi
+
+Extension'lar instance data'ya **ek olarak** zenginleştirilmiş veri sunar. Temel amaç, client'ın veya view render eden yapıların **BFF ihtiyacını azaltmaktır**: instance data dönülürken, view'ın o anda ihtiyaç duyduğu veri extension ile birlikte zenginleştirilmiş halde sunulur, böylece client ek çağrılar yapmak zorunda kalmaz.
+
+Bir extension veriyi iki yoldan üretebilir:
+
+- **Mevcut instance data üzerinden hesaplama** — normalize/denormalize, türetilmiş (computed) alanlar.
+- **Uzak (remote) task call** — dış sistemden veri çekerek instance verisine ekleme.
+
+Her iki durumda da extension, instance data'yı kıymetlendirerek client'ın **anlık veri ihtiyacını** karşılar. Örneğin bir view render edilirken uzak bir sunucudan belirli bir veriyi alıp göstermek o state için gerekliyse, extension kullanımı uygundur.
+
+:::tip[Extension mı, Function mı?]
+- **Extension** → instance data **okunurken** otomatik zenginleştirme (view'ın hazır veriyle gelmesi, BFF azaltma).
+- **Function** → form girdilerini besleyen `x-lov` (liste) ve `x-lookup` (tekil kayıt) gibi **girdi odaklı** veri kaynakları için daha uygundur. Bkz. [Functions](/docs/components/functions/) ve [Pseudo UI → Data Akışı](/docs/how-to/view-consept/data-akisi).
+:::
+
 ## Tanım JSON Örneği
 
 > **Schema:** `extension-definition.schema.json`

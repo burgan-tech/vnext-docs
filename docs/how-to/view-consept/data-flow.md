@@ -56,7 +56,7 @@ Tüm required filtreler dolu mu?
 "city": {
   "type": "string",
   "x-lov": {
-    "source": "urn:amorphie:func:domain:shared:get-cities",
+    "source": "urn:vnext:fn:shared:get-cities",
     "valueField": "$.response.data.code",
     "displayField": "$.response.data.name"
   }
@@ -75,7 +75,7 @@ Bir LOV'un başka bir alanın değerine bağlı olduğu durumlar **cascade LOV**
 "district": {
   "type": "string",
   "x-lov": {
-    "source": "urn:amorphie:func:domain:shared:get-districts",
+    "source": "urn:vnext:fn:shared:get-districts",
     "valueField": "$.response.data.code",
     "displayField": "$.response.data.name",
     "filter": [
@@ -116,7 +116,7 @@ LOV birden fazla satır döndürürken, **lookup** belirli bir değere göre tek
 "branchDetail": {
   "type": "object",
   "x-lookup": {
-    "source": "urn:amorphie:func:domain:shared:get-branch-detail",
+    "source": "urn:vnext:fn:shared:get-branch-detail",
     "resultField": "$.response.data",
     "filter": [
       { "param": "branchCode", "value": "$instance.selectedBranchCode", "required": true }
@@ -132,7 +132,7 @@ Lookup'ın çalışması için view kök seviyesinde `lookups` dizisine eklenmes
 ```json title="view.json (kök)"
 {
   "$schema": "https://amorphie.io/meta/view-vocabulary/1.0",
-  "dataSchema": "urn:amorphie:res:schema:customer:registration-form",
+  "dataSchema": "urn:vnext:res:schema:customer:registration-form",
   "lookups": ["branchDetail"],
   "view": { ... }
 }
@@ -176,7 +176,7 @@ Bir alt bileşen (nested component), üst formdan parametre alabilir. Alt bileş
 "branchCode": {
   "type": "string",
   "x-lov": {
-    "source": "urn:amorphie:func:domain:shared:get-branches",
+    "source": "urn:vnext:fn:shared:get-branches",
     "valueField": "$.response.data.code",
     "displayField": "$.response.data.name",
     "filter": [
@@ -232,27 +232,29 @@ Alt bileşenin view'ı, LOV listesini bir kart listesi olarak göstermek için `
 
 ## URN Tabanlı Servis Adresleme
 
-Tüm `source` değerleri, `urn:amorphie:...` formatında URN adresidir. Renderer bu adresleri HTTP endpoint'lerine çevirir.
+Tüm `source` değerleri, `urn:vnext:...` formatında URN adresidir. Renderer bu adresleri HTTP endpoint'lerine çevirir.
 
 **Fonksiyon çağrıları:**
 
 ```
-urn:amorphie:func:domain:shared:get-cities
+urn:vnext:fn:shared:get-cities
   → GET /api/v1/shared/functions/get-cities
 
-urn:amorphie:func:domain:shared:get-districts?cityCode=34
+urn:vnext:fn:shared:get-districts?cityCode=34
   → GET /api/v1/shared/functions/get-districts?cityCode=34
 
-urn:amorphie:func:domain:shared:get-branch-detail?branchCode=001
+urn:vnext:fn:shared:get-branch-detail?branchCode=001
   → GET /api/v1/shared/functions/get-branch-detail?branchCode=001
 ```
 
 **Workflow geçişleri (Button `command`):**
 
 ```
-urn:amorphie:transition:customer:registration:inst-001:submit
-  → POST /api/v1/customer/workflows/registration/instances/inst-001/transitions/submit
+urn:vnext:flow:transition:customer:registration:${param}:submit
+  → PATCH /api/v1/customer/workflows/registration/instances/{instance}/transitions/submit
 ```
+
+`${param}` binding'i çalışma zamanında aktif `instanceId` ile doldurulur. URN formatlarının tam listesi, prefiks (`urn:vnext` / `urn:client`) ve binding kuralları için bkz. [URN Kataloğu ve Binding](/docs/components/urn-catalog).
 
 URN adreslerini Backend ekibi tanımlar; tasarımcının bu dönüşümü elle yapması gerekmez.
 
