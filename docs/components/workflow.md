@@ -30,12 +30,10 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
       { "label": "Hesap Açma", "language": "tr-TR" }
     ],
     "schema": {
-      "schema": {
         "key": "account-master-schema",
         "domain": "banking",
         "flow": "sys-schemas",
         "version": "1.0.0"
-      }
     },
     "startTransition": {
       "key": "start",
@@ -240,7 +238,7 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
 | `states` | array | **Evet** | State listesi. Tam olarak **bir** `Initial` state (`stateType: 1`) içermelidir |
 | `startTransition` | object | **Evet** | Başlangıç transition tanımı (aşağıda) |
 | `labels` | array | **Evet** | Çoklu dil etiketleri (`minItems: 1`). Her öğe: `label` + `language` |
-| `schema` | object | Hayır | Master schema referansı. `schema.schema` ile `reference` objesi içerir |
+| `schema` | object | Hayır | Master schema referansı. `schema` ile `reference` objesi içerir |
 | `timeout` | object \| null | Hayır | Workflow seviyesi timeout tanımı (aşağıda) |
 | `functions` | array | Hayır | Workflow'da kullanılan function referansları |
 | `features` | array | Hayır | Workflow'da kullanılan feature (extension) referansları |
