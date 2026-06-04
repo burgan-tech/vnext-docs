@@ -88,11 +88,14 @@ Bu kalıplar **available transition** ve **data** yetkilendirmesinin geçerli ol
 
 ## Master Şema Alan Bazlı Görünürlük
 
-Flow **master şeması**, şema property'lerinde `roles` (roleGrant) tanımlayarak **alan bazlı görünürlük** uygulayabilir. Data Function ve veri dönen endpoint'ler (Get Instance, GetInstances vb.) authorize katmanını çalıştırır ve yalnızca çağıranın görmesine izinli alanları döndürür.
+Flow **master şeması**, şema property'lerinde **`x-roles`** keyword'ü tanımlayarak **alan bazlı görünürlük** uygular — yani **alan (column) seviyesinde güvenlik** sağlar. Data Function ve veri dönen endpoint'ler (Get Instance, GetInstances vb.) authorize katmanını çalıştırır ve yalnızca çağıranın görmesine izinli alanları döndürür.
 
-- `roles` tanımı **olmayan** property'ler tüm yetkili çağıranlara görünür.
-- `roles` tanımlı property'lerde aynı sistem rolleri ve JSONPath grant'ları geçerlidir.
-- Vocabulary ve araç uyumluluğu için [roles-vocab.json](https://unpkg.com/@burgan-tech/vnext-schema@0.0.37/vocabularies/roles-vocab.json) kullanılabilir.
+> **Not:** `roles` ve `queryRoles`, transition ve state yetkilendirmesi içindir. Schema property'lerinde **field görünürlüğü** ise `x-roles` keyword'ü ile yapılır (yapı aynıdır: `role` + `grant`).
+
+- `x-roles` tanımı **olmayan** property'ler tüm yetkili çağıranlara görünür.
+- `x-roles` tanımlı property'lerde aynı sistem rolleri ve JSONPath grant'ları geçerlidir; `role` statik ad ya da JSONPath ifadesi olabilir, `grant` ∈ `allow|deny` (DENY > ALLOW).
+- Yapı ve örnekler için bkz. [Schema → Alan Bazlı Yetkilendirme: `x-roles`](/docs/components/schema#alan-bazlı-yetkilendirme-x-roles) ve [Schema Tanımı → `x-roles`](/docs/how-to/view-consept/schema-tanimi).
+- Keyword tanımı `vnext-schema` [view-vocab.json](https://github.com/burgan-tech/vnext-schema/blob/master/vocabularies/view-vocab.json)'da yer alır.
 
 Master şemanın davranışı ve neden `required` kullanılmaması gerektiği için bkz. [Schema → Master Schema Davranışı](/docs/components/schema#master-schema-davranışı).
 
@@ -105,7 +108,7 @@ Master şemanın davranışı ve neden `required` kullanılmaması gerektiği i�
 | Transition | `roles` | İlgili transition'ı kimin tetikleyebileceği |
 | Flow / State | `queryRoles` | Instance ve state'leri kimin sorgulayabileceği (state seviyesi root'u override eder) |
 | State `alias` | `roles` | State'in role göre maskelenmiş görünümü |
-| Master şema property | `roles` | Alan bazlı veri görünürlüğü |
+| Master şema property | `x-roles` | Alan (column) bazlı veri görünürlüğü |
 
 ---
 

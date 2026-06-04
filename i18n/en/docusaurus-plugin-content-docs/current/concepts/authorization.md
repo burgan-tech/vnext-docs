@@ -90,11 +90,14 @@ These patterns are evaluated everywhere **available transition** and **data** au
 
 ## Master Schema Field-Level Visibility
 
-A flow's **master schema** can apply **field-level visibility** by defining `roles` (roleGrant) on schema properties. The Data Function and data-returning endpoints (Get Instance, GetInstances, etc.) run the authorize layer and return only the fields the caller is allowed to see.
+A flow's **master schema** can apply **field-level visibility** by defining the **`x-roles`** keyword on schema properties — i.e. it provides **column-level security**. The Data Function and data-returning endpoints (Get Instance, GetInstances, etc.) run the authorize layer and return only the fields the caller is allowed to see.
 
-- Properties **without** a `roles` definition are visible to all authorized callers.
-- Properties with `roles` use the same system roles and JSONPath grants.
-- For vocabulary and tooling compatibility, use [roles-vocab.json](https://unpkg.com/@burgan-tech/vnext-schema@0.0.37/vocabularies/roles-vocab.json).
+> **Note:** `roles` and `queryRoles` are for transition and state authorization. Schema property **field visibility** uses the `x-roles` keyword (same shape: `role` + `grant`).
+
+- Properties **without** an `x-roles` definition are visible to all authorized callers.
+- Properties with `x-roles` use the same system roles and JSONPath grants; `role` may be a static name or a JSONPath expression, `grant` ∈ `allow|deny` (DENY > ALLOW).
+- For structure and examples, see [Schema → Field-Level Authorization: `x-roles`](/docs/components/schema#field-level-authorization-x-roles) and [Schema Definition → `x-roles`](/docs/how-to/view-consept/schema-tanimi).
+- The keyword is defined in `vnext-schema` [view-vocab.json](https://github.com/burgan-tech/vnext-schema/blob/master/vocabularies/view-vocab.json).
 
 For master schema behavior and why `required` should not be used, see [Schema → Master Schema Behavior](/docs/components/schema#master-schema-behavior).
 
@@ -107,7 +110,7 @@ For master schema behavior and why `required` should not be used, see [Schema �
 | Transition | `roles` | Who can trigger the transition |
 | Flow / State | `queryRoles` | Who can query instances and states (state level overrides root) |
 | State `alias` | `roles` | The role-masked view of a state |
-| Master schema property | `roles` | Field-level data visibility |
+| Master schema property | `x-roles` | Column-level data visibility |
 
 ---
 

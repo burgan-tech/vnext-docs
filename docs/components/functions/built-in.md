@@ -259,7 +259,7 @@ Body döndürülmez, bu da bant genişliği ve işlem süresinden tasarruf sağl
 
 | Alan | Tip | Açıklama |
 |------|-----|----------|
-| `data` | `object` | Mevcut instance verisi (camelCase özellikler); Master şemada roleGrant kullanıldığında [Alan bazlı görünürlük](/docs/concepts/authorization#master-şema-alan-bazlı-görünürlük) bölümüne bakın |
+| `data` | `object` | Mevcut instance verisi (camelCase özellikler); Master şemada `x-roles` kullanıldığında alanlar role göre filtrelenir — bkz. [Alan bazlı görünürlük](/docs/concepts/authorization#master-şema-alan-bazlı-görünürlük) |
 | `eTag` | `string` | Cache doğrulama için ETag |
 | `extensions` | `object` | Kayıtlı extension'lardan ek veriler |
 

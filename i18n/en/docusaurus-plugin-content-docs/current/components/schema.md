@@ -20,13 +20,34 @@ The **Schema** component is a JSON schema definition for **transition**, **flow*
 
 ## Master Schema Behavior
 
-The master schema is defined on the flow itself and determines the **template structure of instance data**. It also enables vNext features such as `x-lookup`, `x-encrypt` and **instance filtering**. When an instance data merge is applied, the runtime validates it against the master schema and **rejects** the request if it does not conform.
+The master schema is defined on the flow itself and determines the **template structure of instance data**. It also enables vNext features such as `x-roles` (field-level authorization), `x-encryption`, `x-lookup` and **instance filtering**. When an instance data merge is applied, the runtime validates it against the master schema and **rejects** the request if it does not conform.
 
 :::caution[Do not use required, set additionalProperties: true]
 Instance data **grows** via merge at each state. Therefore the master schema must **not use `required`** and must set **`additionalProperties: true`** so the data can expand. Strict requirements belong in **transition schemas** (request body validation), not the master schema.
 :::
 
-The master schema also plays an active role in the Data Function: during [instance filtering](/docs/how-to/instance-filtering) it resolves the **types of dynamic fields from the schema**, enabling advanced filtering. Field-level visibility (roleGrant) is defined on master schema properties — see [Authorization → Master Schema Field-Level Visibility](/docs/concepts/authorization#master-schema-field-level-visibility).
+The master schema also plays an active role in the Data Function: during [instance filtering](/docs/how-to/instance-filtering) it resolves the **types of dynamic fields from the schema**, enabling advanced filtering.
+
+### Field-Level Authorization: `x-roles`
+
+`x-roles` is the vocabulary keyword that authorizes a JSON Schema property (an instance data field) via **role evaluation**. It matters most in the **master schema**: it decides which fields are visible to whom — i.e. it provides **column-level security**. The Data Function and data-returning endpoints run the authorize layer and return only the fields the caller may see.
+
+```json
+{
+  "x-roles": [
+    { "role": "morph-idm.initiator", "grant": "allow" },
+    { "role": "$userBehalfOf.$.context.Instance.Data.initial.customer.ownerUserId", "grant": "deny" }
+  ]
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `x-roles` | — | Role grant list for the property (`minItems: 1`). If absent, the field is visible to all authorized callers |
+| `role` | Yes | Domain-qualified role name (e.g. `morph-idm.initiator`) **or** a dynamic JSONPath expression |
+| `grant` | Yes | `allow` or `deny`. **DENY always overrides ALLOW** |
+
+The same system roles and JSONPath grant prefixes (`$user.` / `$userBehalfOf.` / `$role.`) apply; see [Authorization](/docs/concepts/authorization). `x-encryption` is in the same field-governance scope (`persisted` / `transport`).
 
 For a read-only view (no input), the master schema can be supplied directly as the view's `dataSchema`; for input sections, a transition-specific schema should be used instead.
 
