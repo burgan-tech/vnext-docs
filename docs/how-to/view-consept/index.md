@@ -62,7 +62,7 @@ Backend ekibi şu schema'yı tanımlar:
 
 ```json title="schema.json (backend yazdı)"
 {
-  "$id": "urn:amorphie:res:schema:customer:registration-form",
+  "$id": "urn:vnext:res:schema:customer:registration-form",
   "type": "object",
   "required": ["firstName"],
   "properties": {
@@ -79,7 +79,7 @@ UI tasarımcısı şu view'ı tanımlar:
 ```json title="view.json (tasarımcı yazdı)"
 {
   "$schema": "https://amorphie.io/meta/view-vocabulary/1.0",
-  "dataSchema": "urn:amorphie:res:schema:customer:registration-form",
+  "dataSchema": "urn:vnext:res:schema:customer:registration-form",
   "view": {
     "type": "Column",
     "children": [

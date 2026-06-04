@@ -28,7 +28,7 @@ Aşağıdaki view, schema'daki `firstName` alanını ekranda bir metin kutusu ol
 ```json title="view.json"
 {
   "$schema": "https://amorphie.io/meta/view-vocabulary/1.0",
-  "dataSchema": "urn:amorphie:res:schema:customer:registration-form",
+  "dataSchema": "urn:vnext:res:schema:customer:registration-form",
   "view": {
     "type": "TextField",
     "bind": "firstName"
@@ -56,7 +56,7 @@ Gerçek ekranlarda birden fazla alan ve düzenleme gerekir. Bunun için layout b
 ```json title="view.json"
 {
   "$schema": "https://amorphie.io/meta/view-vocabulary/1.0",
-  "dataSchema": "urn:amorphie:res:schema:customer:registration-form",
+  "dataSchema": "urn:vnext:res:schema:customer:registration-form",
   "view": {
     "type": "Column",
     "gap": "md",
@@ -76,7 +76,7 @@ Gerçek ekranlarda birden fazla alan ve düzenleme gerekir. Bunun için layout b
 ```json title="view.json"
 {
   "$schema": "https://amorphie.io/meta/view-vocabulary/1.0",
-  "dataSchema": "urn:amorphie:res:schema:customer:registration-form",
+  "dataSchema": "urn:vnext:res:schema:customer:registration-form",
   "view": {
     "type": "ScrollView",
     "children": [
@@ -242,7 +242,7 @@ Formun sonuna kaydet/iptal gibi aksiyon düğmeleri eklenir. Her düğme bir `ac
       "variant": "filled",
       "icon": "save",
       "action": "submit",
-      "command": "urn:amorphie:transition:customer:registration:inst-001:submit"
+      "command": "urn:vnext:flow:transition:customer:registration:${param}:submit"
     }
   ]
 }
@@ -256,6 +256,10 @@ Formun sonuna kaydet/iptal gibi aksiyon düğmeleri eklenir. Her düğme bir `ac
 
 Submit tetiklendiğinde Renderer önce tüm required alanların validasyonunu yapar. Hata varsa butonu geçip hatalı alanları işaretler.
 
+:::tip
+`action` yukarıdaki gibi kısa bir string olabileceği gibi, `command`, `validate`, `preHooks`/`postHooks` taşıyan genişletilmiş bir nesne de olabilir. `dispatch`, `select`, `reset`, `delegate` verb'leri ve hook davranış kuralları için bkz. [Aksiyonlar ve Hook'lar](./aksiyonlar).
+:::
+
 ---
 
 ## Sonuç: Tam Bir Form View
@@ -265,7 +269,7 @@ Yukarıdaki adımların birleşimi olan gerçek `customer-registration-form/view
 ```json title="samples/components/customer-registration-form/view.json"
 {
   "$schema": "https://amorphie.io/meta/view-vocabulary/1.0",
-  "dataSchema": "urn:amorphie:res:schema:customer:registration-form",
+  "dataSchema": "urn:vnext:res:schema:customer:registration-form",
   "view": {
     "type": "ScrollView",
     "children": [
@@ -355,7 +359,7 @@ Yukarıdaki adımların birleşimi olan gerçek `customer-registration-form/view
             "mainAxisAlignment": "end",
             "children": [
               { "type": "Button", "label": { "tr": "İptal", "en": "Cancel" }, "variant": "outlined", "action": "cancel" },
-              { "type": "Button", "label": { "tr": "Kaydet", "en": "Save" }, "variant": "filled", "icon": "save", "action": "submit", "command": "urn:amorphie:transition:customer:registration:inst-001:submit" }
+              { "type": "Button", "label": { "tr": "Kaydet", "en": "Save" }, "variant": "filled", "icon": "save", "action": "submit", "command": "urn:vnext:flow:transition:customer:registration:${param}:submit" }
             ]
           }
         ]

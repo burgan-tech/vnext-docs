@@ -17,7 +17,7 @@ Bir view dosyasının kök seviyesi şu alanlardan oluşur:
 ```json
 {
   "$schema": "https://amorphie.io/meta/view-vocabulary/1.0",
-  "dataSchema": "urn:amorphie:res:schema:customer:registration-form",
+  "dataSchema": "urn:vnext:res:schema:customer:registration-form",
   "lookups": ["branchDetail"],
   "uiState": {
     "showConfirmDialog": false
@@ -199,6 +199,8 @@ Salt okunur içerik gösterir.
 | `Button` | Buton | `label`, `variant` (`filled`/`outlined`/`text`/`elevated`/`tonal`), `action`, `command`, `icon` |
 | `IconButton` | İkon buton | `icon`, `action` |
 | `FAB` | Floating Action Button | `icon`, `label`, `variant` (`small`/`regular`/`large`/`extended`), `action` |
+
+`action`; kısa string formu dışında `command`, `validate` ve `preHooks`/`postHooks` taşıyan genişletilmiş nesne formunda da yazılabilir. Tüm verb'ler ve hook davranış kuralları için bkz. [Aksiyonlar ve Hook'lar](./aksiyonlar).
 
 ---
 

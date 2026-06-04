@@ -18,6 +18,18 @@ The **Schema** component is a JSON schema definition for **transition**, **flow*
 | **Transition Schema** | Transition definition | Transition request body validation |
 | **Flow Schema** | Workflow definition | Workflow-level validation |
 
+## Master Schema Behavior
+
+The master schema is defined on the flow itself and determines the **template structure of instance data**. It also enables vNext features such as `x-lookup`, `x-encrypt` and **instance filtering**. When an instance data merge is applied, the runtime validates it against the master schema and **rejects** the request if it does not conform.
+
+:::caution[Do not use required, set additionalProperties: true]
+Instance data **grows** via merge at each state. Therefore the master schema must **not use `required`** and must set **`additionalProperties: true`** so the data can expand. Strict requirements belong in **transition schemas** (request body validation), not the master schema.
+:::
+
+The master schema also plays an active role in the Data Function: during [instance filtering](/docs/how-to/instance-filtering) it resolves the **types of dynamic fields from the schema**, enabling advanced filtering. Field-level visibility (roleGrant) is defined on master schema properties — see [Authorization → Master Schema Field-Level Visibility](/docs/concepts/authorization#master-schema-field-level-visibility).
+
+For a read-only view (no input), the master schema can be supplied directly as the view's `dataSchema`; for input sections, a transition-specific schema should be used instead.
+
 ## Required Fields
 
 | Field | Type | Description |

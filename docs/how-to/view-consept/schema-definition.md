@@ -19,7 +19,7 @@ Schema, bir ekranın **veri sözleşmesini** tanımlar. Hangi alanlar var, hangi
 ```json title="schema.json (kök yapı)"
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:amorphie:res:schema:customer:registration-form",
+  "$id": "urn:vnext:res:schema:customer:registration-form",
   "title": "Müşteri Kayıt Formu",
   "description": "...",
   "type": "object",
@@ -143,7 +143,7 @@ Bir dropdown veya seçim bileşeninin liste verilerini nereden çekeceğini tan�
 "city": {
   "type": "string",
   "x-lov": {
-    "source": "urn:amorphie:func:domain:shared:get-cities",
+    "source": "urn:vnext:fn:shared:get-cities",
     "valueField": "$.response.data.code",
     "displayField": "$.response.data.name"
   }
@@ -163,7 +163,7 @@ Bir dropdown veya seçim bileşeninin liste verilerini nereden çekeceğini tan�
 "district": {
   "type": "string",
   "x-lov": {
-    "source": "urn:amorphie:func:domain:shared:get-districts",
+    "source": "urn:vnext:fn:shared:get-districts",
     "valueField": "$.response.data.code",
     "displayField": "$.response.data.name",
     "filter": [
@@ -187,7 +187,7 @@ LOV birden çok satır döndürürken, `x-lookup` seçilen bir değere göre tek
 "branchDetail": {
   "type": "object",
   "x-lookup": {
-    "source": "urn:amorphie:func:domain:shared:get-branch-detail",
+    "source": "urn:vnext:fn:shared:get-branch-detail",
     "resultField": "$.response.data",
     "filter": [
       { "param": "branchCode", "value": "$instance.selectedBranchCode", "required": true }

@@ -6,7 +6,7 @@ description: vNext geliştirme ortamında kullanılan araçlar
 
 # Developer Tools
 
-vNext platformu, geliştirme sürecini hızlandırmak için üç temel araç sunar. Bu araçlar birlikte çalışarak workflow tasarımından deploy'a kadar tüm geliştirme döngüsünü kapsar.
+vNext platformu, geliştirme sürecini hızlandırmak için üç temel araç ve bir AI plugin'i sunar. Bunlar birlikte çalışarak workflow tasarımından deploy'a kadar tüm geliştirme döngüsünü kapsar.
 
 ## Araç Ekosistemi
 
@@ -15,6 +15,7 @@ vNext platformu, geliştirme sürecini hızlandırmak için üç temel araç sun
 | [vNext Forge Studio](./forge-studio) | Görsel workflow tasarımcısı (VS Code Extension + Desktop) | VS Code Marketplace / VSIX |
 | [vNext Workflow CLI](./workflow-cli) | Deploy, validation, CSX mapping işlemleri | `npm install -g @burgan-tech/vnext-workflow-cli` |
 | [vNext Template CLI](./template-cli) | Hazır workflow projesi oluşturma | `npx @burgan-tech/vnext-template <domain>` |
+| [vNext AI Toolkit](./ai-assisted-development) | AI destekli bileşen geliştirme (Claude Code plugin) | `claude plugin install vnext-ai-toolkit@burgan-tech` |
 
 ## Araçlar Arası İlişki
 
@@ -38,3 +39,4 @@ graph TB
 - **Görsel tasarım** yapmak istiyorsanız → [Forge Studio](./forge-studio)
 - **Terminal üzerinden hızlı deploy/sync** yapmak istiyorsanız → [Workflow CLI](./workflow-cli)
 - **Sıfırdan yeni bir workflow projesi** başlatmak istiyorsanız → [Template CLI](./template-cli)
+- **AI ile bileşen tasarlamak/üretmek** istiyorsanız → [AI Destekli Geliştirme](./ai-assisted-development)

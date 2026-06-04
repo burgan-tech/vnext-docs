@@ -71,6 +71,7 @@ const sidebars: SidebarsConfig = {
         'components/extension',
         'components/schema',
         'components/view',
+        'components/urn-catalog',
       ],
     },
     {
@@ -79,6 +80,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'concepts/user-integration',
         'concepts/instance-data',
+        'concepts/authorization',
       ],
     },
     {
@@ -98,6 +100,7 @@ const sidebars: SidebarsConfig = {
             'how-to/view-consept/view-yapisi',
             'how-to/view-consept/schema-tanimi',
             'how-to/view-consept/data-akisi',
+            'how-to/view-consept/aksiyonlar',
           ],
         },
       ],

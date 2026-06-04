@@ -51,4 +51,5 @@ The Client SDK reads the platform header and renders the correct variant.
 - [Views (conceptual)](/docs/components/view) — conceptual explanation
 - [User Integration](/docs/concepts/user-integration) — view loop flow
 - [Schema component](/docs/components/schema) — form validation integration
+- [URN Catalog & Binding](/docs/components/urn-catalog) — Http / Deeplink / URN content shapes and `${param}` binding
 - Schema source: [vnext-schema (GitHub)](https://github.com/burgan-tech/vnext-schema)

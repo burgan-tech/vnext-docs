@@ -291,11 +291,15 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `data.href` | `string` | Data fonksiyon endpoint'i |
 | `view.loadData` | `boolean` | View'ın data yüklemesi gerekip gerekmediği |
 | `view.href` | `string` | View fonksiyon endpoint'i |
-| `state` | `string` | Mevcut state adı |
+| `state` | `string` | Mevcut state adı. State'te `alias` tanımlıysa role göre maskelenmiş etiket döner (bkz. aşağıdaki not) |
 | `status` | `string` | Instance durumu (A=Active, C=Completed) |
 | `activeCorrelations` | `array` | Aktif alt korelasyonlar |
 | `transitions` | `array` | Kullanılabilir transition'lar |
 | `eTag` | `string` | Cache kontrolü için ETag değeri |
+
+:::info State Alias (Rol Tabanlı Maskeleme)
+`state` alanı, aktif state'te `alias` tanımlıysa **role göre maskelenmiş** etiketi döndürebilir. İstek yapan aktörün rolleri alias `roles` listesine göre değerlendirilir (DENY her zaman ALLOW'u geçersiz kılar) ve eşleşen alias için istek diline (Accept-Language) uygun `label` döner; o dilde label yoksa `alias.name` döner. `alias` tanımlı değilse veya hiçbir rol eşleşmezse ham `state.key` döner. Detay için bkz. [State Alias](/docs/components/workflow#state-alias-rol-tabanlı-state-maskeleme).
+:::
 
 ### View Function
 
