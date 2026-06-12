@@ -84,7 +84,8 @@ Bir input bileşenini schema'daki bir alana bağlamak için `bind` kullanılır:
 | `$instance.fieldName` | Backend'den gelen mevcut kayıt | `"content": "$instance.customerId"` |
 | `$param.fieldName` | Üst bileşenden gelen parametre | `"source": "$param.cityCode"` |
 | `$lov.fieldName` | LOV listesi (dizi) | `"source": "$lov.branchCode"` |
-| `$lookup.fieldName.prop` | Lookup tekil kayıt | `"content": "$lookup.branchDetail.address"` |
+| `$lookup.fieldName.prop` | Lookup tekil nesne alanı | `"content": "$lookup.branchDetail.address"` |
+| `$lookup.fieldName` | Lookup dizisi (ForEach kaynağı) | `"source": "$lookup.branchList"` |
 | `$ui.key` | uiState değeri | `"showIf": {"field": "$ui.showDialog"}` |
 | `$item.prop` | ForEach döngüsünde aktif öğe | `"content": "$item.display"` |
 | `$schema.fieldName.label` | Alan etiketi | `"content": "$schema.city.label"` |

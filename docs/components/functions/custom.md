@@ -140,8 +140,9 @@ Her fonksiyon bir task çalıştırabilir ve task sonucundaki veri mapping ile i
 |---------|-----|---------|------------|----------|
 | `type` | `string` | Hayır | `L` | Mapping tipi: `G` (Global) veya `L` (Local). Global ise `code` gerekmez |
 | `location` | `string` | Hayır | — | Kod dosyası yolu (pattern: `^\.\/.*\.csx$`) |
-| `code` | `string` | **Koşullu** | — | Mapping kodu içeriği. `type` = `L` ise zorunlu |
-| `encoding` | `string` | Hayır | `B64` | Kodlama formatı: `B64` (Base64) veya `NAT` (Native/Ham) |
+| `code` | `string \| object` | **Koşullu** | — | Mapping kodu içeriği. `type` = `L` ise zorunlu. `encoding: "REF"` ise string yerine bir sys-mappings referans objesi |
+| `encoding` | `string` | Hayır | `B64` | Kodlama formatı: `B64` (Base64), `NAT` (Native/Ham) veya `REF` (sys-mappings referansı) |
+| `scripts` <sup>New</sup> | `object` | Hayır | — | Helper referansları (`helpers[]`) ve izinli assembly'ler (`allowedAssemblies[]`) — bkz. [Mapping Bileşeni](/docs/components/mapping-component) |
 
 ### Çoklu task çalıştırma ve output mapping
 

@@ -68,7 +68,50 @@ Doğrudan veritabanı kolonları:
 
 ### JSON Veri Alanları (attributes)
 
-Instance'ın JSON verisinde saklanan herhangi bir alan `attributes` prefix'i kullanılarak filtrelenebilir.
+Instance'ın JSON verisinde saklanan alanlar `attributes` prefix'i ile filtrelenebilir. Ancak bir JSON alanının **filtrelenebilir ve sıralanabilir** olması, **master şemada** o alan için tanımlı vocabulary'e (`x-filterOperators` / `x-sortable`) bağlıdır — bkz. [Şema-Tabanlı Filtrelenebilirlik ve Sıralama](#şema-tabanlı-filtrelenebilirlik-ve-sıralama).
+
+---
+
+## Şema-Tabanlı Filtrelenebilirlik ve Sıralama
+
+Instance tablo kolonları (`key`, `status`, `createdAt` …) doğrudan filtrelenebilir/sıralanabilir. Buna karşılık **JSON (`attributes.*`) alanları** için bu yetenek, **master şemadaki** alan tanımının taşıdığı vocabulary keyword'leri ile belirlenir. Data Function ve instance listeleme endpoint'leri bu tanıma göre çalışır:
+
+| Keyword | Etki |
+|---------|------|
+| `x-filterOperators` (string[]) | Alanda izin verilen filtre operatörleri. **Boş veya yok ise alan filtrelenemez** |
+| `x-sortable` (boolean) | `true` ise alan sıralanabilir; yok ise sıralanamaz |
+| `x-displayFormat` (string) | UI'a yönelik format ipucu (örn. `yyyy-MM-dd'T'HH:mm:ssXXX`) — filtreleme/sıralamayı etkilemez |
+
+Keyword tanımları için bkz. [Schema → Filtreleme & Sıralama Vocabulary'si](/docs/components/schema#filtreleme--sıralama-vocabularysi) ve [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+
+### Tip-Operatör İlişkisi
+
+İzin verilen operatörlerin davranışı, alanın JSON Schema `type` değerine göre değişir:
+
+| Schema `type` | Operatör kategorisi | SQL davranışı |
+|---|---|---|
+| `number` / `integer` | `gt`, `lt`, `ge`, `le`, `between` | `accessor::numeric {op} @param` |
+| `string` + `gt`/`lt`/`ge`/`le`/`between` | tarih karşılaştırma | `accessor::timestamptz {op} @param` |
+| `string` + `eq`/`like`/`startswith`/`endswith`/`match` | metin karşılaştırma | `accessor ILIKE @param` |
+| `boolean` | `eq`, `ne` | equality |
+| `array` (instance verisinde JSON dizi) | `includes` | `Data @> @param`; yaprak yolda tek elemanlı dizi + kısmi nesne deseni |
+
+### Kurallar
+
+1. `x-filterOperators` mevcut ve dolu ise alan filtrelenebilir. Boş veya yok ise alan filtrelenemez.
+2. `x-sortable: true` ise alan sıralanabilir. Tanımlı değilse sıralanabilir değildir.
+3. Filtrelenemez bir alan sorgulandığında veya izin verilmeyen bir operatör kullanıldığında **`SchemaFilterValidationException`** fırlatılır.
+4. JSON dizisi alanlarında kullanılan GraphQL-only `includes` operatörü için, ilgili alanın `x-filterOperators` listesinde `includes` tanımlı olmalıdır (diğer operatörler gibi). Yük boyutu ve iç içe derinlik **`InputValidator`** limitleriyle sınırlıdır.
+
+```json
+"startDateTime": {
+  "type": "string",
+  "format": "date-time",
+  "x-filterOperators": ["eq", "gt", "ge", "lt", "le", "between"],
+  "x-sortable": true,
+  "x-displayFormat": "yyyy-MM-dd'T'HH:mm:ssXXX"
+}
+```
 
 ---
 
@@ -137,9 +180,9 @@ Instance listesi ve data endpoint'leri `sort` veya `orderBy` query parametresi i
 | `status` | Instance durumu |
 | `key` | Instance anahtarı |
 | `currentState` / `state` | Mevcut state (`state` alias) |
-| `attributes.fieldName` | Instance verisine JSON yolu; iç içe yollar desteklenir (örn. `attributes.nested.path`) |
+| `attributes.fieldName` | Instance verisine JSON yolu; iç içe yollar desteklenir (örn. `attributes.nested.path`). Yalnızca master şemada **`x-sortable: true`** taşıyan alanlar sıralanabilir |
 
-Instance kolonları veritabanında uygulanır; `attributes.*` sıralaması en güncel instance verisi JSON'u kullanır ve filtreleme ile aynı şema/güvenlik kurallarına tabidir.
+Instance kolonları veritabanında uygulanır; `attributes.*` sıralaması en güncel instance verisi JSON'u kullanır ve filtreleme ile aynı şema/güvenlik kurallarına tabidir (bkz. [Şema-Tabanlı Filtrelenebilirlik ve Sıralama](#şema-tabanlı-filtrelenebilirlik-ve-sıralama)).
 
 ---
 
@@ -421,6 +464,10 @@ GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=2
 }
 ```
 
+### Şema Filtre Doğrulama Hatası
+
+Master şemada **filtrelenemez** bir alan (`x-filterOperators` boş/yok) sorgulandığında veya alan için **izin verilmeyen bir operatör** kullanıldığında **`SchemaFilterValidationException`** fırlatılır. Aynı kural sıralama için `x-sortable` üzerinden geçerlidir. Bkz. [Şema-Tabanlı Filtrelenebilirlik ve Sıralama](#şema-tabanlı-filtrelenebilirlik-ve-sıralama).
+
 ---
 
 ## Performans İpuçları
@@ -438,3 +485,5 @@ GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=2
 - [Function API'leri](/docs/components/functions/built-in) - Yerleşik sistem fonksiyonları (State, Data, View)
 - [Custom Functions](/docs/components/functions/custom) - Kullanıcı tanımlı fonksiyonlar
 - [Instance Data](/docs/concepts/instance-data) - Instance veri yapısı ve yaşam döngüsü
+- [Schema → Filtreleme & Sıralama Vocabulary'si](/docs/components/schema#filtreleme--sıralama-vocabularysi) - `x-filterOperators`, `x-sortable`, `x-displayFormat` tanımları
+- [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) - tasarımcı bakışıyla `x-*` uzantıları

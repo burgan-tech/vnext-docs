@@ -85,6 +85,7 @@ C# script dosyalarını düzenlemek için entegre bir editör:
 - Syntax highlighting ve IntelliSense
 - Snippet Quick Bar (sık kullanılan kod kalıpları)
 - C# API Reference paneli
+- **Mapping referansı (REF):** `encoding` değeri `REF` seçildiğinde, gömülü kod yerine bir [sys-mappings bileşeni](/docs/components/mapping-component) referansı kullanılır. Bir pickup dialog ile mevcut sys-mappings bileşenleri listelenir; diğer referans alanlarında olduğu gibi seçme, mevcut seçimi kaldırma veya yeni bileşen oluşturma yapılabilir.
 
 ## Quick Run
 

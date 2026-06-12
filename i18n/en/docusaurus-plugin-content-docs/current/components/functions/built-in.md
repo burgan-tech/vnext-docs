@@ -30,6 +30,10 @@ The vNext Runtime platform provides three core function APIs that are automatica
 
 > **Note:** For Schema Function and custom user-defined functions, see [Custom Functions](/docs/components/functions/custom).
 
+:::caution[QueryRoles authorization]
+All read functions (**state**, **data**, **view**, **schema**) authorize the caller against the `queryRoles` defined on the instance's **current state** and the flow level. If the caller has no `allow` role, the function returns **`403`**. See [QueryRoles authorization in read functions](#queryroles-authorization-in-read-functions).
+:::
+
 These functions enable:
 - Real-time state monitoring (long-polling)
 - Efficient data retrieval with ETag support
@@ -642,6 +646,16 @@ These patterns are evaluated wherever **available transition** and **data** auth
 ### Master schema field-level visibility
 
 The Flow **Master schema** can define **field-level visibility** using a **roleGrant** (`roles`) property on schema properties. Data function and data-returning endpoints (Get Instance, GetInstances, etc.) run the authorize layer and return only fields the caller is allowed to see. Properties without `roles` are visible to all authorized callers. For vocabulary and tooling, see [roles-vocab.json](https://unpkg.com/@burgan-tech/vnext-schema@0.0.37/vocabularies/roles-vocab.json).
+
+### QueryRoles authorization in read functions
+
+Before returning data, the **state**, **data**, **view** and **schema** functions evaluate the caller against the `queryRoles` defined on the instance's **current state**. Evaluation order:
+
+1. If the state defines `queryRoles`, it **overrides the flow (root) level**; otherwise the flow-level `queryRoles` is used.
+2. The caller's roles are evaluated as `allow`/`deny` (**DENY always overrides ALLOW**).
+3. If the result is not `allow`, the function returns **`403 Forbidden`**.
+
+This lets an instance be opened or closed to different audiences depending on its current state (e.g. while under backoffice review only operator roles can see it). To pre-check whether a role is authorized on a given state, use the **Instance Authorize** (`queryRoles=true`) endpoint below. See [Workflow → Query Roles](/docs/components/workflow#query-roles) and [Authorization](/docs/concepts/authorization).
 
 ### Get Flow Permissions
 

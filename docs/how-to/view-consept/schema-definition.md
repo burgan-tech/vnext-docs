@@ -181,7 +181,7 @@ Daha fazla bilgi için bkz. [Data Akışı → Cascade LOV](./data-akisi#cascade
 
 ### `x-lookup` — Tekil Kayıt Zenginleştirme
 
-LOV birden çok satır döndürürken, `x-lookup` seçilen bir değere göre tek bir nesne döndürür. Seçilen şubenin adres ve iletişim bilgileri gibi detayları çekmek için kullanılır.
+`x-lookup`, view render edilirken bir kaynaktan veri çekip `$lookup` namespace'ine yükler. `resultField` path'ine göre **hem tekil nesne hem de dizi** döndürebilir: tekil nesne (ör. seçilen şubenin adres/iletişim detayları) `$lookup.<ad>.<alan>` ile, dizi ise `ForEach` ile (`source: "$lookup.<ad>"`, eleman erişimi `$item.*`) kullanılır.
 
 ```json
 "branchDetail": {
@@ -318,6 +318,42 @@ Rol değerlendirme semantiği (sistem rolleri, `$user` / `$userBehalfOf` / `$rol
 |-------|-------|
 | `"persisted"` | Veritabanında şifreli saklanır |
 | `"transport"` | Sadece iletim sırasında şifrelenir |
+
+---
+
+### `x-filterOperators` — Filtrelenebilir Operatörler (Bilgi Amaçlı)
+
+Bir alanın hangi filtre operatörleriyle sorgulanabileceğini belirler. **Boş veya yok ise alan filtrelenemez.** Genellikle master şemada tanımlanır; instance listeleme/sorgulama davranışını besler.
+
+```json
+"startDateTime": {
+  "type": "string",
+  "format": "date-time",
+  "x-filterOperators": ["eq", "gt", "ge", "lt", "le", "between"]
+}
+```
+
+İzin verilen değerler: `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `between`, `match`, `like`, `startswith`, `endswith`, `in`, `nin`. Operatörlerin alan tipine göre davranışı ve kuralları için bkz. [Instance Filtering](/docs/how-to/instance-filtering).
+
+---
+
+### `x-sortable` — Sıralanabilirlik (Bilgi Amaçlı)
+
+`true` ise alan sıralanabilir; tanımlı değilse sıralanamaz.
+
+```json
+"startDateTime": { "type": "string", "x-sortable": true }
+```
+
+---
+
+### `x-displayFormat` — Görüntü Formatı
+
+Alanın UI'da nasıl biçimlendirileceğine dair ipucu. Filtreleme/sıralamayı etkilemez.
+
+```json
+"startDateTime": { "type": "string", "x-displayFormat": "yyyy-MM-dd'T'HH:mm:ssXXX" }
+```
 
 ---
 

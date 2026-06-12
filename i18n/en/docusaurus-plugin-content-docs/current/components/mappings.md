@@ -906,6 +906,7 @@ public async Task<ScriptResponse> OutputHandler(ScriptContext context)
 **Encoding Options:**
 - `B64`: BASE64 encoded code (`location` field is required)
 - `NAT`: Native C# code (`location` field is not required - more readable)
+- `REF`: A reference to a [sys-mappings component](/docs/components/mapping-component) instead of inline code; `code` becomes a reference object (`{key, version, domain, flow: "sys-mappings"}`). Reusable helpers can also be included via `scripts.helpers[]` and third-party assemblies via `scripts.allowedAssemblies[]` — see [Scripting / Sandbox](/docs/configuration/scripting).
 
 **BASE64 Encoding Example (B64):**
 ```json

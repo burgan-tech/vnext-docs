@@ -108,7 +108,7 @@ For master schema behavior and why `required` should not be used, see [Schema â†
 | Context | Field | Effect |
 |---------|-------|--------|
 | Transition | `roles` | Who can trigger the transition |
-| Flow / State | `queryRoles` | Who can query instances and states (state level overrides root) |
+| Flow / State | `queryRoles` | Who can query instances and states (state level overrides root). Enforced by the built-in **state/data/view/schema** read functions on the current state; **403** if not allowed |
 | State `alias` | `roles` | The role-masked view of a state |
 | Master schema property | `x-roles` | Column-level data visibility |
 

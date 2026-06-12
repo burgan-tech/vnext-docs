@@ -99,12 +99,17 @@ public async Task<ScriptResponse> OutputHandler(ScriptContext context)
 }
 ```
 
-### Encoding (B64 / NAT) ve transition şemasında mapping
+### Encoding (B64 / NAT / REF) ve transition şemasında mapping
 
 Betik içeriği şemada `encoding` ile belirlenir:
 
 - **B64**: BASE64 kodlanmış kod (`location` alanı gerekebilir)
 - **NAT**: Doğrudan C# kodu (`location` olmadan da kullanılabilir)
+- **REF**: Gömülü kod yerine bir [sys-mappings bileşenine](/docs/components/mapping-component) referans. Bu durumda `code`, bir referans objesidir (`{key, version, domain, flow: "sys-mappings"}`).
+
+:::tip[Helper'lar ve yeniden kullanım]
+Tekrar eden yardımcı kodu gömmek yerine [Mapping Bileşeni](/docs/components/mapping-component) olarak tanımlayıp `scripts.helpers[]` ile dahil edebilir veya `encoding: "REF"` ile doğrudan referans verebilirsiniz. 3. parti assembly kullanımı (`scripts.allowedAssemblies[]`) ve sandbox için bkz. [Scripting / Sandbox](/docs/configuration/scripting).
+:::
 
 BASE64 örneği:
 
@@ -139,6 +144,17 @@ NAT örneği:
   "mapping": {
     "code": "public class OrderApprovalTransitionMapping : ScriptBase, ITransitionMapping { ... }",
     "encoding": "NAT"
+  }
+}
+```
+
+REF örneği (sys-mappings referansı):
+
+```json
+{
+  "mapping": {
+    "encoding": "REF",
+    "code": { "key": "initial-mapping", "version": "1.0.0", "flow": "sys-mappings", "domain": "core" }
   }
 }
 ```

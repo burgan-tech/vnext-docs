@@ -98,9 +98,24 @@ Defines the list of **functions** that will run for the flow and instance. Each 
 
 Defines the list of **extensions** that will run for the flow and instance. Extensions enrich instance data.
 
+### Scripts (Helpers & Allowed Assemblies)
+
+`attributes.scripts` declares **helper** references and **allowed assemblies** effective across the whole flow:
+
+```json
+"scripts": {
+  "helpers": [
+    { "key": "rsa-crypto", "version": "1.0.0", "domain": "core", "flow": "sys-mappings" }
+  ],
+  "allowedAssemblies": ["System.Security.Cryptography"]
+}
+```
+
+The same `scripts` object can be defined on any mapping object. Mapping `encoding` may also be **`REF`** (a reference to a sys-mappings component instead of inline code). See [Mapping Component](/docs/components/mapping-component) and [Scripting / Sandbox](/docs/configuration/scripting).
+
 ### Query Roles
 
-Authorization mechanism. Holds the information about **who can query** the workflow and the states within an instance.
+Authorization mechanism. Holds the information about **who can query** the workflow and the states within an instance. `queryRoles` can be defined at two levels: the **flow (root)** level and each **state** level. **Precedence:** the instance's **current state** `queryRoles` is evaluated first; if the state has none, the flow-level `queryRoles` is used as the base. It is enforced by the built-in **state/data/view/schema** read functions; if the caller is not allowed, the function returns **`403`**. See [Built-in Functions → QueryRoles authorization in read functions](/docs/components/functions/built-in#queryroles-authorization-in-read-functions).
 
 ### Error Boundary
 

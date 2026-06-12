@@ -108,7 +108,16 @@ Bir LOV'un başka bir alanın değerine bağlı olduğu durumlar **cascade LOV**
 
 ## Lookup
 
-LOV birden fazla satır döndürürken, **lookup** belirli bir değere göre tek bir nesne döndürür. Seçilen şubenin adres, telefon, çalışma saatleri gibi detaylarını göstermek için kullanılır.
+**Lookup** (`x-lookup`), view render edilirken bir kaynaktan veri çekip `$lookup` namespace'i altına yükler. `resultField` path'inin işaret ettiği değere göre **hem tekil nesne hem de dizi (array)** döndürebilir:
+
+- **Tekil nesne** → seçilen şubenin adres, telefon, çalışma saatleri gibi detaylarını göstermek için (alanlara `$lookup.<ad>.<alan>` ile erişilir).
+- **Dizi** → bir liste döndürmek için; `ForEach` ile iterate edilir (aşağıda).
+
+:::note
+`resultField`'in array'i mi yoksa tek nesneyi mi işaret ettiği, lookup'ın hangi modda kullanılacağını belirler. Runtime her ikisini de destekler.
+:::
+
+Lookup yalnızca view ilk render edildiğinde bir kez yüklenmek zorunda değildir: `filter` tanımı bir **binding**'e (`$form.*`, `$instance.*`, `$param.*`) bağlıysa, lookup o binding'in değişimini **izler** ve değer değiştikçe **kendini yeniden yükler** (bkz. [Filtreye Göre Yeniden Yükleme](#filtreye-göre-yeniden-yükleme-binding-takibi)).
 
 ### 1. Schema'da Tanımlama
 
@@ -149,6 +158,58 @@ Lookup verisi `$lookup.alanAdı.property` ifadesiyle erişilir:
 { "type": "Text", "content": "$lookup.branchDetail.address" },
 { "type": "Text", "content": "$lookup.branchDetail.phone" }
 ```
+
+### 4. Dizi (Array) Lookup'ı ForEach ile Kullanma
+
+`resultField` bir dizi işaret ediyorsa, `$lookup.<ad>` doğrudan bir array'e çözülür ve `ForEach` ile iterate edilir. Bu durumda **`$lookup.<ad>`** array container'ın kendisidir; eleman alanlarına **`$item.*`** ile erişilir (`$lookup.*` ile değil).
+
+```json title="schema.json"
+"branchList": {
+  "x-lookup": {
+    "source": "urn:vnext:fn:shared:list-branches",
+    "resultField": "$.response.data.branches"
+  }
+}
+```
+
+```json title="view.json"
+{
+  "type": "ForEach",
+  "source": "$lookup.branchList",
+  "template": {
+    "type": "Card",
+    "children": [
+      { "type": "Text", "content": "$item.name" },
+      { "type": "Text", "content": "$item.address" }
+    ]
+  }
+}
+```
+
+`branchList` ismi yine view kökündeki `lookups` dizisine eklenmelidir.
+
+### Filtreye Göre Yeniden Yükleme (Binding Takibi)
+
+Lookup'ın `filter` parametreleri bir binding ifadesine bağlanabilir. Renderer bu binding'in değerini izler; değer değiştiğinde lookup **otomatik olarak yeniden yüklenir**. Bu, cascade LOV davranışının lookup karşılığıdır.
+
+```json title="schema.json"
+"branchDetail": {
+  "type": "object",
+  "x-lookup": {
+    "source": "urn:vnext:fn:shared:get-branch-detail",
+    "resultField": "$.response.data",
+    "filter": [
+      { "param": "branchCode", "value": "$form.selectedBranchCode", "required": true }
+    ]
+  }
+}
+```
+
+- Kullanıcı `selectedBranchCode` değerini değiştirdiğinde, `branchDetail` lookup'ı yeni `branchCode` ile yeniden çağrılır ve `$lookup.branchDetail.*` değerleri güncellenir.
+- `"required": true` ise binding boşken çağrı yapılmaz; tüm zorunlu filtreler dolduğunda yükleme tetiklenir.
+- `value` olarak `$form.*` (kullanıcı girdisi), `$instance.*` (mevcut kayıt) veya `$param.*` (üst bileşen parametresi) kullanılabilir.
+
+Bu sayede lookup yalnızca ilk render'da değil, ilgili binding her değiştiğinde güncel veriyi sunar.
 
 ---
 
@@ -291,7 +352,8 @@ LOV filtreleri kontrol edilir
 | `$lov.fieldName` | ForEach kaynağı olarak LOV listesini kullanmak | `"source": "$lov.branchCode"` |
 | `$item.value` | ForEach içinde seçim değerini okumak | `"value": "$item.value"` |
 | `$item.display` | ForEach içinde görüntülenen metni okumak | `"content": "$item.display"` |
-| `$lookup.field.prop` | Lookup ile yüklenen tekil kaydı okumak | `"content": "$lookup.branchDetail.address"` |
+| `$lookup.field.prop` | Lookup ile yüklenen tekil nesnenin alanını okumak | `"content": "$lookup.branchDetail.address"` |
+| `$lookup.field` | Dizi dönen lookup'ı `ForEach` kaynağı olarak kullanmak | `"source": "$lookup.branchList"` |
 | `$ui.key` | UI durumunu (dialog açık/kapalı) okumak | `"showIf": {"field": "$ui.showDialog"}` |
 
 ---

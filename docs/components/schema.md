@@ -82,7 +82,7 @@ Buna karşılık master schema'da **`pattern`**, ana omurga şablonu, vocabulary
 
 ### Filtering ve Data Function'daki Rolü
 
-Data Function veriyi response ederken master schema **aktif rol alır**. [Instance filtering](/docs/how-to/instance-filtering) sırasında, instance data gibi dinamik alanların **tiplerini şemadan çözerek** gelişmiş (advance) filtre esnekliği kazandırır. Master schema olmadan dinamik alanlarda tip-duyarlı filtreleme mümkün olmaz.
+Data Function veriyi response ederken master schema **aktif rol alır**. [Instance filtering](/docs/how-to/instance-filtering) sırasında, instance data gibi dinamik alanların **tiplerini şemadan çözerek** gelişmiş (advance) filtre esnekliği kazandırır. Master schema olmadan dinamik alanlarda tip-duyarlı filtreleme mümkün olmaz. Bir alanın hangi operatörlerle filtrelenebileceği ve sıralanabilirliği `x-filterOperators` / `x-sortable` ile bildirilir (aşağıda).
 
 Alan bazlı görünürlük, master şema property'lerinde **`x-roles`** keyword'ü ile tanımlanır (aşağıda); bkz. [Yetkilendirme → Master Şema Alan Görünürlüğü](/docs/concepts/authorization#master-şema-alan-bazlı-görünürlük).
 
@@ -108,6 +108,36 @@ Alan bazlı görünürlük, master şema property'lerinde **`x-roles`** keyword'
 `role` değeri statik bir ad ya da JSONPath ifadesi olabilir; sistem rolleri (`$InstanceStarter` vb.) ve JSONPath grant prefiksleri (`$user.` / `$userBehalfOf.` / `$role.`) burada da geçerlidir. Bu kalıpların çözümleme semantiği için bkz. [Yetkilendirme](/docs/concepts/authorization).
 
 `x-encryption` de aynı alan-yönetişim kapsamındadır; bir field'ın şifreleme tipini (`persisted` / `transport`) belirtir. Tüm property seviyesi `x-*` uzantılarının ayrıntısı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+
+### Filtreleme & Sıralama Vocabulary'si
+
+Bir JSON (`attributes.*`) alanının **filtrelenip sıralanabilirliği** master şemada üç keyword ile bildirilir. Data Function ve instance listeleme endpoint'leri (`.../instances?filter=`, `.../functions/data`) bu vocabulary'e göre çalışır:
+
+| Keyword | Tip | Zorunlu | Açıklama |
+|---------|-----|---------|----------|
+| `x-filterOperators` | string[] | Hayır | İzin verilen filtre operatörleri. **Boş veya yok ise alan filtrelenemez** |
+| `x-sortable` | boolean | Hayır | `true` ise alan sıralanabilir. Yok ise sıralanabilir değil |
+| `x-displayFormat` | string | Hayır | UI'a yönelik format ipucu (örn. `yyyy-MM-dd'T'HH:mm:ssXXX`) |
+
+**`x-filterOperators` değerleri:** `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `between`, `match`, `like`, `startswith`, `endswith`, `in`, `nin` (`uniqueItems`).
+
+```json
+"startDateTime": {
+  "type": "string",
+  "format": "date-time",
+  "x-filterOperators": ["eq", "gt", "ge", "lt", "le", "between"],
+  "x-sortable": true,
+  "x-displayFormat": "yyyy-MM-dd'T'HH:mm:ssXXX"
+}
+```
+
+**Kurallar (özet):**
+
+- `x-filterOperators` dolu ise alan filtrelenebilir; boş/yok ise filtrelenemez.
+- `x-sortable: true` değilse alan sıralanamaz.
+- Filtrelenemez bir alan veya izin verilmeyen bir operatör kullanıldığında **`SchemaFilterValidationException`** fırlatılır.
+
+Operatörlerin alan tipine göre (numeric / tarih / metin / boolean / dizi) davranışı, JSON dizi alanları için `includes` operatörü ve `SchemaFilterValidationException` ayrıntıları için bkz. [Instance Filtering → Şema-Tabanlı Filtrelenebilirlik](/docs/how-to/instance-filtering#şema-tabanlı-filtrelenebilirlik-ve-sıralama).
 
 ### View ile Kullanımı
 
@@ -180,7 +210,7 @@ vNext vocabulary'sinin (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-enc
 | `const` | any | Hayır | Sabit değer |
 | `default` | any | Hayır | Varsayılan değer |
 
-Standart JSON Schema alanlarına ek olarak, property seviyesinde vNext **`x-*` vocabulary uzantıları** desteklenir — alan bazlı yetkilendirme (`x-roles`), şifreleme (`x-encryption`), etiketleme (`x-labels`), LOV (`x-lov`), lookup (`x-lookup`), koşullu görünürlük (`x-conditional`) vb. Tam liste ve örnekler için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+Standart JSON Schema alanlarına ek olarak, property seviyesinde vNext **`x-*` vocabulary uzantıları** desteklenir — alan bazlı yetkilendirme (`x-roles`), şifreleme (`x-encryption`), filtreleme (`x-filterOperators`), sıralama (`x-sortable`), görüntü formatı (`x-displayFormat`), etiketleme (`x-labels`), LOV (`x-lov`), lookup (`x-lookup`), koşullu görünürlük (`x-conditional`) vb. Tam liste ve örnekler için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 
 ---
 
