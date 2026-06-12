@@ -66,8 +66,9 @@ Kural tabanlı view seçimi, çalışma zamanı koşullarına göre farklı view
 | Özellik | Tip | Zorunlu | Açıklama |
 |---------|-----|---------|----------|
 | `location` | string | Hayır | Script konumu. Gömülü kod için `"inline"` kullanın. |
-| `code` | string | Evet | IConditionMapping arayüzünü uygulayan C# kodu. |
-| `encoding` | string | Hayır | Düz metin için `"NAT"`, Base64 için `"B64"`. |
+| `code` | string \| object | Evet | IConditionMapping arayüzünü uygulayan C# kodu. `encoding: "REF"` ise bir sys-mappings referans objesi. |
+| `encoding` | string | Hayır | Düz metin için `"NAT"`, Base64 için `"B64"`, sys-mappings referansı için `"REF"`. |
+| `scripts` <sup>New</sup> | object | Hayır | Helper referansları ve izinli assembly'ler — bkz. [Mapping Bileşeni](/docs/components/mapping-component). |
 
 ### View (Reference) Özellikleri
 

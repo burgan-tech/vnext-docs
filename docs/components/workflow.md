@@ -235,6 +235,7 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
 | `type` | string | **Evet** | Workflow türü: `C`, `F`, `S`, `P` (yukarıdaki tür tablosu) |
+| `scripts` <sup>New</sup> | object | Hayır | Flow seviyesi helper ve izinli assembly tanımı (aşağıda) |
 | `states` | array | **Evet** | State listesi. Tam olarak **bir** `Initial` state (`stateType: 1`) içermelidir |
 | `startTransition` | object | **Evet** | Başlangıç transition tanımı (aşağıda) |
 | `labels` | array | **Evet** | Çoklu dil etiketleri (`minItems: 1`). Her öğe: `label` + `language` |
@@ -280,7 +281,7 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 | `onEntries` | array | Hayır | State'e girildiğinde çalıştırılacak task'lar |
 | `onExits` | array | Hayır | State'den çıkılırken çalıştırılacak task'lar |
 | `errorBoundary` | object \| null | Hayır | State seviyesi hata yönetimi |
-| `queryRoles` | array | Hayır | State seviyesi sorgu rolleri. Root `queryRoles`'u override eder |
+| `queryRoles` | array | Hayır | State seviyesi sorgu rolleri. Root `queryRoles`'u override eder. Instance bu state'teyken **state/data/view/schema** read fonksiyonlarınca uygulanır; izin yoksa `403` (bkz. [Query Roles](#query-roles)) |
 | `alias` | array | Hayır | State için rol bazlı alternatif çoklu-dil etiketleri. Tanımlıysa State Function `state` değerini role göre maskeler |
 
 ### `stateType` Enum Değerleri
@@ -546,6 +547,17 @@ flowchart TD
 | `roles` | array | Hayır | Yetkilendirme rolleri |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 
+### Davranış
+
+Start transition **view tanımı alamaz** (tabloda `view` alanı bilinçli olarak yoktur); yalnızca `schema` ile **başlangıç verisi** ve validation tanımlanabilir. Bu, instance'ın hangi veriyle başlatılacağını belirler.
+
+- **Service-to-service (S2S) akışlar:** Start transition'da `schema` ile veri almak mantıklıdır; çağıran sistem başlangıç payload'ını doğrudan gönderir.
+- **Client-base akışlar:** Instance genellikle **base bilgiyle** başlatılır; kullanıcı girdisi (gerekiyorsa) start'ta değil, **initial state view**'inde alınır. Çünkü client tarafı girdiyi view üzerinden toplar.
+
+:::tip[Flow tasarım notu]
+Girdi modelini bu ayrıma göre kurgulayın: S2S tetikleyiciler için start `schema`; kullanıcıdan girdi gereken client akışlarında ise minimal start payload'ı + initial state view. State vs transition view ayrımı için bkz. [Pseudo UI → Giriş](/docs/how-to/view-consept) ve [User Integration](/docs/concepts/user-integration).
+:::
+
 ---
 
 ## Özel Transition'lar
@@ -650,25 +662,64 @@ Workflow (global), state ve task seviyesinde tanımlanabilir. Öncelik sırası:
 `attributes.schema` alanı, workflow'un **instance data** ana yapısını belirler. Gelişmiş filtreleme ve instance data'nın her değişim noktasında **tutarlılık kontrolü** sağlar.
 
 :::caution
-Instance data her state'de merge ile genişlediğinden master schema'da **`required` kullanılmamalı** ve **`additionalProperties: true`** olmalıdır. Davranış kuralları, filtering ve view kullanımı için bkz. [Schema → Master Schema Davranışı](/docs/components/schema#master-schema-davranışı).
+Instance data her state'de merge ile genişlediğinden master schema'da **`required` kullanılmamalı** ve **`additionalProperties: true`** olmalıdır. Alan görünürlüğü (`x-roles`), filtrelenebilirlik/sıralanabilirlik (`x-filterOperators` / `x-sortable`) gibi davranışlar da master şemada tanımlanır. Davranış kuralları, filtering ve view kullanımı için bkz. [Schema → Master Schema Davranışı](/docs/components/schema#master-schema-davranışı).
 :::
 
 ### Functions ve Extensions
 
 `attributes.functions` ve `attributes.extensions` alanları, workflow'a bağlı function ve extension **reference** listelerini içerir. Her öğe standart `reference` yapısındadır.
 
+### Scripts (Helpers & Allowed Assemblies)
+
+`attributes.scripts`, flow boyunca geçerli olacak **helper** referanslarını ve **izinli assembly**'leri tanımlar. Tek tek mapping objelerine `scripts` eklemek yerine, tüm flow'da kullanılacak bir helper/assembly burada bir kez bildirilir.
+
+```json
+"scripts": {
+  "helpers": [
+    { "key": "rsa-crypto", "version": "1.0.0", "domain": "core", "flow": "sys-mappings" }
+  ],
+  "allowedAssemblies": ["System.Security.Cryptography"]
+}
+```
+
+| Alan | Tip | Açıklama |
+|------|-----|----------|
+| `helpers` | array | [sys-mappings](/docs/components/mapping-component) bileşenlerine referans (`key`, `version`, `domain`, `flow: "sys-mappings"`) |
+| `allowedAssemblies` | string[] | Script bağlamı için izinli .NET assembly'leri (sandbox allow-list'e eklenir) |
+
+Aynı `scripts` yapısı her mapping objesinde (transition `mapping`, `rule`, `timer`, subflow `mapping`, task `onExecutionTasks[].mapping` vb.) de tanımlanabilir. Helper bileşenleri, `REF` encoding ve sandbox ayrıntıları için bkz. [Mapping Bileşeni](/docs/components/mapping-component) ve [Scripting / Sandbox](/docs/configuration/scripting).
+
+### Mapping `encoding` ve `REF`
+
+Tüm mapping/scriptCode objelerinde `encoding` değeri `B64`, `NAT` veya **`REF`** olabilir. `REF` ile `code`, gömülü string yerine bir sys-mappings bileşenine referans objesidir:
+
+```json
+"mapping": {
+  "encoding": "REF",
+  "code": { "key": "initial-mapping", "version": "1.0.0", "flow": "sys-mappings", "domain": "core" }
+}
+```
+
+Ayrıntı için bkz. [Mapping Bileşeni → REF Encoding](/docs/components/mapping-component#ref-encoding-ile-referans-kullanımı).
+
 ### Query Roles
 
-`attributes.queryRoles` yetkilendirme mekanizmasıdır. Workflow ve instance içindeki state'leri **kimlerin sorgulayabileceği** bilgisini tutar. State seviyesinde `queryRoles` tanımlıysa root seviyeyi override eder.
+`attributes.queryRoles` yetkilendirme mekanizmasıdır. Workflow ve instance içindeki state'leri **kimlerin sorgulayabileceği** bilgisini tutar. `queryRoles` iki seviyede tanımlanabilir: **flow (root)** seviyesinde ve her **state** seviyesinde.
+
+**Öncelik:** Değerlendirmede önce instance'ın **mevcut (current) state**'inin `queryRoles` tanımı baz alınır. State'de tanım **yoksa** flow seviyesindeki `queryRoles` kullanılır. Yani state tanımı, varsa flow (root) tanımını override eder; yoksa flow tanımına geri düşülür.
 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
 | `role` | string | **Evet** | Rol adı |
 | `grant` | string | **Evet** | `allow` veya `deny`. DENY her zaman ALLOW'u geçersiz kılar |
 
+**Etki alanı:** `queryRoles`, built-in read fonksiyonları — **state**, **data**, **view**, **schema** — tarafından instance'ın **mevcut (current) state**'i üzerinde değerlendirilir. State seviyesi tanımı flow (root) seviyesini override eder; çağıranın sonucu `allow` değilse fonksiyon **`403`** döner. Ayrıntı için bkz. [Built-in Functions → Read fonksiyonlarında queryRoles authorize](/docs/components/functions/built-in#read-fonksiyonlarında-queryroles-authorize) ve [Yetkilendirme](/docs/concepts/authorization).
+
 ## İlgili
 
 - [Mappings](/docs/components/mappings) — mapping türleri ve örnekler
+- [Mapping Bileşeni](/docs/components/mapping-component) — sys-mappings helper'ları, `scripts`, `REF`
+- [Scripting / Sandbox](/docs/configuration/scripting) — flow `scripts.allowedAssemblies` ve sandbox
 - [Schema](/docs/components/schema) — schema tanımları
 - [ITransitionMapping](/docs/components/interfaces#itransitionmapping) — transition mapping interface
 - [Schema component](/docs/components/schema) — master schema

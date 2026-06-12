@@ -68,7 +68,50 @@ Direct database columns:
 
 ### JSON Data Fields (attributes)
 
-Any field stored in the instance's JSON data can be filtered using the `attributes` prefix.
+Fields stored in the instance's JSON data can be filtered using the `attributes` prefix. However, whether a JSON field is **filterable and sortable** depends on the vocabulary (`x-filterOperators` / `x-sortable`) declared for that field in the **master schema** — see [Schema-Driven Filterability & Sorting](#schema-driven-filterability--sorting).
+
+---
+
+## Schema-Driven Filterability & Sorting
+
+Instance table columns (`key`, `status`, `createdAt` …) are directly filterable/sortable. For **JSON (`attributes.*`) fields**, this capability is determined by the keywords the field carries in the **master schema**. The Data Function and instance-listing endpoints honor this definition:
+
+| Keyword | Effect |
+|---------|--------|
+| `x-filterOperators` (string[]) | Allowed filter operators. **Empty or absent means the field is not filterable** |
+| `x-sortable` (boolean) | When `true`, the field is sortable; absent means not sortable |
+| `x-displayFormat` (string) | UI-facing format hint (e.g. `yyyy-MM-dd'T'HH:mm:ssXXX`) — does not affect filtering/sorting |
+
+For keyword definitions, see [Schema → Filter & Sort Vocabulary](/docs/components/schema#filter--sort-vocabulary).
+
+### Type-Operator Relationship
+
+The behavior of an allowed operator depends on the field's JSON Schema `type`:
+
+| Schema `type` | Operator category | SQL behavior |
+|---|---|---|
+| `number` / `integer` | `gt`, `lt`, `ge`, `le`, `between` | `accessor::numeric {op} @param` |
+| `string` + `gt`/`lt`/`ge`/`le`/`between` | date compare | `accessor::timestamptz {op} @param` |
+| `string` + `eq`/`like`/`startswith`/`endswith`/`match` | text compare | `accessor ILIKE @param` |
+| `boolean` | `eq`, `ne` | equality |
+| `array` (JSON array in instance data) | `includes` | `Data @> @param`; single-element array + partial object pattern at the leaf path |
+
+### Rules
+
+1. If `x-filterOperators` is present and non-empty, the field is filterable. Empty or absent means not filterable.
+2. If `x-sortable: true`, the field is sortable. Otherwise it is not.
+3. Querying a non-filterable field, or using a disallowed operator, raises **`SchemaFilterValidationException`**.
+4. For the GraphQL-only `includes` operator on JSON array fields, `includes` must also be listed in the field's `x-filterOperators`. Payload size and nesting depth are bounded by **`InputValidator`** limits.
+
+```json
+"startDateTime": {
+  "type": "string",
+  "format": "date-time",
+  "x-filterOperators": ["eq", "gt", "ge", "lt", "le", "between"],
+  "x-sortable": true,
+  "x-displayFormat": "yyyy-MM-dd'T'HH:mm:ssXXX"
+}
+```
 
 ---
 
@@ -137,9 +180,9 @@ Instance list and data endpoints support sorting via the `sort` or `orderBy` que
 | `status` | Instance status |
 | `key` | Instance key |
 | `currentState` / `state` | Current state (`state` is alias) |
-| `attributes.fieldName` | JSON path into instance data; nested paths supported (e.g. `attributes.nested.path`) |
+| `attributes.fieldName` | JSON path into instance data; nested paths supported (e.g. `attributes.nested.path`). Only fields carrying **`x-sortable: true`** in the master schema are sortable |
 
-Instance columns are applied in the database; ordering by `attributes.*` uses the latest instance data JSON and is subject to the same schema/security as filtering.
+Instance columns are applied in the database; ordering by `attributes.*` uses the latest instance data JSON and is subject to the same schema/security as filtering (see [Schema-Driven Filterability & Sorting](#schema-driven-filterability--sorting)).
 
 ---
 
@@ -421,6 +464,10 @@ GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=2
 }
 ```
 
+### Schema Filter Validation Error
+
+Querying a field that is **not filterable** in the master schema (`x-filterOperators` empty/absent), or using a **disallowed operator**, raises **`SchemaFilterValidationException`**. The same applies to sorting via `x-sortable`. See [Schema-Driven Filterability & Sorting](#schema-driven-filterability--sorting).
+
 ---
 
 ## Performance Tips
@@ -438,3 +485,4 @@ GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=2
 - [Function APIs](/docs/components/functions/built-in) - Built-in system functions (State, Data, View)
 - [Custom Functions](/docs/components/functions/custom) - User-defined functions
 - [Instance Lifecycle](/docs/concepts/instance-data) - Starting and managing instances
+- [Schema → Filter & Sort Vocabulary](/docs/components/schema#filter--sort-vocabulary) - `x-filterOperators`, `x-sortable`, `x-displayFormat` definitions

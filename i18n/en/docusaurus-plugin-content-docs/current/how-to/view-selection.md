@@ -66,8 +66,9 @@ The `views` property accepts an array of view entries. Each entry can have an op
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `location` | string | No | Script location. Use `"inline"` for embedded code. |
-| `code` | string | Yes | C# code implementing IConditionMapping interface. |
-| `encoding` | string | No | `"NAT"` for plain text, `"B64"` for Base64 encoded. |
+| `code` | string \| object | Yes | C# code implementing IConditionMapping interface. When `encoding: "REF"`, a sys-mappings reference object. |
+| `encoding` | string | No | `"NAT"` for plain text, `"B64"` for Base64, `"REF"` for a sys-mappings reference. |
+| `scripts` <sup>New</sup> | object | No | Helper references and allowed assemblies — see [Mapping Component](/docs/components/mapping-component). |
 
 ### View (Reference) Properties
 

@@ -49,6 +49,30 @@ The master schema also plays an active role in the Data Function: during [instan
 
 The same system roles and JSONPath grant prefixes (`$user.` / `$userBehalfOf.` / `$role.`) apply; see [Authorization](/docs/concepts/authorization). `x-encryption` is in the same field-governance scope (`persisted` / `transport`).
 
+### Filter & Sort Vocabulary
+
+Whether a JSON (`attributes.*`) field is **filterable and sortable** is declared in the master schema via three keywords. The Data Function and instance-listing endpoints (`.../instances?filter=`, `.../functions/data`) honor this vocabulary:
+
+| Keyword | Type | Required | Description |
+|---------|------|----------|-------------|
+| `x-filterOperators` | string[] | No | Allowed filter operators. **Empty or absent means the field is not filterable** |
+| `x-sortable` | boolean | No | When `true`, the field is sortable. Absent means not sortable |
+| `x-displayFormat` | string | No | UI-facing format hint (e.g. `yyyy-MM-dd'T'HH:mm:ssXXX`) |
+
+**`x-filterOperators` values:** `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `between`, `match`, `like`, `startswith`, `endswith`, `in`, `nin` (`uniqueItems`).
+
+```json
+"startDateTime": {
+  "type": "string",
+  "format": "date-time",
+  "x-filterOperators": ["eq", "gt", "ge", "lt", "le", "between"],
+  "x-sortable": true,
+  "x-displayFormat": "yyyy-MM-dd'T'HH:mm:ssXXX"
+}
+```
+
+A non-filterable field, or a disallowed operator, raises **`SchemaFilterValidationException`**. For per-type (numeric / date / text / boolean / array) operator behavior, the `includes` operator for JSON arrays, and the rules, see [Instance Filtering → Schema-Driven Filterability](/docs/how-to/instance-filtering#schema-driven-filterability--sorting).
+
 For a read-only view (no input), the master schema can be supplied directly as the view's `dataSchema`; for input sections, a transition-specific schema should be used instead.
 
 ## Required Fields

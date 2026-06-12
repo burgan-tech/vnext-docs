@@ -144,8 +144,9 @@ Her extension key'i, `extensions` objesinde **camelCase** property olarak yer al
 |------|-----|---------|------------|----------|
 | `type` | string | Hayır | `L` | `G` = Global, `L` = Local. Global ise `code` gerekmez |
 | `location` | string | Hayır | — | Kod dosyası yolu (pattern: `^\.\/.*\.csx$`) |
-| `code` | string | **Koşullu** | — | Mapping kodu. `type` = `L` ise zorunlu |
-| `encoding` | string | Hayır | `B64` | Kodlama formatı: `B64` (Base64) veya `NAT` (Native) |
+| `code` | string \| object | **Koşullu** | — | Mapping kodu. `type` = `L` ise zorunlu. `encoding: "REF"` ise string yerine bir sys-mappings referans objesi (`{key, version, domain, flow}`) |
+| `encoding` | string | Hayır | `B64` | Kodlama formatı: `B64` (Base64), `NAT` (Native) veya `REF` (sys-mappings referansı) |
+| `scripts` <sup>New</sup> | object | Hayır | — | Helper referansları (`helpers[]`) ve izinli assembly'ler (`allowedAssemblies[]`) — bkz. [Mapping Bileşeni](/docs/components/mapping-component) |
 
 ---
 

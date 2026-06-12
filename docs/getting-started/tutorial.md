@@ -51,7 +51,8 @@ demo-project/
     ├── Schemas/
     ├── Views/
     ├── Functions/
-    └── Extensions/
+    ├── Extensions/
+    └── Mappings/
 ```
 
 :::info

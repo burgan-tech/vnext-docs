@@ -313,6 +313,8 @@ Arabirimin `Handler` metodunda **varsayılan gövde** vardır: boş bir nesne d�
 }
 ```
 
+> **Not:** `mapping.encoding` `B64`/`NAT` dışında **`REF`** olabilir (kod yerine bir sys-mappings referansı) ve mapping objesine `scripts` (helper + izinli assembly) eklenebilir. Bkz. [Mapping Bileşeni](/docs/components/mapping-component).
+
 ---
 
 ## INotificationMapping

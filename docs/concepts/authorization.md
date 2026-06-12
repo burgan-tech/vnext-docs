@@ -106,7 +106,7 @@ Master şemanın davranışı ve neden `required` kullanılmaması gerektiği i�
 | Bağlam | Alan | Etki |
 |--------|------|------|
 | Transition | `roles` | İlgili transition'ı kimin tetikleyebileceği |
-| Flow / State | `queryRoles` | Instance ve state'leri kimin sorgulayabileceği (state seviyesi root'u override eder) |
+| Flow / State | `queryRoles` | Instance ve state'leri kimin sorgulayabileceği (state seviyesi root'u override eder). Built-in **state/data/view/schema** read fonksiyonlarınca current state üzerinde uygulanır; izin yoksa **403** |
 | State `alias` | `roles` | State'in role göre maskelenmiş görünümü |
 | Master şema property | `x-roles` | Alan (column) bazlı veri görünürlüğü |
 

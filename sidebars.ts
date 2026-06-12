@@ -67,6 +67,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'components/mappings',
+        'components/mapping-component',
         'components/interfaces',
         'components/extension',
         'components/schema',
@@ -113,6 +114,7 @@ const sidebars: SidebarsConfig = {
         'configuration/service-discovery',
         'configuration/server-timeout',
         'configuration/header-limits',
+        'configuration/scripting',
       ],
     },
     {

@@ -32,6 +32,10 @@ vNext Runtime platformu, her workflow instance'ı için otomatik olarak kullanı
 
 > **Not:** Kullanıcı tanımlı fonksiyonlar için bkz. [Custom Functions](/docs/components/functions/custom).
 
+:::caution[QueryRoles yetkilendirmesi]
+Dört read fonksiyonu da (**state**, **data**, **view**, **schema**) çağıranı instance'ın **mevcut (current) state**'i ve flow seviyesindeki `queryRoles` tanımına göre authorize eder. Çağıranın izinli (`allow`) rolü yoksa fonksiyon **`403`** döner. Ayrıntı için bkz. [Read fonksiyonlarında queryRoles authorize](#read-fonksiyonlarında-queryroles-authorize).
+:::
+
 Bu fonksiyonlar şunları sağlar:
 - Gerçek zamanlı durum izleme (long-polling)
 - ETag desteği ile verimli veri alma
@@ -677,6 +681,16 @@ Instance yetkilendirmesi (transition `roles`, state/flow `queryRoles`, master ş
 State Function'ın döndürdüğü `transitions` dizisi de bu grant'lara göre filtrelenir: yalnızca çağıranın izinli olduğu transition'lar yanıta dahil edilir.
 
 > **Tam referans:** Claim'ler (`sub`/`act_sub`), sistem rolü tabloları, JSONPath örnek yolları ve master şema alan görünürlüğü için bkz. [Yetkilendirme (Authorization)](/docs/concepts/authorization).
+
+### Read fonksiyonlarında queryRoles authorize
+
+**state**, **data**, **view** ve **schema** fonksiyonları veri dönmeden önce çağıranı, instance'ın **mevcut (current) state**'inin `queryRoles` tanımına göre değerlendirir. Değerlendirme sırası:
+
+1. State seviyesinde `queryRoles` tanımlıysa **flow (root) seviyesini override eder**; yoksa flow seviyesindeki `queryRoles` kullanılır.
+2. Çağıranın rolleri `allow`/`deny` olarak değerlendirilir (**DENY her zaman ALLOW'u geçersiz kılar**).
+3. Sonuç `allow` değilse fonksiyon **`403 Forbidden`** döner.
+
+Böylece bir instance, bulunduğu state'e göre farklı izleyici kitlelerine açılıp kapatılabilir (ör. backoffice incelemesindeyken yalnızca operatör rolleri görür). Bir rolün belirli bir state üzerinde yetkili olup olmadığını önceden kontrol etmek için aşağıdaki **Instance Authorize** (`queryRoles=true`) endpoint'i kullanılabilir. `queryRoles` tanımı için bkz. [Workflow → Query Roles](/docs/components/workflow#query-roles) ve [Yetkilendirme](/docs/concepts/authorization).
 
 ### Flow Authorize
 
