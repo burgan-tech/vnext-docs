@@ -141,6 +141,17 @@ const config: Config = {
         onUntruncatedBlogPosts: 'warn',
       },
     ],
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        redirects: [
+          {
+            from: '/blog/v0055-neler-degisti',
+            to: '/blog/migration/v0055-neler-degisti',
+          },
+        ],
+      },
+    ],
   ],
 
   themes: [
