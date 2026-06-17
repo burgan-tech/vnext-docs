@@ -8,7 +8,7 @@ description: vNext platformunun sunduğu iş değeri — hız, operasyonel güve
 
 ## Neden vNext?
 
-Kurumsal yazılım dünyasında iş süreçleri geleneksel olarak **özel kod** ile geliştirilir. Her yeni süreç aylar süren analiz, geliştirme, test ve deploy döngüsüne girer. vNext, bu döngüyü kırarak iş süreçlerini **platformlaştırır** ve aşağıdaki dört temel değer eksenini sunar.
+Kurumsal yazılım dünyasında iş süreçleri geleneksel olarak **özel kod** ile geliştirilir. Her yeni süreç aylar süren analiz, geliştirme, test ve deploy döngüsüne girer. vNext, bu döngüyü kırarak iş süreçlerini **platformlaştırır** ve aşağıdaki beş temel değer eksenini sunar.
 
 ## Beş Temel Değer Ekseni
 
