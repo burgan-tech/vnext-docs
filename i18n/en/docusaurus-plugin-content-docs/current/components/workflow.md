@@ -117,6 +117,32 @@ The same `scripts` object can be defined on any mapping object. Mapping `encodin
 
 Authorization mechanism. Holds the information about **who can query** the workflow and the states within an instance. `queryRoles` can be defined at two levels: the **flow (root)** level and each **state** level. **Precedence:** the instance's **current state** `queryRoles` is evaluated first; if the state has none, the flow-level `queryRoles` is used as the base. It is enforced by the built-in **state/data/view/schema** read functions; if the caller is not allowed, the function returns **`403`**. See [Built-in Functions → QueryRoles authorization in read functions](/docs/components/functions/built-in#queryroles-authorization-in-read-functions).
 
+### State Interaction (Long Poll)
+
+A state may declare an optional `interaction.longPoll` block that makes **long-poll termination declarative**. The runtime keeps the State Function request open until a transition occurs or the fallback timeout elapses, so different clients can model their own stop points across a process.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `terminate` | boolean | yes | Whether leaving the state closes the open long-poll request |
+| `fallbackTimeoutSeconds` | integer | no | Max seconds to hold the request open before falling back (`minimum: 1`) |
+| `roles` | array | yes | Roles allowed to use the long-poll interaction. DENY overrides ALLOW |
+
+```json
+{
+  "key": "waiting-approval",
+  "stateType": 2,
+  "interaction": {
+    "longPoll": {
+      "terminate": true,
+      "fallbackTimeoutSeconds": 30,
+      "roles": [{ "role": "client.app", "grant": "allow" }]
+    }
+  }
+}
+```
+
+See [Sync vs Async execution](/docs/how-to/async-sync).
+
 ### Error Boundary
 
 The **global error handling** definition at the workflow level. Applied if no boundary is defined at task or state level.

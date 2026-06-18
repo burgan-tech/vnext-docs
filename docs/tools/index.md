@@ -6,7 +6,7 @@ description: vNext geliştirme ortamında kullanılan araçlar
 
 # Developer Tools
 
-vNext platformu, geliştirme sürecini hızlandırmak için üç temel araç ve bir AI plugin'i sunar. Bunlar birlikte çalışarak workflow tasarımından deploy'a kadar tüm geliştirme döngüsünü kapsar.
+vNext platformu, geliştirme sürecini hızlandırmak için üç temel araç, bir AI plugin'i ve bir runtime MCP sunucusu sunar. Bunlar birlikte çalışarak workflow tasarımından deploy'a kadar tüm geliştirme döngüsünü kapsar.
 
 ## Araç Ekosistemi
 
@@ -16,6 +16,7 @@ vNext platformu, geliştirme sürecini hızlandırmak için üç temel araç ve 
 | [vNext Workflow CLI](./workflow-cli) | Deploy, validation, CSX mapping işlemleri | `npm install -g @burgan-tech/vnext-workflow-cli` |
 | [vNext Template CLI](./template-cli) | Hazır workflow projesi oluşturma | `npx @burgan-tech/vnext-template <domain>` |
 | [vNext AI Toolkit](./ai-assisted-development) | AI destekli bileşen geliştirme (Claude Code plugin) | `claude plugin install vnext-ai-toolkit@burgan-tech` |
+| [vnext-runtime MCP Server](./mcp-runtime) | MCP ajanları için bileşen / runtime / meta keşfi | `dotnet tool install -g BBT.Workflow.Mcp` |
 
 ## Araçlar Arası İlişki
 
@@ -40,3 +41,4 @@ graph TB
 - **Terminal üzerinden hızlı deploy/sync** yapmak istiyorsanız → [Workflow CLI](./workflow-cli)
 - **Sıfırdan yeni bir workflow projesi** başlatmak istiyorsanız → [Template CLI](./template-cli)
 - **AI ile bileşen tasarlamak/üretmek** istiyorsanız → [AI Destekli Geliştirme](./ai-assisted-development)
+- **MCP ajanlarına runtime/bileşen keşfi** açmak istiyorsanız → [vnext-runtime MCP Server](./mcp-runtime)

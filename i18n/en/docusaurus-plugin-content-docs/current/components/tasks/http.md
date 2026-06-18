@@ -61,6 +61,7 @@ The following fields are defined in the config section of HTTP Task. The task de
 | `method` | string | "GET" | HTTP method (GET, POST, PUT, DELETE, etc.) |
 | `headers` | object | null | HTTP headers |
 | `body` | object | null | Request body (except GET) |
+| `contentType` | string | - | `Content-Type` header for the request body (e.g. `application/json`, `application/xml`, `text/plain`). Different content types are supported; when set, the body is preserved **byte-exact** — important for signed request bodies |
 | `timeoutSeconds` | number | 30 | Request timeout duration |
 | `validateSsl` | boolean | true | SSL certificate validation |
 

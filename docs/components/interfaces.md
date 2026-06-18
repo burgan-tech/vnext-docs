@@ -104,7 +104,7 @@ public interface IOutputHandler
 |---|---|---|
 | `context` | `ScriptContext` | Task sonuçları, instance datası, header'lar ve runtime bilgisi. Bireysel task çıktılarına genelde `context.OutputResponse` veya `context.TaskResponse` üzerinden erişilir. |
 
-**Dönüş:** `Task<ScriptResponse>` — `Data` özelliği **function response gövdesi** olarak kullanılır.
+**Dönüş:** `Task<ScriptResponse>` — `Data` özelliği **function response gövdesi** olarak kullanılır. Multi-task (`onExecutionTasks`) function'larda döndürülen `ScriptResponse`'un **`Headers`** ve **`StatusCode`** alanları nihai function HTTP yanıtına **forward edilir**; böylece output handler yanıt status'ünü (örn. `201`, `202`) ve `Location` / `ETag` gibi header'ları belirleyebilir.
 
 ### IMapping ve IOutputHandler karşılaştırması
 

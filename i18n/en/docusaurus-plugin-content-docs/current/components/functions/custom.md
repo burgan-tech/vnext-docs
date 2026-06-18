@@ -136,6 +136,10 @@ A function may run **multiple tasks in order** using **`attributes.onExecutionTa
 
 Optional **`attributes.output`** references a script that implements **`IOutputHandler`**. In **`OutputHandler`**, read per-task results from **`context.OutputResponse`** (keys follow the executed task keys, typically **camelCase**).
 
+:::tip Response header & status code forwarding
+In multi-task functions, the **`Headers`** and **`StatusCode`** of the `ScriptResponse` returned by the output handler are **forwarded** onto the final function HTTP response. The output handler can therefore set the response status (e.g. `201`, `202`) and propagate headers such as `Location` or `ETag` — not just the body.
+:::
+
 ```json
 "attributes": {
   "scope": "I",

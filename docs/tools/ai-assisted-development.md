@@ -187,6 +187,10 @@ Plugin, projenizin `package.json`'ında sabitlediğiniz `@burgan-tech/vnext-sche
 Bu docs portalı da Context7'ye kayıtlıdır ([`context7.com/burgan-tech/vnext-docs`](https://context7.com/burgan-tech/vnext-docs)). Böylece AI asistanları bu sayfaları da güncel runtime bilgi kaynağı olarak sorgulayabilir.
 :::
 
+:::info[Runtime keşfi için MCP]
+Doküman keşfi Context7 ile yapılırken, **canlı runtime ve bileşen keşfi** için ayrı bir [vnext-runtime MCP Server](./mcp-runtime) bulunur — bir domain'in bileşenlerini, instance verisini ve `vnext-meta`'sını MCP ajanlarına açar.
+:::
+
 ## İlgili
 
 - [`burgan-tech/vnext-ai-toolkit`](https://github.com/burgan-tech/vnext-ai-toolkit) — plugin'in kaynağı
