@@ -283,6 +283,7 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 | `errorBoundary` | object \| null | Hayır | State seviyesi hata yönetimi |
 | `queryRoles` | array | Hayır | State seviyesi sorgu rolleri. Root `queryRoles`'u override eder. Instance bu state'teyken **state/data/view/schema** read fonksiyonlarınca uygulanır; izin yoksa `403` (bkz. [Query Roles](#query-roles)) |
 | `alias` | array | Hayır | State için rol bazlı alternatif çoklu-dil etiketleri. Tanımlıysa State Function `state` değerini role göre maskeler |
+| `interaction` | object \| null | Hayır | State etkileşim yapılandırması (ör. `longPoll`). Long-poll'un ne zaman sonlandırılacağını deklaratif tanımlar — bkz. [State Interaction (Long Poll)](#state-interaction-long-poll) |
 
 ### `stateType` Enum Değerleri
 
@@ -371,6 +372,38 @@ State Function `state` değerini döndürürken aşağıdaki sırayı izler:
 2. `alias` tanımı **varsa** → istek yapan aktörün rolleri her alias'ın `roles` listesine göre değerlendirilir (DENY her zaman ALLOW'u geçersiz kılar).
 3. Eşleşen bir alias bulunursa → istek diline (Accept-Language) uygun `label` döner; o dilde label yoksa `alias.name` döner.
 4. Hiçbir alias rolü eşleşmezse → `state.key` fallback olarak döner.
+
+### State Interaction (Long Poll)
+
+State Function, client tarafında **long-polling** ile süreç durumunu döner. `interaction.longPoll` ile bu açık tutulan isteğin **ne zaman sonlandırılacağı** state tanımında **deklaratif** olarak belirtilir. Runtime, isteği bir transition gerçekleşene veya fallback timeout dolana kadar açık tutar. Böylece bir süreç tasarımında farklı client'lar süreci kendi **durak noktaları** ile belirleyebilir.
+
+`interaction` opsiyoneldir ve şimdilik tek bir alt blok taşır: `longPoll`.
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `terminate` | boolean | **Evet** | State'ten çıkıldığında açık olan long-poll isteğinin sonlandırılıp sonlandırılmayacağı |
+| `fallbackTimeoutSeconds` | integer | Hayır | İstek fallback'e düşmeden önce açık tutulacağı maksimum saniye (`minimum: 1`) |
+| `roles` | array | **Evet** | Long-poll etkileşimini kullanabilecek roller. DENY her zaman ALLOW'u geçersiz kılar |
+
+**Örnek:**
+
+```json
+{
+  "key": "waiting-approval",
+  "stateType": 2,
+  "interaction": {
+    "longPoll": {
+      "terminate": true,
+      "fallbackTimeoutSeconds": 30,
+      "roles": [
+        { "role": "client.app", "grant": "allow" }
+      ]
+    }
+  }
+}
+```
+
+> İlgili doküman: [Async / Sync Yöntemi](/docs/how-to/async-sync)
 
 ---
 

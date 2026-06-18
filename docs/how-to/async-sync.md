@@ -42,6 +42,14 @@ Response: `{ "id": "...", "status": { "code": "InProgress" } }` — işleme baş
 
 Sonra client `GET /api/v1/{domain}/workflows/{wf}/instances/{id}/functions/state` ile long-polling yapar; `status.code = "A"` (Active) olduğunda mevcut state'e geçilmiştir.
 
+### Deklaratif long-poll sonlandırma (`interaction.longPoll`)
+
+Bir state, açık tutulan long-poll isteğinin **ne zaman sonlandırılacağını** `interaction.longPoll` ile deklaratif olarak tanımlayabilir. Runtime, isteği bir transition gerçekleşene veya `fallbackTimeoutSeconds` dolana kadar açık tutar; `terminate` ise state'ten çıkıldığında isteğin kapatılıp kapatılmayacağını belirler. Böylece her client kendi long-poll sonlandırma mantığını uygulamak yerine, durak noktalarını süreç tasarımından okur. Tanım ve örnek için bkz. [Workflow → State Interaction (Long Poll)](/docs/components/workflow#state-interaction-long-poll).
+
+### Continuation işletimi (durable)
+
+Asenkron continuation'lar dayanıklılık için kuyruğa alınabilir: continuation **doğrudan Dapr üzerinden** enqueue edilir, bu yol kullanılamadığında transactional **outbox** fallback devreye girer. Bu, sağlıklı koşullarda gecikmeyi azaltırken dayanıklılık garantisini korur.
+
 ## Karar
 
 | Ne zaman? | Tercih |
@@ -56,3 +64,4 @@ Sonra client `GET /api/v1/{domain}/workflows/{wf}/instances/{id}/functions/state
 - [User Integration](/docs/concepts/user-integration) — async + view loop akışı
 - [Instance Data](/docs/concepts/instance-data) — instance lifecycle
 - [Built-in Functions](/docs/components/functions/built-in) — State function
+- [Workflow → State Interaction (Long Poll)](/docs/components/workflow#state-interaction-long-poll) — deklaratif long-poll sonlandırma

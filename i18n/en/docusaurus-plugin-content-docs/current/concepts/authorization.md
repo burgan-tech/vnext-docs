@@ -103,6 +103,23 @@ For master schema behavior and why `required` should not be used, see [Schema â†
 
 ---
 
+## Grant evaluation: allow-list vs. deny-only (blacklist)
+
+The **intent** of a `roles` / `queryRoles` set is interpreted in two ways depending on its grants:
+
+| Set contents | Mode | Default | Meaning |
+|--------------|------|---------|---------|
+| Contains at least one `allow` grant | **allow-list** (whitelist) | **deny** | Only matching `allow` roles pass |
+| Contains only `deny` grants | **blacklist** | **allow** | Everyone is allowed *except* the listed roles |
+
+In both modes **DENY always overrides ALLOW.** A deny-only set lets you express "allow everyone except X" without enumerating every permitted role.
+
+:::warning Backward impact
+An existing deny-only set is now treated as a **blacklist** (open to everyone except the listed roles). If your intent was "deny everyone," convert it to an allow-list by adding at least one `allow` grant.
+:::
+
+---
+
 ## Where Is It Evaluated?
 
 | Context | Field | Effect |

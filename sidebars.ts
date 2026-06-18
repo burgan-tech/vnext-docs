@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
         'tools/workflow-cli',
         'tools/template-cli',
         'tools/ai-assisted-development',
+        'tools/mcp-runtime',
       ],
     },
     {

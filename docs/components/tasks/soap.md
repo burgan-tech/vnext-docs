@@ -58,6 +58,10 @@ SOAP Task, SOAP 1.1 veya 1.2 protokolüyle web servis endpoint'lerine istek gön
 | `1.2` | `application/soap+xml; charset=utf-8; action="..."` | Content-Type içine gömülür |
 :::
 
+:::note XML escaping (v0.0.62)
+SOAP mapping çalışma bağlamı `System.Security` assembly'sini varsayılan olarak referans eder ve envelope'a yerleştirilen değerlerde XML özel karakterleri (`<`, `>`, `&`, `"`, `'`) varsayılan olarak escape edilir. Bu, daha önce `CS0012` derleme hatasına yol açan ve escaping'in tutarsız uygulandığı senaryoları giderir.
+:::
+
 ## Property Erişimi
 
 Mapping içinde `SoapTask` sınıfı üzerinden erişilebilir property'ler ve setter metodları:

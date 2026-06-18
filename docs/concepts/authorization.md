@@ -101,6 +101,23 @@ Master şemanın davranışı ve neden `required` kullanılmaması gerektiği i�
 
 ---
 
+## Grant Değerlendirme: ALLOW listesi vs. yalnızca DENY (blacklist)
+
+Bir `roles` / `queryRoles` setinin **niyeti**, içerdiği grant'lara göre iki şekilde yorumlanır:
+
+| Set içeriği | Mod | Varsayılan | Anlam |
+|-------------|-----|------------|-------|
+| En az bir `allow` grant'ı var | **allow-list** (whitelist) | **deny** | Yalnızca eşleşen `allow` rolleri geçer |
+| Yalnızca `deny` grant'ları var | **blacklist** | **allow** | Listelenenler **dışındaki** herkese izin verilir |
+
+Her iki modda da **DENY her zaman ALLOW'u geçersiz kılar.** Yalnızca `deny` içeren bir set "X hariç herkese izin ver" kuralını, izinli her rolü tek tek saymadan ifade etmenizi sağlar.
+
+:::warning Geriye dönük etki
+Yalnızca `deny` grant'ı içeren mevcut bir set artık **blacklist** olarak değerlendirilir (listelenenler dışındaki herkese açık). Niyetiniz "herkesi engelle" idiyse en az bir `allow` grant'ı ekleyerek allow-list'e çevirin.
+:::
+
+---
+
 ## Nerede Değerlendirilir?
 
 | Bağlam | Alan | Etki |

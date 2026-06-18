@@ -43,6 +43,7 @@ HTTP Task, harici web servislerine HTTP istekleri göndermek için kullanılan g
 | `method` | string | Evet | - | HTTP metodu (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`) |
 | `headers` | object | Hayır | null | HTTP header'ları |
 | `body` | object | Hayır | null | Request body (GET dışında) |
+| `contentType` | string | Hayır | - | Request body için `Content-Type` header'ı (örn. `application/json`, `application/xml`, `text/plain`). Farklı content-type'lar desteklenir; tanımlandığında body **byte-exact** korunur — imzalanan (signing) gövdeler için önemlidir |
 | `timeoutSeconds` | integer | Hayır | 30 | İstek timeout süresi (saniye, minimum: 1) |
 | `validateSsl` | boolean | Hayır | true | SSL sertifika doğrulaması |
 | `acceptedStatusCodes` | string[] | Hayır | - | Başarılı kabul edilecek HTTP hata kodları. Exact kod (`"403"`, `"404"`) ve wildcard pattern (`"4xx"`, `"40x"`, `"5xx"`) destekler. Eşleşen status code'larda task başarılı sayılır ve ErrorBoundary tetiklenmez. |
@@ -59,6 +60,7 @@ HTTP Task, harici web servislerine HTTP istekleri göndermek için kullanılan g
 | - | `AddHeader(string key, string? value)` | Tekil header ekler/günceller |
 | - | `RemoveHeader(string key)` | Tekil header kaldırır |
 | `Body` | `SetBody(dynamic body)` | Request body'yi set eder |
+| `ContentType` | Read-only | Tanım dosyasında ayarlanır |
 | `TimeoutSeconds` | Read-only | Tanım dosyasında ayarlanır |
 | `ValidateSSL` | Read-only | Tanım dosyasında ayarlanır |
 | `AcceptedStatusCodes` | Read-only | Tanım dosyasında ayarlanır |

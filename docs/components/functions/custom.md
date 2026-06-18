@@ -150,6 +150,10 @@ Tek bir **`task`** yerine **`attributes.onExecutionTasks`** ile **sırayla** bir
 
 İsteğe bağlı **`attributes.output`**, **`IOutputHandler`** uygulayan bir betiğe işaret eder. **`OutputHandler`** içinde sonuçlar **`context.OutputResponse`** üzerinden okunur (anahtarlar çalıştırılan task anahtarlarına göre, tipik olarak **camelCase**).
 
+:::tip Response header & status code forward
+Multi-task function'larda output handler'ın döndürdüğü `ScriptResponse`'un **`Headers`** ve **`StatusCode`** alanları, nihai function HTTP yanıtına **forward edilir**. Böylece output handler yalnızca gövdeyi değil, yanıt status'ünü (örn. `201`, `202`) ve `Location` / `ETag` gibi header'ları da belirleyebilir.
+:::
+
 ```json
 "attributes": {
   "scope": "I",
