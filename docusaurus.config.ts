@@ -210,7 +210,7 @@ const config: Config = {
       hideOnScroll: true,
       title: 'vNext Docs',
       logo: {
-        alt: 'vNext Logo',
+        alt: 'amorphie Logo',
         src: 'img/logo.svg',
         srcDark: 'img/logo-dark.svg',
       },

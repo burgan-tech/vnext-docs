@@ -117,6 +117,32 @@ The same `scripts` object can be defined on any mapping object. Mapping `encodin
 
 Authorization mechanism. Holds the information about **who can query** the workflow and the states within an instance. `queryRoles` can be defined at two levels: the **flow (root)** level and each **state** level. **Precedence:** the instance's **current state** `queryRoles` is evaluated first; if the state has none, the flow-level `queryRoles` is used as the base. It is enforced by the built-in **state/data/view/schema** read functions; if the caller is not allowed, the function returns **`403`**. See [Built-in Functions → QueryRoles authorization in read functions](/docs/components/functions/built-in#queryroles-authorization-in-read-functions).
 
+### State Notifications
+
+A state may declare a `notifications` array. After the transition pipeline completes, the platform **enqueues** each notification and processes it **durably** — independently of the task pipeline. The Dapr Binding convention is the same as the [Notification Task](./tasks/notification) (`vnext-notification-state`). Mapping uses `IStateNotificationMapping`.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | integer | yes | Notification type. Currently only `0` (State) is supported |
+| `mapping` | scriptCode | yes | `IStateNotificationMapping` implementation |
+| `rule` | scriptCode \| null | no | Condition script. If absent or `null`, the notification fires on every state entry |
+
+```json
+{
+  "key": "waiting-approval",
+  "stateType": 2,
+  "notifications": [
+    {
+      "type": 0,
+      "mapping": { "type": "L", "code": "<base64-encoded-script>", "encoding": "B64" },
+      "rule": { "type": "L", "code": "<base64-encoded-condition>", "encoding": "B64" }
+    }
+  ]
+}
+```
+
+See [IStateNotificationMapping](/docs/components/interfaces) · [Notification Task](./tasks/notification).
+
 ### State Interaction (Long Poll)
 
 A state may declare an optional `interaction.longPoll` block that makes **long-poll termination declarative**. The runtime keeps the State Function request open until a transition occurs or the fallback timeout elapses, so different clients can model their own stop points across a process.
@@ -124,7 +150,7 @@ A state may declare an optional `interaction.longPoll` block that makes **long-p
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `terminate` | boolean | yes | Whether leaving the state closes the open long-poll request |
-| `fallbackTimeoutSeconds` | integer | no | Max seconds to hold the request open before falling back (`minimum: 1`) |
+| `fallbackTimeoutSeconds` | integer | no | Max seconds to hold the request open before falling back (`minimum: 1`). If the client cannot send an ack, the platform closes the request automatically after this duration |
 | `roles` | array | yes | Roles allowed to use the long-poll interaction. DENY overrides ALLOW |
 
 ```json
@@ -140,6 +166,16 @@ A state may declare an optional `interaction.longPoll` block that makes **long-p
   }
 }
 ```
+
+#### Long Poll Acknowledge
+
+When the client finishes consuming the long-poll response, it calls the **acknowledge** endpoint to inform the platform:
+
+```
+PATCH /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack
+```
+
+If the client fails or cannot send the request, the platform automatically closes the long-poll after `fallbackTimeoutSeconds` elapses — preventing stuck connections on client crash or network failure.
 
 See [Sync vs Async execution](/docs/how-to/async-sync).
 
