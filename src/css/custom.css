@@ -150,10 +150,22 @@ body {
    NAVBAR
    ============================================================ */
 .navbar {
-  backdrop-filter: saturate(180%) blur(16px);
-  -webkit-backdrop-filter: saturate(180%) blur(16px);
   border-bottom: 1px solid var(--vn-border);
   transition: background-color var(--vn-transition);
+}
+
+/* backdrop-filter'ı ::before'a taşıyoruz — doğrudan .navbar'a uygulandığında
+   position:fixed/sticky + backdrop-filter kombinasyonu yeni bir containing block
+   oluşturur ve mobil sidebar'ın (position:fixed) viewport yerine navbar'a göre
+   konumlanmasına yol açar. */
+.navbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  backdrop-filter: saturate(180%) blur(16px);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  z-index: -1;
+  pointer-events: none;
 }
 
 .navbar__title {

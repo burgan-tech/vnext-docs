@@ -283,6 +283,7 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 | `errorBoundary` | object \| null | Hayır | State seviyesi hata yönetimi |
 | `queryRoles` | array | Hayır | State seviyesi sorgu rolleri. Root `queryRoles`'u override eder. Instance bu state'teyken **state/data/view/schema** read fonksiyonlarınca uygulanır; izin yoksa `403` (bkz. [Query Roles](#query-roles)) |
 | `alias` | array | Hayır | State için rol bazlı alternatif çoklu-dil etiketleri. Tanımlıysa State Function `state` değerini role göre maskeler |
+| `notifications` | array | Hayır | State'e bağlı bildirim tanımları. Transition pipeline tamamlandıktan sonra enqueue edilir ve durable çalışır — bkz. [State Notifications](#state-notifications) |
 | `interaction` | object \| null | Hayır | State etkileşim yapılandırması (ör. `longPoll`). Long-poll'un ne zaman sonlandırılacağını deklaratif tanımlar — bkz. [State Interaction (Long Poll)](#state-interaction-long-poll) |
 
 ### `stateType` Enum Değerleri
@@ -373,6 +374,44 @@ State Function `state` değerini döndürürken aşağıdaki sırayı izler:
 3. Eşleşen bir alias bulunursa → istek diline (Accept-Language) uygun `label` döner; o dilde label yoksa `alias.name` döner.
 4. Hiçbir alias rolü eşleşmezse → `state.key` fallback olarak döner.
 
+### State Notifications
+
+State'e girildikten sonra, transition pipeline'ı tamamlandığında platform bildirim taleplerini **enqueue** eder ve **durable** olarak çalıştırır. Bu yapı Notification Task'tan bağımsızdır; task pipeline'ına bağlı kalmadan state geçişini takip eden bildirimleri kapsam dışında tutar.
+
+Dapr Binding yapılandırması [Notification Task](./tasks/notification) ile aynı convention'ı izler (`vnext-notification-state`).
+
+#### `stateNotification` Alanları
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `type` | integer | **Evet** | Bildirim tipi. Şu an yalnızca `0` (State) desteklenir |
+| `mapping` | scriptCode | **Evet** | `IStateNotificationMapping` implementasyonu. Bildirim içeriğini ve hedef metadata'yı şekillendirir |
+| `rule` | scriptCode \| null | Hayır | Koşul scripti. Tanımsız veya `null` ise bildirim her durumda çalışır |
+
+**Örnek:**
+
+```json
+{
+  "key": "waiting-approval",
+  "stateType": 2,
+  "notifications": [
+    {
+      "type": 0,
+      "mapping": { "type": "L", "code": "<base64-encoded-script>", "encoding": "B64" },
+      "rule": { "type": "L", "code": "<base64-encoded-condition>", "encoding": "B64" }
+    }
+  ]
+}
+```
+
+:::tip
+`rule` alanı yalnızca belirli koşullarda (örn. yalnızca belirli bir transition üzerinden gelindiğinde) bildirim göndermek için kullanılır. `rule` yoksa her state girişinde bildirim enqueue edilir.
+:::
+
+> İlgili: [IStateNotificationMapping](/docs/components/interfaces#istatenotificationmapping) · [Notification Task](./tasks/notification)
+
+---
+
 ### State Interaction (Long Poll)
 
 State Function, client tarafında **long-polling** ile süreç durumunu döner. `interaction.longPoll` ile bu açık tutulan isteğin **ne zaman sonlandırılacağı** state tanımında **deklaratif** olarak belirtilir. Runtime, isteği bir transition gerçekleşene veya fallback timeout dolana kadar açık tutar. Böylece bir süreç tasarımında farklı client'lar süreci kendi **durak noktaları** ile belirleyebilir.
@@ -382,7 +421,7 @@ State Function, client tarafında **long-polling** ile süreç durumunu döner. 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
 | `terminate` | boolean | **Evet** | State'ten çıkıldığında açık olan long-poll isteğinin sonlandırılıp sonlandırılmayacağı |
-| `fallbackTimeoutSeconds` | integer | Hayır | İstek fallback'e düşmeden önce açık tutulacağı maksimum saniye (`minimum: 1`) |
+| `fallbackTimeoutSeconds` | integer | Hayır | İstek fallback'e düşmeden önce açık tutulacağı maksimum saniye (`minimum: 1`). Client `ack` gönderemezse bu süre sonunda platform isteği otomatik kapatır |
 | `roles` | array | **Evet** | Long-poll etkileşimini kullanabilecek roller. DENY her zaman ALLOW'u geçersiz kılar |
 
 **Örnek:**
@@ -403,6 +442,16 @@ State Function, client tarafında **long-polling** ile süreç durumunu döner. 
 }
 ```
 
+#### Long Poll Acknowledge
+
+Client, açık tuttuğu long-poll isteğini tamamladığında **acknowledge** endpoint'ini çağırarak platformu bilgilendirir:
+
+```
+PATCH /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack
+```
+
+Client hata alır veya talep gönderemezse `fallbackTimeoutSeconds` süresi dolduğunda platform isteği otomatik olarak kapatır. Bu sayede client çökmesi veya ağ hatası durumunda long-poll askıda kalmaz.
+
 > İlgili doküman: [Async / Sync Yöntemi](/docs/how-to/async-sync)
 
 ---
@@ -421,7 +470,8 @@ flowchart TD
     D --> E[State Change]
     E --> F[Target State OnEntries]
 
-    F --> G{"State Type Check"}
+    F --> NOTIF[Notification Enqueue]
+    NOTIF --> G{"State Type Check"}
 
     G --> |Finish| H["Instance Status: Completed"]
     G --> |SubFlow| I[Execute SubFlow]
@@ -464,6 +514,10 @@ flowchart TD
 
 5. **State OnEntries**
    - Yeni state'in OnEntry task'ları çalıştırılır
+
+5.1. **State Notifications**
+   - State'de tanımlı bildirimler enqueue edilir ve durable olarak gönderilir
+   - `rule` koşulu varsa değerlendirilir; koşul sağlanmazsa bildirim atlanır
 
 6. **State Tipi Kontrolü**
    - **Finish**: Instance durumu "Completed" olarak güncellenir
