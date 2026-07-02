@@ -68,7 +68,7 @@ description: vNext View component — Backend-Driven UI tanımları
     "type": 4,
     "display": "popup",
     "content": {
-      "href": "on-burgan//onboarding/${param}"
+      "href": "mock-app//sample-page/${param}"
     },
     "labels": [
       { "label": "OTP Verification", "language": "en-US" },
@@ -135,10 +135,10 @@ State veya transition seviyesinde view tanımları yapılır. **vNext Client Wor
 { "href": "https://example.com/detail?id=${param}" }
 
 // Deeplink (type: 4) — şu an yalnızca full path desteklenir
-{ "href": "on-burgan//onboarding/${param}" }
+{ "href": "mock-app//sample-page/${param}" }
 
 // URN (type: 6)
-{ "urn": "urn:vnext:flow:transition:onboarding:kyc-main-flow:${param}:approved" }
+{ "urn": "urn:vnext:flow:transition:demo:sample-flow:${param}:approved" }
 ```
 
 Üç yapı da `${param}` **binding**'i destekler; çalışma zamanında bağlamdaki değerle doldurulur. URN segment yapısı ve binding kuralları için bkz. [URN Kataloğu ve Binding](/docs/components/urn-catalog).

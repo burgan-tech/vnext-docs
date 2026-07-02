@@ -24,7 +24,7 @@ Kurumdaki tüm süreç-yoğun uygulamalar **aynı platform runtime'ını** payla
 
 ### 2. Domain = Runtime
 
-Her iş alanı (onboarding, ödeme, bildirim, IDM) **bağımsız bir runtime instance'ına** sahiptir. Aynı platform yazılımı, domain başına ayrı deployment olarak çalışır:
+Her iş alanı (kredi, ödeme, bildirim, IDM) **bağımsız bir runtime instance'ına** sahiptir. Aynı platform yazılımı, domain başına ayrı deployment olarak çalışır:
 
 - Kendi veritabanı, kendi state store, kendi pub/sub
 - Hata, deployment ve performans bazında tam izolasyon

@@ -6,7 +6,7 @@ description: vNext'in multi-domain yapısı, bounded context'ler ve domain izola
 
 # Domain Model
 
-vNext platformunun çekirdek tezi: **Domain = Runtime**. Her iş alanı (onboarding, ödeme, bildirim, IDM gibi) **bağımsız bir runtime instance'ına** ve **bağımsız bir veritabanına** sahiptir. Aynı platform yazılımı, domain başına ayrı deployment olarak çalışır — kod sabit, topoloji değişkendir.
+vNext platformunun çekirdek tezi: **Domain = Runtime**. Her iş alanı (kredi, ödeme, bildirim, IDM gibi) **bağımsız bir runtime instance'ına** ve **bağımsız bir veritabanına** sahiptir. Aynı platform yazılımı, domain başına ayrı deployment olarak çalışır — kod sabit, topoloji değişkendir.
 
 Bu yaklaşım üç sonuca götürür:
 

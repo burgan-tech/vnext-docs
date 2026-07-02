@@ -15,7 +15,7 @@ A workflow named `tasks` is created in each domain deployment. All tasks used wi
 
 ## Task Types
 
-`vnext-schema/task-definition.schema.json` defines a total of **15 task types**. Each is listed below with its number, name, and detail page.
+`vnext-schema/task-definition.schema.json` defines a total of **17 task types**. Each is listed below with its number, name, and detail page.
 
 | # | Task Type | Description | Detail |
 |---|---|---|---|
@@ -34,8 +34,10 @@ A workflow named `tasks` is created in each domain deployment. All tasks used wi
 | 13 | **GetInstanceDataTask** | Fetch a single instance's data | *(detail page in a later phase)* |
 | 14 | **SubProcessTask** | Run a SubProcess (fire-and-forget) | *(detail page in a later phase)* |
 | 15 | **GetInstancesTask** | Fetch multiple instances by filter | [GetInstances](./get-instances) |
+| 16 | **SoapTask** | SOAP 1.1 / 1.2 web service calls | [Soap](./soap) |
+| 17 | **StateStoreTask** | Dapr state store caching (get/set/delete) | [StateStore](./state-store) |
 
-> **Note:** Only these 15 task types defined in the schema exist. Task types not on this list are **not supported** by the system.
+> **Note:** Only these 17 task types defined in the schema exist. Task types not on this list are **not supported** by the system.
 
 ## Task Usage
 

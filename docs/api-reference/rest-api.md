@@ -94,11 +94,25 @@ Yeni instance başlatır.
 | `attributes` | object | Initial instance data |
 | `stage` | string \| null | Kullanıcı tanımlı durum bilgisi (max 120 char, serbest metin) |
 
+:::tip[Serbest (free-form) payload]
+Gövde, top-level `attributes` anahtarı içermeyen **serbest bir JSON** de olabilir; runtime bunu otomatik olarak `{"attributes": {...}}` şekline normalize eder. Örn. `{"customer_id":"123"}` → `{"attributes":{"customer_id":"123"}}`. Mod, `x-vnext-payload-mode` header'ı ile de zorlanabilir:
+
+| Header değeri | Etki |
+|---|---|
+| `raw` | Gövdede `attributes` olsa bile serbest payload kabul edilir |
+| `standard` | Gövdede `attributes` olmasa bile standart DTO kabul edilir |
+| (yok) | Top-level `attributes` anahtarı varsa standart, yoksa serbest mod |
+
+Aynı davranış transition endpoint'i için de geçerlidir.
+:::
+
 **Responses:**
 - `200 OK` → `StartInstanceOutput` (id, key, status, attributes, eTag, extensions)
 - `400 Bad Request` → `ProblemDetails`
 - `404 Not Found` → workflow bulunamadı
 - `409 Conflict` → key collision
+
+> **Not:** Workflow tanımında [`output` mapping](/docs/components/workflow#output-mapping) varsa ve istek `sync=true` ise, yanıt standart `StartInstanceOutput` zarfı yerine **doğrudan output script'in ürettiği gövde** olur (script'in status code + header'ları ile). Subflow instance'ları bu davranışın dışındadır.
 
 ### PATCH `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/transitions/{transitionKey}`
 
@@ -115,9 +129,13 @@ Bir instance üzerinde transition tetikler.
 | `attributes` | object | Transition payload data |
 | `stage` | string \| null | Kullanıcı tanımlı durum bilgisi (max 120 char, serbest metin) |
 
+Gövde serbest (free-form) JSON da olabilir — bkz. yukarıdaki *Serbest payload* notu (`x-vnext-payload-mode` header'ı burada da geçerlidir).
+
 **Responses:**
 - `200 OK` → `TransitionOutput`
 - `400 Bad Request`, `403 Forbidden` (yetki yok), `404 Not Found`, `409 Conflict`, `503 Service Unavailable`
+
+> **Not:** Workflow tanımında [`output` mapping](/docs/components/workflow#output-mapping) varsa ve istek `sync=true` ise, yanıt standart `TransitionOutput` zarfı yerine doğrudan output script'in ürettiği gövde olur.
 
 ### POST `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/retry`
 
@@ -154,7 +172,18 @@ Instance metadata + data döner (extension dahil).
 
 ### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/transitions`
 
-Instance'ın **transition history**'sini döner.
+Instance'ın **transition history**'sini döner. Her transition kaydı, geçişin tamamlandığı andaki **dışarıdan görünen (effective) state** bilgisini de içerir:
+
+| Field | Type | Description |
+|---|---|---|
+| `transitionKey` | string | Çalıştırılan transition |
+| `fromState` / `toState` | string | Kaynak ve hedef state |
+| `effectiveState` | string \| null | Tamamlanma anındaki effective state (subflow'larda dışarıya görünen state) |
+| `effectiveStateType` | StateType \| null | Effective state'in türü |
+| `effectiveStateSubType` | StateSubType \| null | Effective state'in alt türü |
+| `stage` | string \| null | Çağıranın set ettiği stage değeri |
+
+> **Not:** `effectiveState*` ve `stage` alanları transition **tamamlanma anında** snapshot'lanır. Başarısız/tamamlanmamış transition'larda ve v0.0.68 öncesi tarihsel kayıtlarda `null` döner (backfill yapılmaz).
 
 ---
 

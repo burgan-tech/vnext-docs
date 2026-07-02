@@ -21,7 +21,7 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
   "flowVersion": "1.0.0",
   "domain": "banking",
   "version": "1.0.0",
-  "tags": ["banking", "account", "onboarding"],
+  "tags": ["banking", "account", "account-opening"],
   "_comment": "Hesap açma iş akışı",
   "attributes": {
     "type": "F",
@@ -250,6 +250,7 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
 | `exit` | object \| null | Hayır | Exit transition tanımı. Yalnızca `triggerType: 0` (manual) |
 | `updateData` | object \| null | Hayır | Update data transition. `target` her zaman `$self` |
 | `queryRoles` | array | Hayır | Root-level sorgu rolleri. DENY her zaman ALLOW'u geçersiz kılar |
+| `output` <sup>New</sup> | object \| null | Hayır | Sync yanıt için opsiyonel output mapping (`scriptCode`, `IOutputHandler`). Ayrıntı: [Output Mapping](#output-mapping) |
 
 ---
 
@@ -788,6 +789,30 @@ Tüm mapping/scriptCode objelerinde `encoding` değeri `B64`, `NAT` veya **`REF`
 ```
 
 Ayrıntı için bkz. [Mapping Bileşeni → REF Encoding](/docs/components/mapping-component#ref-encoding-ile-referans-kullanımı).
+
+### Output Mapping
+
+`attributes.output`, workflow için opsiyonel bir **output mapping** tanımıdır — **sync yanıtları** şekillendirir (standart `scriptCode` yapısı, `IOutputHandler` implementasyonu). Instance **`sync=true`** ile başlatıldığında veya transition edildiğinde, output script'in ürettiği sonuç standart `StartInstanceOutput` / `TransitionOutput` zarfı yerine **doğrudan HTTP yanıt gövdesi** olarak döner — script'in belirlediği `statusCode` ve `headers` değerleri ile birlikte. Bu, [Function](/docs/components/functions/custom) endpoint'lerindeki `output` davranışının workflow'a taşınmış halidir; flow kendi API sözleşmesini şekillendirebilir.
+
+```json
+"attributes": {
+  "type": "F",
+  "output": {
+    "type": "L",
+    "code": "<base64-encoded IOutputHandler script>",
+    "encoding": "B64"
+  }
+}
+```
+
+**Davranış kuralları:**
+
+- Sadece **`sync=true`** isteklerde devreye girer; `sync=false` yanıtı (`{ id, status }`) değişmez.
+- Doğrudan yanıt, output script **gerçekten çalıştığında** uygulanır — script bilinçli olarak boş gövde de dönebilir (kendi status code / header'ları ile).
+- **Subflow instance'ları hariçtir**: `/sub/instances/start` ve subflow transition'ları standart modeli korur (parent/child correlation bu modele dayanır).
+- Output script hata alırsa platform hatayı loglar ve **standart yanıta geri döner** — output mapping isteği asla bozmaz.
+
+Bkz. [Async / Sync Yöntemi](/docs/how-to/async-sync) ve mapping yapısı için [Mapping Bileşeni](/docs/components/mapping-component).
 
 ### Query Roles
 

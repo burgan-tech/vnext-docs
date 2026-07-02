@@ -46,7 +46,7 @@ urn:<namespace>:<type>:<command>:<domain>:<flow>[:<instanceId>[:<key>]]
 | | |
 |---|---|
 | **Format** | `urn:<namespace>:flow:start:<domain>:<flowName>` |
-| **Example** | `urn:vnext:flow:start:onboarding:kyc-main-flow` |
+| **Example** | `urn:vnext:flow:start:demo:sample-flow` |
 | **HTTP equivalent** | `POST /api/v1/{domain}/workflows/{flow}/instances/start` |
 
 Starts a new instance of the given flow. It carries no `instanceId` because the instance does not exist yet.
@@ -56,7 +56,7 @@ Starts a new instance of the given flow. It carries no `instanceId` because the 
 | | |
 |---|---|
 | **Format** | `urn:<namespace>:flow:transition:<domain>:<flowName>:<instanceId>:<transitionName>` |
-| **Example** | `urn:vnext:flow:transition:onboarding:kyc-main-flow:${param}:approved` |
+| **Example** | `urn:vnext:flow:transition:demo:sample-flow:${param}:approved` |
 | **HTTP equivalent** | `PATCH /api/v1/{domain}/workflows/{flow}/instances/{instance}/transitions/{transitionKey}` |
 
 Triggers the named transition on a specific instance. `instanceId` is usually filled via [binding](#binding-formatting) (`${param}`).
@@ -66,7 +66,7 @@ Triggers the named transition on a specific instance. `instanceId` is usually fi
 | | |
 |---|---|
 | **Format** | `urn:<namespace>:flow:transition:<domain>:<flowName>:<transitionName>` |
-| **Example** | `urn:vnext:flow:transition:onboarding:kyc-main-flow:approved` |
+| **Example** | `urn:vnext:flow:transition:demo:sample-flow:approved` |
 
 Triggers the transition in the active (current) instance context; carries no `instanceId`. Used when the client knows the instance it operates on from context.
 
@@ -79,21 +79,21 @@ Function URNs vary along two axes:
 
 | Scope | Command | Format | Example |
 |-------|---------|--------|---------|
-| Instance | Present | `urn:<ns>:fn:<command>:<domain>:<flow>:<instanceId>:<functionKey>` | `urn:vnext:fn:get:onboarding:kyc-main-flow:${param}:custom-function` |
-| Instance | Omitted (`get`) | `urn:<ns>:fn:<domain>:<flow>:<instanceId>:<functionKey>` | `urn:vnext:fn:onboarding:kyc-main-flow:${param}:custom-function` |
-| Domain | Present | `urn:<ns>:fn:<command>:<domain>:<functionKey>` | `urn:vnext:fn:get:onboarding:custom-function` |
-| Domain | Omitted (`get`) | `urn:<ns>:fn:<domain>:<functionKey>` | `urn:vnext:fn:onboarding:custom-function` |
+| Instance | Present | `urn:<ns>:fn:<command>:<domain>:<flow>:<instanceId>:<functionKey>` | `urn:vnext:fn:get:demo:sample-flow:${param}:custom-function` |
+| Instance | Omitted (`get`) | `urn:<ns>:fn:<domain>:<flow>:<instanceId>:<functionKey>` | `urn:vnext:fn:demo:sample-flow:${param}:custom-function` |
+| Domain | Present | `urn:<ns>:fn:<command>:<domain>:<functionKey>` | `urn:vnext:fn:get:demo:custom-function` |
+| Domain | Omitted (`get`) | `urn:<ns>:fn:<domain>:<functionKey>` | `urn:vnext:fn:demo:custom-function` |
 
 **HTTP equivalents:**
 
 ```text
 # Instance-scoped function
-urn:vnext:fn:get:onboarding:kyc-main-flow:${param}:custom-function
-  → GET /api/v1/onboarding/workflows/kyc-main-flow/instances/{instance}/functions/custom-function
+urn:vnext:fn:get:demo:sample-flow:${param}:custom-function
+  → GET /api/v1/demo/workflows/sample-flow/instances/{instance}/functions/custom-function
 
 # Domain-scoped function
-urn:vnext:fn:onboarding:custom-function
-  → GET /api/v1/onboarding/functions/custom-function
+urn:vnext:fn:demo:custom-function
+  → GET /api/v1/demo/functions/custom-function
 ```
 
 #### Function Command Values
@@ -155,13 +155,13 @@ Examples:
 
 ```jsonc
 // URN — instanceId binding
-"urn:vnext:flow:transition:onboarding:kyc-main-flow:${param}:approved"
+"urn:vnext:flow:transition:demo:sample-flow:${param}:approved"
 
 // Http — query parameter binding
 { "href": "https://example.com/detail?id=${param}" }
 
 // Deeplink — full path binding
-{ "href": "on-burgan//onboarding/${param}" }
+{ "href": "mock-app//sample-page/${param}" }
 ```
 
 :::tip[Raw JSON + field input]

@@ -24,6 +24,10 @@ POST /api/v1/{domain}/workflows/{wf}/instances/start?sync=true
 
 Response: instance ID + güncel state + tüm output data.
 
+:::tip[Workflow `output` mapping]
+Workflow tanımında [`attributes.output`](/docs/components/workflow#output-mapping) tanımlıysa, `sync=true` yanıtı standart zarf yerine **doğrudan output script'in ürettiği gövde** olur — script'in belirlediği status code ve header'lar ile. Flow böylece kendi API sözleşmesini şekillendirebilir. Subflow instance'ları hariçtir.
+:::
+
 ## `sync=false` (default) — Asenkron
 
 İstek **asenkron** çalışır:

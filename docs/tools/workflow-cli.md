@@ -136,14 +136,14 @@ CLI, birden fazla domain konfigürasyonunu destekler. Her domain'in kendi API ve
 ```bash
 # Domain profilleri ekle (tek seferlik)
 wf domain add core --API_BASE_URL http://localhost:4201 --DB_NAME vNext_Core
-wf domain add onboarding --API_BASE_URL http://localhost:4221 --DB_NAME vNext_Onboarding
+wf domain add demo --API_BASE_URL http://localhost:4221 --DB_NAME vNext_Demo
 
 # Proje dizinine gir — domain otomatik değişir
 cd ~/projects/core-app        # vnext.config.json: "domain": "core"
 wf update                     # → core profili kullanılır
 
-cd ~/projects/onboarding-app  # vnext.config.json: "domain": "onboarding"
-wf update                     # → onboarding profili kullanılır
+cd ~/projects/demo-app        # vnext.config.json: "domain": "demo"
+wf update                     # → demo profili kullanılır
 ```
 
 ### Domain Komutları
