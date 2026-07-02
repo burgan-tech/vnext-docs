@@ -15,8 +15,8 @@ In the vNext Runtime platform, each domain has its own independent database. Thi
 ```mermaid
 flowchart TB
   subgraph platform["vNext Platform"]
-    subgraph onb["Onboarding Domain"]
-      onb_db[("onboarding_db")]
+    subgraph onb["Loan Domain"]
+      onb_db[("loan_db")]
     end
     subgraph idm_d["IDM Domain"]
       idm_db[("idm_db")]
@@ -116,8 +116,8 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  S1["Deployment: customer-onboarding flow (v1.0.0)"] --> S2["DB-Migrator job runs<br/>(deployment pipeline)"]
-  S2 --> S3["customer_onboarding schema<br/>created or updated"]
+  S1["Deployment: loan-application flow (v1.0.0)"] --> S2["DB-Migrator job runs<br/>(deployment pipeline)"]
+  S2 --> S3["loan_application schema<br/>created or updated"]
   S3 --> S4["Migration scripts<br/>run as needed"]
   S4 --> S5["Flow is ready<br/>(before first start/transition)"]
 
@@ -187,7 +187,7 @@ graph TB
         end
         
         subgraph flows["Flow Schemas"]
-            flow1["customer_onboarding<br/><i>Instances, data, history</i>"]
+            flow1["loan_application<br/><i>Instances, data, history</i>"]
             flow2["payment_process<br/><i>Instances, data, history</i>"]
             flow3["document_approval<br/><i>Instances, data, history</i>"]
         end

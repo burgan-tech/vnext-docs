@@ -26,11 +26,11 @@ In an organization, domains can be organized as follows:
 
 ```mermaid
 graph LR
-  OD["Onboarding Domain"]
-  OD --> RT["vNext Runtime<br/>(onboarding)"]
-  OD --> DB[("onboarding_db")]
-  OD --> PS["PubSub<br/>(onboarding_events)"]
-  OD --> SS["State Store<br/>(onboarding_state)"]
+  OD["Loan Domain"]
+  OD --> RT["vNext Runtime<br/>(loan)"]
+  OD --> DB[("loan_db")]
+  OD --> PS["PubSub<br/>(loan_events)"]
+  OD --> SS["State Store<br/>(loan_state)"]
 
   style OD fill:#dbeafe,stroke:#1e40af,color:#1e293b
   style RT fill:#e0f2fe,stroke:#0369a1,color:#1e293b
@@ -39,7 +39,7 @@ graph LR
   style SS fill:#fef3c7,stroke:#b45309,color:#1e293b
 ```
 
-**Example:** The onboarding team managing customer acceptance processes has its own domain.
+**Example:** The lending team managing loan processes has its own domain.
 
 ### Team Responsibility-Based Domains
 
@@ -105,7 +105,7 @@ Although domains are isolated from each other, they can communicate according to
 
 ```mermaid
 flowchart LR
-  OB["Onboarding<br/>Domain"] <-->|REST/HTTP| GW{{"API Gateway"}} <-->|REST/HTTP| IDM["IDM<br/>Domain"]
+  OB["Loan<br/>Domain"] <-->|REST/HTTP| GW{{"API Gateway"}} <-->|REST/HTTP| IDM["IDM<br/>Domain"]
 
   style OB fill:#dbeafe,stroke:#1e40af,color:#1e293b
   style GW fill:#fef3c7,stroke:#b45309,color:#1e293b
@@ -144,7 +144,7 @@ flowchart TB
   EvBus{{"Event Bus<br/>(PubSub)"}}
 
   subgraph platform["vNext Platform"]
-    Onb["Onboarding Domain<br/><i>Customer acceptance</i>"]
+    Onb["Loan Domain<br/><i>Loan processes</i>"]
     IDM["IDM Domain<br/><i>Identity & authorization</i>"]
     Notif["Notification Domain<br/><i>Notification services</i>"]
     Pay["Payment Domain<br/><i>Payment processes</i>"]
@@ -184,7 +184,7 @@ flowchart TB
   User["User<br/><i>Domain user</i>"]
   ExtSvc["External Services<br/><i>APIs, webhooks</i>"]
 
-  subgraph domain["vNext Domain (e.g. Onboarding)"]
+  subgraph domain["vNext Domain (e.g. Loan)"]
     Orch["vnext-app<br/><i>Orchestration Service</i>"]
     Exec["vnext-execution-app<br/><i>Execution Service</i>"]
     Init["vnext-init<br/><i>Seed Service</i>"]

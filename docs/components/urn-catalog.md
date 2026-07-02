@@ -42,7 +42,7 @@ urn:<namespace>:<type>:<command>:<domain>:<flow>[:<instanceId>[:<key>]]
 | | |
 |---|---|
 | **Format** | `urn:<namespace>:flow:start:<domain>:<flowName>` |
-| **Örnek** | `urn:vnext:flow:start:onboarding:kyc-main-flow` |
+| **Örnek** | `urn:vnext:flow:start:demo:sample-flow` |
 | **HTTP karşılığı** | `POST /api/v1/{domain}/workflows/{flow}/instances/start` |
 
 Belirli bir flow'un yeni bir instance'ını başlatır. Instance henüz oluşmadığı için `instanceId` taşımaz.
@@ -52,7 +52,7 @@ Belirli bir flow'un yeni bir instance'ını başlatır. Instance henüz oluşmad
 | | |
 |---|---|
 | **Format** | `urn:<namespace>:flow:transition:<domain>:<flowName>:<instanceId>:<transitionName>` |
-| **Örnek** | `urn:vnext:flow:transition:onboarding:kyc-main-flow:${param}:approved` |
+| **Örnek** | `urn:vnext:flow:transition:demo:sample-flow:${param}:approved` |
 | **HTTP karşılığı** | `PATCH /api/v1/{domain}/workflows/{flow}/instances/{instance}/transitions/{transitionKey}` |
 
 Belirli bir instance üzerinde adı verilen transition'ı tetikler. `instanceId` genellikle [binding](#binding-formatlama) ile (`${param}`) doldurulur.
@@ -62,7 +62,7 @@ Belirli bir instance üzerinde adı verilen transition'ı tetikler. `instanceId`
 | | |
 |---|---|
 | **Format** | `urn:<namespace>:flow:transition:<domain>:<flowName>:<transitionName>` |
-| **Örnek** | `urn:vnext:flow:transition:onboarding:kyc-main-flow:approved` |
+| **Örnek** | `urn:vnext:flow:transition:demo:sample-flow:approved` |
 
 Aktif (current) instance bağlamında transition'ı tetikler; `instanceId` taşımaz. Client, üzerinde çalıştığı instance'ı bağlamdan bildiğinde kullanılır.
 
@@ -75,21 +75,21 @@ Function URN'leri iki eksende değişir:
 
 | Kapsam | Command | Format | Örnek |
 |--------|---------|--------|-------|
-| Instance | Var | `urn:<ns>:fn:<command>:<domain>:<flow>:<instanceId>:<functionKey>` | `urn:vnext:fn:get:onboarding:kyc-main-flow:${param}:custom-function` |
-| Instance | Yok (`get`) | `urn:<ns>:fn:<domain>:<flow>:<instanceId>:<functionKey>` | `urn:vnext:fn:onboarding:kyc-main-flow:${param}:custom-function` |
-| Domain | Var | `urn:<ns>:fn:<command>:<domain>:<functionKey>` | `urn:vnext:fn:get:onboarding:custom-function` |
-| Domain | Yok (`get`) | `urn:<ns>:fn:<domain>:<functionKey>` | `urn:vnext:fn:onboarding:custom-function` |
+| Instance | Var | `urn:<ns>:fn:<command>:<domain>:<flow>:<instanceId>:<functionKey>` | `urn:vnext:fn:get:demo:sample-flow:${param}:custom-function` |
+| Instance | Yok (`get`) | `urn:<ns>:fn:<domain>:<flow>:<instanceId>:<functionKey>` | `urn:vnext:fn:demo:sample-flow:${param}:custom-function` |
+| Domain | Var | `urn:<ns>:fn:<command>:<domain>:<functionKey>` | `urn:vnext:fn:get:demo:custom-function` |
+| Domain | Yok (`get`) | `urn:<ns>:fn:<domain>:<functionKey>` | `urn:vnext:fn:demo:custom-function` |
 
 **HTTP karşılıkları:**
 
 ```text
 # Instance-scoped function
-urn:vnext:fn:get:onboarding:kyc-main-flow:${param}:custom-function
-  → GET /api/v1/onboarding/workflows/kyc-main-flow/instances/{instance}/functions/custom-function
+urn:vnext:fn:get:demo:sample-flow:${param}:custom-function
+  → GET /api/v1/demo/workflows/sample-flow/instances/{instance}/functions/custom-function
 
 # Domain-scoped function
-urn:vnext:fn:onboarding:custom-function
-  → GET /api/v1/onboarding/functions/custom-function
+urn:vnext:fn:demo:custom-function
+  → GET /api/v1/demo/functions/custom-function
 ```
 
 #### Function Command Değerleri
@@ -151,13 +151,13 @@ Renderer / client, `${param}` ifadelerini bağlamdaki ilgili değerle (ör. akti
 
 ```jsonc
 // URN — instanceId binding
-"urn:vnext:flow:transition:onboarding:kyc-main-flow:${param}:approved"
+"urn:vnext:flow:transition:demo:sample-flow:${param}:approved"
 
 // Http — query parametresi binding
 { "href": "https://example.com/detail?id=${param}" }
 
 // Deeplink — full path binding
-{ "href": "on-burgan//onboarding/${param}" }
+{ "href": "mock-app//sample-page/${param}" }
 ```
 
 :::tip[Raw JSON + alan girişi]

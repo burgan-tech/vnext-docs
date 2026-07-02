@@ -30,7 +30,7 @@ Bir aksiyon iki şekilde yazılabilir:
   "label": { "tr": "Kaydet", "en": "Save" },
   "action": {
     "action": "dispatch",
-    "command": "urn:vnext:flow:transition:onboarding:kyc-main-flow:${param}:save",
+    "command": "urn:vnext:flow:transition:demo:sample-flow:${param}:save",
     "validate": true,
     "preHooks":  [{ "action": "audit",     "command": "urn:client:audit:click", "sync": true }],
     "postHooks": [{ "action": "telemetry", "command": "urn:client:telemetry:click" }]

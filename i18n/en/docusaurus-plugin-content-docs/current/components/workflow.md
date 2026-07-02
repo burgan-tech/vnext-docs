@@ -42,6 +42,8 @@ Every workflow definition must include the following top-level fields (per `vnex
 - `startTransition` — start transition definition
 - `labels` — multi-language labels
 
+Optional fields include `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, and `output` (sync response mapping — see [Output Mapping](#output-mapping)).
+
 ## Capability Matrix
 
 Which sub-features each workflow type **typically uses**:
@@ -112,6 +114,25 @@ Defines the list of **extensions** that will run for the flow and instance. Exte
 ```
 
 The same `scripts` object can be defined on any mapping object. Mapping `encoding` may also be **`REF`** (a reference to a sys-mappings component instead of inline code). See [Mapping Component](/docs/components/mapping-component) and [Scripting / Sandbox](/docs/configuration/scripting).
+
+### Output Mapping
+
+`attributes.output` is an optional **output mapping** for the workflow (standard `scriptCode` object implementing `IOutputHandler`). When an instance is started or transitioned with **`sync=true`**, the script's result is returned **directly as the HTTP response body** — together with the script's `statusCode` and `headers` — instead of the standard `StartInstanceOutput` / `TransitionOutput` envelope, mirroring Function endpoint behavior.
+
+```json
+"attributes": {
+  "type": "F",
+  "output": {
+    "type": "L",
+    "code": "<base64-encoded IOutputHandler script>",
+    "encoding": "B64"
+  }
+}
+```
+
+- Applies only to `sync=true` requests; the `sync=false` response (`{ id, status }`) is unchanged.
+- **Subflow instances are excluded**: `/sub/instances/start` and subflow transitions keep the standard envelope (parent/child correlation relies on it).
+- If the output script fails, the platform logs the error and falls back to the standard response.
 
 ### Query Roles
 

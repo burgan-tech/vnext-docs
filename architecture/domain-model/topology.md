@@ -24,14 +24,14 @@ Bir kurumda domainler şu şekilde organize edilebilir:
 
 ### Ürün Grubu Bazlı Domain
 ```
-Onboarding Domain
-├── vNext Runtime (onboarding)
-├── Database (onboarding_db)
-├── PubSub (onboarding_events)
-└── State Store (onboarding_state)
+Loan Domain
+├── vNext Runtime (loan)
+├── Database (loan_db)
+├── PubSub (loan_events)
+└── State Store (loan_state)
 ```
 
-**Örnek:** Müşteri kabul süreçlerini yöneten onboarding ekibinin kendi domain'i.
+**Örnek:** Kredi süreçlerini yöneten kredi ekibinin kendi domain'i.
 
 ### Ekip Sorumluluğu Bazlı Domainler
 ```
@@ -79,7 +79,7 @@ Domainler birbirinden izole olmasına rağmen, iş gereksinimleri doğrultusunda
 ### 1. API Gateway Üzerinden
 ```
 ┌─────────────┐      API Gateway      ┌─────────────┐
-│  Onboarding │◄──────────────────────►│     IDM     │
+│    Loan     │◄──────────────────────►│     IDM     │
 │   Domain    │    REST/HTTP Calls     │   Domain    │
 └─────────────┘                        └─────────────┘
 ```
@@ -119,7 +119,7 @@ flowchart TB
     eventbus{{Event Bus<br/>Dapr Pub/Sub}}
 
     subgraph vnext [vNext Platform]
-        onb[Onboarding Domain<br/>vNext Runtime]
+        onb[Loan Domain<br/>vNext Runtime]
         idm[IDM Domain<br/>vNext Runtime]
         notif[Notification Domain<br/>vNext Runtime]
         pay[Payment Domain<br/>vNext Runtime]
@@ -152,7 +152,7 @@ Bir domain içinde çalışan vNext bileşenleri:
 flowchart TB
     user([Kullanıcı<br/>Domain kullanıcısı])
 
-    subgraph domain [vNext Domain — örn: Onboarding]
+    subgraph domain [vNext Domain — örn: Loan]
         orch[Orchestration API<br/>BBT.Workflow.Orchestration.HttpApi.Host<br/>:4201]
         exec[Execution API<br/>BBT.Workflow.Execution.HttpApi.Host<br/>:4202]
         wrkin[Inbox Worker<br/>BBT.Workflow.Workers.Inbox]
