@@ -52,6 +52,7 @@ const sidebars: SidebarsConfig = {
             'components/tasks/trigger',
             'components/tasks/get-instances',
             'components/tasks/state-store',
+            'components/tasks/cache-aside',
             'components/tasks/notification',
             'components/tasks/dapr-service',
             'components/tasks/dapr-pubsub',
