@@ -85,12 +85,31 @@ Yaygın sıralama alanları: `CreatedAt`, `UpdatedAt`, `Key`
 | `Sort`          | `SetSort(string? sort)`                           | Sıralama                               |
 | `Filter`        | `SetFilter(string? filter)`                       | Filtre (string)                        |
 | `Filter`        | `SetFilter(object? filter)`                       | Filtre (object, JSON serialize edilir) |
+| -               | `SetFilterSpec(InstanceQuerySpec spec)`           | Fluent `InstanceQuery` spec'i (önerilen) |
 | `Headers`       | `SetHeaders(Dictionary<string, string?> headers)` | Tüm header'lar                         |
 | -               | `AddHeader(string key, string? value)`            | Tekil header ekle                      |
 | -               | `RemoveHeader(string key)`                        | Tekil header kaldır                    |
 | `UseDapr`       | `SetUseDapr(bool useDapr)`                        | Dapr service invocation                |
 | `ValidateSSL`   | `SetValidateSSL(bool validateSSL)`                | SSL doğrulama                          |
 
+### Fluent Filtreleme: SetFilterSpec
+
+Yeni kodda önerilen yol, filter/sort JSON'ını elle yazmak yerine fluent `InstanceQuery` builder'ını kullanıp spec'i task'a vermektir. Aynı domain'e giden sorgular **in-process** çalışır (HTTP/Dapr atlaması olmaz); cross-domain sorgular otomatik yönlendirilir:
+
+```csharp
+var query = InstanceQuery.Create()
+    .OrGroup(
+        q => q.Where("currentState", f => f.Eq("active")),
+        q => q.Where("currentState", f => f.Eq("in-review")))
+    .Where("status", f => f.Eq("A"))
+    .OrderBy("attributes.dueDate");
+
+getInstancesTask.SetFilterSpec(query.Build());
+```
+
+- `SetFilterSpec`, task'ın `Filter`/`Sort` string'lerini spec'ten üretir; lokal ve remote çalıştırma birebir aynı değerleri taşır.
+- Sonradan yapılan bir `SetFilter(...)` / `SetSort(...)` çağrısı spec'i geçersiz kılar ve temizler.
+- Operatörler, `OrGroup`/`Not`, `GroupBy` ve aggregation'ların tam referansı: [Fluent InstanceQuery Builder](/docs/how-to/instance-filtering#fluent-instancequery-builder).
 
 ## Standart Yanıt
 

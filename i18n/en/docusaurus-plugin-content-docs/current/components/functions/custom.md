@@ -13,10 +13,11 @@ Custom functions are components designed to reduce BFF (Backend for Frontend) AP
 1. [Overview](#overview)
 2. [Function Definition](#function-definition)
 3. [Function Properties](#function-properties)
-4. [Consumption Endpoints](#consumption-endpoints)
-5. [System Functions](#system-functions)
-6. [Usage Examples](#usage-examples)
-7. [Best Practices](#best-practices)
+4. [Function Cache](#function-cache)
+5. [Consumption Endpoints](#consumption-endpoints)
+6. [System Functions](#system-functions)
+7. [Usage Examples](#usage-examples)
+8. [Best Practices](#best-practices)
 
 ---
 
@@ -95,6 +96,7 @@ Each function can execute a task and the task result data can be returned in the
 | `task` | `object` | Single task to execute (legacy shape; use with one task) |
 | `onExecutionTasks` | `array` | Ordered tasks to execute; see **Multi-task execution** below |
 | `output` | `object` | Optional output mapping script: `location` / `code`; implements **`IOutputHandler`** |
+| `cache` | `object` | Optional read-through response cache — see **Function Cache** below |
 
 ### Scope Values
 
@@ -196,6 +198,28 @@ public class FunctionOutputMapping : IOutputHandler
     }
 }
 ```
+
+---
+
+## Function Cache
+
+A function can declare an optional **`attributes.cache`** block that caches its **entire response** in a Dapr state store. On a hit the response is served with a single cache read — tasks are skipped; on a miss the function runs normally and the result is written back (read-through). Opt-in per function and intended **only for side-effect-free (read) functions**.
+
+```json
+"cache": {
+  "keyExpression": {
+    "location": "dynamicExpresso",
+    "code": "\"config:\" + Instance.Key + \":\" + Instance.Version"
+  },
+  "ttlInSeconds": 300,
+  "consistency": "Eventual",
+  "bypassOnCacheError": true
+}
+```
+
+Fields: `keyExpression` (Dynamic Expresso, takes precedence) or static `key`; `storeName` (defaults to the runtime's `DAPR_STATE_STORE_NAME`); `ttlInSeconds`; `consistency` (`Eventual`/`Strong`); `bypassOnCacheError` (default `true` — cache failures fall back to executing the function); and `generationKey` / `generationKeyExpression` for **generation-namespace invalidation** — bumping the generation stamp in the state store invalidates the whole cache family without deletes. `Instance.Version` is available in key expressions so a new config version self-invalidates.
+
+> 🚧 Full English translation of this section is pending. See the [Turkish page](/docs/components/functions/custom) for the complete field table and details.
 
 ---
 

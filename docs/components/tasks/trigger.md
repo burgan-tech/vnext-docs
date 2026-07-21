@@ -15,6 +15,8 @@ description: Workflow orchestration ve instance yönetim task'ları
 - **GetInstanceDataTask** (Type: `13`) - Instance verilerini alır
 - **SubProcessTask** (Type: `14`) - Bağımsız subprocess instance'ları başlatır
 
+Aynı ailenin sorgu tarafındaki üyeleri ayrı sayfalarda belgelenmiştir: [GetInstances Task](/docs/components/tasks/get-instances) (Type: `15`, instance listesi) ve [GetInstance Task](/docs/components/tasks/get-instance) (Type: `19`, tek instance'ın tam projeksiyonu).
+
 ---
 
 ## 1. StartTask (Type: `11`)

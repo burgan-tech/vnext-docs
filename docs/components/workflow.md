@@ -251,6 +251,7 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
 | `updateData` | object \| null | Hayır | Update data transition. `target` her zaman `$self` |
 | `queryRoles` | array | Hayır | Root-level sorgu rolleri. DENY her zaman ALLOW'u geçersiz kılar |
 | `output` <sup>New</sup> | object \| null | Hayır | Sync yanıt için opsiyonel output mapping (`scriptCode`, `IOutputHandler`). Ayrıntı: [Output Mapping](#output-mapping) |
+| `event` <sup>New</sup> | object \| null | Hayır | Workflow seviyesi event tanımı. Tanımlıysa harici bir event bu workflow'un **yeni bir instance'ını başlatabilir** (`action=start`). Transition seviyesi event'ten bağımsızdır. Ayrıntı: [Event Transition](#event-transition) |
 
 ---
 
@@ -443,6 +444,28 @@ State Function, client tarafında **long-polling** ile süreç durumunu döner. 
 }
 ```
 
+#### State Yanıtındaki `interaction` Objesi
+
+State Function yanıtındaki `interaction` objesi, state'te `interaction.longPoll` tanımlıysa (rol kontrolüne tabi olarak) **`terminate` değerinden bağımsız her zaman** döner:
+
+```json
+"interaction": {
+  "terminateLongPoll": false,
+  "fallbackTimeoutSeconds": 600
+}
+```
+
+| Alan | Açıklama |
+|------|----------|
+| `terminateLongPoll` | State'in `interaction.longPoll.terminate` değerini yansıtır |
+| `fallbackTimeoutSeconds` | Fallback penceresi (varsayılan `60`). `interaction.longPoll` tanımlıysa her zaman döner |
+| `ack` | Acknowledge endpoint href'i. **Yalnızca** `terminateLongPoll: true` iken bulunur |
+
+Client davranışı:
+
+- **`terminateLongPoll: true`** → client aktif long-poll isteğini sonlandırır, girilen state'in ekranını render eder ve `ack` ile platformu bilgilendirir. Süre içinde ack gelmezse zamanlanmış fallback pipeline'ı otomatik devam ettirir.
+- **`terminateLongPoll: false`** → client, **instance durumundan bağımsız olarak** durmuş bir long-poll isteği varsa yeniden başlatır ve `fallbackTimeoutSeconds` penceresi boyunca denemeye devam eder.
+
 #### Long Poll Acknowledge
 
 Client, açık tuttuğu long-poll isteğini tamamladığında **acknowledge** endpoint'ini çağırarak platformu bilgilendirir:
@@ -553,6 +576,7 @@ flowchart TD
 | `mapping` | object \| null | Hayır | Transition input mapping betiği |
 | `roles` | array | Hayır | Yetkilendirme rolleri. DENY her zaman ALLOW'u geçersiz kılar |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata. Platform annotations değerlerini yorumlamaz (passthrough). Çakışmaları önlemek için namespace'li key'ler kullanın (örn. `ui/visible-in`, `ui/priority`) |
+| `event` <sup>New</sup> | object \| null | **Koşullu** | Transition seviyesi event tanımı. `triggerType: 3` ise **zorunlu**. Ayrıntı: [Event Transition](#event-transition) |
 
 ### `triggerType` Enum Değerleri
 
@@ -561,7 +585,7 @@ flowchart TD
 | `0` | **Manual** | Kullanıcı tarafından tetiklenir | — |
 | `1` | **Automatic** | Otomatik tetiklenir | `rule` zorunlu (`triggerKind: 10` hariç) |
 | `2` | **Scheduled** | Zamanlayıcı ile tetiklenir | `timer` zorunlu |
-| `3` | **Event** | Olay ile tetiklenir | — |
+| `3` | **Event** | Harici pub/sub event'i ile tetiklenir — bkz. [Event Transition](#event-transition) | `event` zorunlu |
 
 ### `triggerKind` Enum Değerleri
 
@@ -617,6 +641,37 @@ flowchart TD
   "ui/intent": "cancel"
 }
 ```
+
+### Event Transition
+
+Bir transition, harici bir **pub/sub event'i** ile tetiklenebilir. Bunun için transition'da `"triggerType": 3` ve bir `event` tanımı bulunmalıdır. Ayrıca workflow seviyesinde `attributes.event` tanımlanarak harici bir event ile **yeni instance başlatılabilir** (`action=start`). İki tanım birbirinden bağımsızdır.
+
+`event` objesinin tek alanı vardır:
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `mapping` | object | **Evet** | [IEventMapping](/docs/components/interfaces#ieventmapping) uygulayan mapping betiği (standart `scriptCode` yapısı: `location` + base64 `code`). Ham event payload'ını **InstanceKey + Body**'ye (veya key yoksa **Selector**'e) dönüştürür |
+
+```json
+{
+  "key": "abort-order",
+  "target": "aborted",
+  "triggerType": 3,
+  "versionStrategy": "Minor",
+  "labels": [{ "label": "Abort Order", "language": "en-US" }],
+  "event": {
+    "mapping": { "location": "./src/AbortEventMapping.csx", "code": "<base64>" }
+  }
+}
+```
+
+Kurallar:
+
+- Event transition yalnızca **state transition'ları** ve **shared transition'lar** üzerinde tanımlanabilir; `startTransition`, `cancel`, `exit` ve `updateData` manuel kalır.
+- `triggerType: 3` olan bir transition'a event dışı teslimat `NotAnEventTransition` hatasıyla reddedilir.
+- Event teslimatı `POST /api/v1/{domain}/workflows/{workflow}/instances/events?action=transition&transitionKey=<key>` endpoint'i üzerinden yapılır; topic ve Dapr Subscription tanımları domain'e aittir.
+
+> Uçtan uca akış (korelasyon kuralları, Dapr Subscription YAML'ları, runtime davranışları, test) için: [Event-Driven Workflow'lar](/docs/how-to/event-driven-workflows).
 
 ---
 
@@ -681,6 +736,9 @@ Birden fazla state'den erişilebilen **ortak transition**'lardır. Standart tran
 |------|-----|---------|----------|
 | `availableIn` <sup>New</sup> | string[] | Hayır | Transition'ın geçerli olduğu state key'leri. Tanımlanmazsa **tüm state'lerden** erişilebilir |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
+| `event` <sup>New</sup> | object \| null | **Koşullu** | Event tanımı. `triggerType: 3` ise **zorunlu** — bkz. [Event Transition](#event-transition) |
+
+Shared transition'larda `triggerType` yalnızca `0` (Manual), `2` (Scheduled) veya `3` (Event) olabilir.
 
 ---
 

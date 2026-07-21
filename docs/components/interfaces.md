@@ -395,6 +395,67 @@ public interface IStateNotificationMapping
 
 ---
 
+## IEventMapping
+
+Harici bir pub/sub event'ini bir workflow instance'ına bağlayan mapping arabirimidir. Workflow seviyesi `attributes.event` (instance başlatma) ve `triggerType: 3` transition'larındaki `event` tanımı (transition tetikleme) bu arabirimi uygulayan bir betik referanslar. Bkz. [Event-Driven Workflow'lar](/docs/how-to/event-driven-workflows).
+
+### Tanım
+
+```csharp
+public interface IEventMapping
+{
+    Task<EventMappingResult> Handler(ScriptContext context);
+}
+```
+
+### `Handler(ScriptContext context)`
+
+**Parametreler:**
+
+| Parametre | Tip | Açıklama |
+|---|---|---|
+| `context` | `ScriptContext` | Ham event payload'ı **`context.EventPayload`** üzerinden erişilir. CloudEvent zarfları script çalışmadan önce runtime tarafından açılır — producer'ın `data`'sı görülür. `context.Headers` ve `context.Workflow` da kullanılabilir. |
+
+**Dönüş:** `Task<EventMappingResult>` — korelasyon ve payload bilgisi.
+
+### EventMappingResult
+
+| Alan | Kullanım | Açıklama |
+|---|---|---|
+| `InstanceKey` | start + transition | Business key. Start için yeni instance'ın key'i; transition için bu key'e sahip **aktif** instance bulunur |
+| `Body` | start + transition | Start için başlangıç attribute'ları; transition için transition input datası |
+| `Selector` | yalnız transition | Payload key taşımadığında fluent `InstanceQuery` + `First()/Last()` ile kurulan korelasyon filtresi. `InstanceKey` set edilmişse yok sayılır |
+
+### Örnek
+
+```csharp
+public class AbortEventMapping : ScriptBase, IEventMapping
+{
+    public Task<EventMappingResult> Handler(ScriptContext context)
+    {
+        var p = context.EventPayload;
+        return Task.FromResult(new EventMappingResult
+        {
+            Selector = InstanceQuery.Create()
+                .Where("currentState",      f => f.Eq("waiting-payment"))
+                .Where("attributes.userId", f => f.Eq(p.userId))
+                .OrderBy("createdAt")
+                .Last(),
+            Body = new { reason = p.reason }
+        });
+    }
+}
+```
+
+### Uygulama yönergeleri
+
+- Script **deterministik ve yan etkisiz** olmalıdır; yalnızca payload'ı dönüştürür. İçinden harici servis çağırmayın.
+- Handler'ın iki sorumluluğu vardır: **korelasyon** (hangi instance?) ve **payload şekillendirme** (workflow'a hangi veri girecek?).
+- Selector, hedef workflow'un flow'una **otomatik scope'lanır** — başka bir flow'un instance'ları asla eşleşmez.
+- Exception fırlatmak veya `null` dönmek 500 ile sonuçlanır ve event broker tarafından yeniden denenir; eşleşme bulunamaması ise bilinçli olarak 200 döner (yeniden teslim edilmez).
+
+---
+
 ## Modeller
 
 Mapping arabirimlerinin paylaştığı **`ScriptResponse`**, **`StandardTaskResponse`**, **`NotificationMessage`**, **`StateNotificationMetadata`** ve **`ScriptContext`** tipleri.

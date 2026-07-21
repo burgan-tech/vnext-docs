@@ -14,9 +14,10 @@ Function APIs provide system-level operations for workflow instances. These buil
 2. [State Function](#state-function)
 3. [Data Function](#data-function)
 4. [View Function](#view-function)
-5. [Authorization](#authorization)
-6. [Best Practices](#best-practices)
-7. [Related Documentation](#related-documentation)
+5. [Master Function](#master-function)
+6. [Authorization](#authorization)
+7. [Best Practices](#best-practices)
+8. [Related Documentation](#related-documentation)
 
 ## Overview
 
@@ -68,6 +69,13 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
     "hasView": true,
     "loadData": true,
     "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/functions/view"
+  },
+  "master": {
+    "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/functions/master"
+  },
+  "interaction": {
+    "terminateLongPoll": false,
+    "fallbackTimeoutSeconds": 600
   },
   "state": "active",
   "status": "A",
@@ -128,6 +136,12 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `view.hasView` | `boolean` | Whether a view exists for the current state |
 | `view.href` | `string` | View function endpoint URL |
 | `view.loadData` | `boolean` | Whether view requires instance data |
+| `master` | `object` | Link to retrieve the instance's **master schema** — see [Master Function](#master-function) |
+| `master.href` | `string` | Master function endpoint URL |
+| `interaction` | `object` | Long-poll interaction directive. Present whenever the state declares `interaction.longPoll` (subject to role grants), regardless of the `terminate` value |
+| `interaction.terminateLongPoll` | `boolean` | `true`: terminate the long-poll and acknowledge via `ack`. `false`: restart a stopped long-poll independent of instance status, retrying within the fallback window |
+| `interaction.fallbackTimeoutSeconds` | `integer` | Fallback window in seconds (default `60`) |
+| `interaction.ack` | `object` | Acknowledge endpoint href. Present **only** when `terminateLongPoll` is `true` |
 | `state` | `string` | Current state of the instance |
 | `status` | `string` | Instance status code (A=Active, C=Completed, etc.) |
 | `activeCorrelations` | `array` | Active sub-flows and correlations |
@@ -313,7 +327,20 @@ Content-Type: application/json
 }
 ```
 
-#### Authorization-aware ETag
+#### Master Function
+
+Returns the **flow-level master schema** the instance is bound to (`Workflow.Schema`). While the Schema function serves transition-specific input schemas, the Master function serves the schema that defines the **template structure of instance data**. Clients reach it via the `master.href` link in the State function response, without knowing the workflow definition.
+
+```http
+GET /{domain}/workflows/{workflow}/instances/{instance}/functions/master
+```
+
+- **Subflow forwarding**: when the instance has an active subflow instance, the request forwards to it and returns **its** master schema.
+- `queryRoles` authorization matches the other read functions: a denied caller gets **`403`**.
+- A workflow without a master schema returns **`404`**.
+- Typical uses: dynamic master-schema discovery (including the filter/sort vocabulary) and applying the master schema's [`x-context-target`](/docs/components/schema#data-context-vocabulary-data-vocab) annotations on every instance read.
+
+## Authorization-aware ETag
 
 When the data endpoints use authorization, the response can vary per caller. From  the ETag strategy distinguishes:
 

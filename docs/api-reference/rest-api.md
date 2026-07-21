@@ -106,8 +106,27 @@ Gövde, top-level `attributes` anahtarı içermeyen **serbest bir JSON** de olab
 Aynı davranış transition endpoint'i için de geçerlidir.
 :::
 
+:::tip[Form-urlencoded gövde desteği]
+Start, transition ve function endpoint'leri JSON'a ek olarak **`application/x-www-form-urlencoded`** gövde kabul eder. Form key'leri bracket-path söz dizimi ile aynı JSON ağacına normalize edilir ve mevcut payload-mode pipeline'ı aynen çalışır:
+
+| Form girdisi | JSON sonucu |
+|---|---|
+| `attributes[customer][name]=Ali` | İç içe objeler |
+| `tags[]=a&tags[]=b` (veya tekrarlı `tags=a&tags=b`) | Skaler dizi |
+| `items[0][name]=A&items[1][name]=B` | İndeksli obje dizisi |
+
+Kurallar:
+
+- Payload data'daki skaler değerler **JSON-literal** semantiği kullanır: `30`, `1.25`, `true`, `false`, `null` kendi tiplerine dönüşür; JSON-quoted `"00123"` string kalır; JSON literal olmayan metin (`Ali`) string kalır.
+- Standart zarf alanları `key`, `stage` ve `tags` elemanları, JSON literal görünümlü olsalar bile **her zaman string** kalır.
+- Belirsiz şekiller — `items[][name]=A` (indekssiz obje dizisi), bozuk bracket, negatif/seyrek indeks, aynı path'te skaler/konteyner çakışması — **HTTP 400** ile reddedilir; kısmen normalize edilmiş payload asla işlenmez.
+- Payload mode çözümü değişmez: `x-vnext-payload-mode` header'ı otomatik algılamayı geçersiz kılar.
+- Multipart form data ve dosya yükleme desteklenmez.
+:::
+
 **Responses:**
-- `200 OK` → `StartInstanceOutput` (id, key, status, attributes, eTag, extensions)
+- `200 OK` → `StartInstanceOutput` (id, key, status, attributes, eTag, extensions) — `sync=true`
+- `202 Accepted` → `sync=false` (varsayılan): iş, durable arkaplan işlemesi için kuyruğa alındı
 - `400 Bad Request` → `ProblemDetails`
 - `404 Not Found` → workflow bulunamadı
 - `409 Conflict` → key collision
@@ -129,13 +148,16 @@ Bir instance üzerinde transition tetikler.
 | `attributes` | object | Transition payload data |
 | `stage` | string \| null | Kullanıcı tanımlı durum bilgisi (max 120 char, serbest metin) |
 
-Gövde serbest (free-form) JSON da olabilir — bkz. yukarıdaki *Serbest payload* notu (`x-vnext-payload-mode` header'ı burada da geçerlidir).
+Gövde serbest (free-form) JSON da olabilir — bkz. yukarıdaki *Serbest payload* notu (`x-vnext-payload-mode` header'ı burada da geçerlidir). **Form-urlencoded** gövde de kabul edilir — bkz. yukarıdaki *Form-urlencoded gövde desteği* notu.
 
 **Responses:**
-- `200 OK` → `TransitionOutput`
+- `200 OK` → `TransitionOutput` — `sync=true`
+- `202 Accepted` → `sync=false` (varsayılan): iş, durable arkaplan işlemesi için kuyruğa alındı
 - `400 Bad Request`, `403 Forbidden` (yetki yok), `404 Not Found`, `409 Conflict`, `503 Service Unavailable`
 
 > **Not:** Workflow tanımında [`output` mapping](/docs/components/workflow#output-mapping) varsa ve istek `sync=true` ise, yanıt standart `TransitionOutput` zarfı yerine doğrudan output script'in ürettiği gövde olur.
+
+> **Not (Content-Type):** Function ve instance **output script'leri** artık yanıtın `content-type` header'ını da belirleyebilir (önceden bu header ayıklanıyordu). Script bir değer set etmezse varsayılan `application/json` kullanılır. Entegrasyon senaryolarında (örn. XML/text dönen legacy sözleşmeler) kullanışlıdır.
 
 ### POST `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/retry`
 

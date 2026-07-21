@@ -78,6 +78,25 @@ The `filter` parameter must be a **single** expression (string), consistent with
 }
 ```
 
+### Fluent Filtering: SetFilterSpec
+
+For new code, prefer the fluent `InstanceQuery` builder over hand-written filter/sort JSON, and hand the typed spec to the task in the input mapping. Same-domain queries run **in-process** (no HTTP/Dapr hop); cross-domain queries route automatically:
+
+```csharp
+var query = InstanceQuery.Create()
+    .OrGroup(
+        q => q.Where("currentState", f => f.Eq("active")),
+        q => q.Where("currentState", f => f.Eq("in-review")))
+    .Where("status", f => f.Eq("A"))
+    .OrderBy("attributes.dueDate");
+
+getInstancesTask.SetFilterSpec(query.Build());
+```
+
+- `SetFilterSpec` materializes the task's `Filter`/`Sort` strings from the spec, so local and remote execution carry identical values.
+- A later `SetFilter(...)` / `SetSort(...)` call overrides and clears the spec.
+- Full operator, `OrGroup`/`Not`, `GroupBy`, and aggregation reference: [Instance Filtering guide](/docs/how-to/instance-filtering).
+
 ## Usage Examples
 
 ### Basic Usage

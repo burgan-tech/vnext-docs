@@ -139,6 +139,49 @@ Bir JSON (`attributes.*`) alanının **filtrelenip sıralanabilirliği** master 
 
 Operatörlerin alan tipine göre (numeric / tarih / metin / boolean / dizi) davranışı, JSON dizi alanları için `includes` operatörü ve `SchemaFilterValidationException` ayrıntıları için bkz. [Instance Filtering → Şema-Tabanlı Filtrelenebilirlik](/docs/how-to/instance-filtering#şema-tabanlı-filtrelenebilirlik-ve-sıralama).
 
+### Data Context Vocabulary (data-vocab)
+
+> **Vocabulary:** `vnext-schema/vocabularies/data-vocab.json`
+
+`data-vocab`, **şema güdümlü client context-store bağlama** için iki anotasyon tanımlar. Amaç: generic bir client'ın, akış başına özel kod yazmadan — yalnızca backend şemalarından — girdi alanlarını client context-store'undan çözmesi ve yeniden kullanılabilir çıktıları oraya geri yazması.
+
+| Anotasyon | Nerede tanımlanır | Yön | Ne zaman uygulanır |
+|---|---|---|---|
+| `x-context-source` | Transition input şemasının bir property'sinde | context-store → input | Start/transition payload'ı oluşturulurken |
+| `x-context-target` | Workflow **master şemasında** | instance data → context-store | Her instance okumasında (start sonucu, her transition sonrası) |
+
+**`x-context-source`** — property'yi **client tarafından çözülen** bir alan olarak işaretler; client bu alan için form field'ı render etmez. Değer üç kaynaktan birinden gelir:
+
+| Form | Anlamı |
+|---|---|
+| `{ "const": <değer> }` | Şemaya gömülü literal değer (yalnız source) |
+| `{ "context": { "boundary": "device\|user\|subject", "key": "<key-template>", "storage"?: "memory\|local\|secure" } }` | Context-store veri slot'u. `key` şablonu `{instance}` ve `{subject}` interpolasyonu destekler |
+| `{ "identity": "subject" \| "user" }` | Context-store kimliği — aktif subject (JWT `sub`, örn. login'li userId) veya aktif user (yalnız source) |
+
+```json
+"properties": {
+  "oldPassword": { "type": "string" },
+  "channel":  { "type": "string", "x-context-source": { "const": "web" } },
+  "deviceId": { "type": "string", "x-context-source": { "context": { "boundary": "device", "key": "device.id" } } },
+  "userId":   { "type": "string", "x-context-source": { "identity": "subject" } }
+}
+```
+
+**`x-context-target`** — master şema üzerinde, instance data alan yollarını (dot-notation) context-store slot'larına eşler. Client bunu **her instance okumasında** uygular; böylece bir transition'dan sonra ortaya çıkan değerler (token, cihaz kaydı, sertifika…) otomatik olarak context-store'a taşınır ve sonraki akışlar `x-context-source` ile okuyabilir. Hedefler yalnızca context slot'u olabilir (`const` ve `identity` source-only'dir):
+
+```json
+"x-context-target": {
+  "deviceData.instanceId": { "context": { "boundary": "device", "key": "device.registration.{instance}" } },
+  "certificate":           { "context": { "boundary": "device", "key": "device.cert.{instance}", "storage": "secure" } }
+}
+```
+
+**`{instance}` şablonu:** Aynı mantıksal alan farklı instance'larda gelebilir (örn. cihaz başına bir device-manager instance'ı). Key'e `{instance}` (instance id) eklemek her instance'ın değerini ayrı bir konuma yazar. Akışlar arası **singleton** değerler için `{instance}` kullanmayın — sabit bir key'de kalsın ki sonraki akışın `x-context-source`'u bulabilsin. Kullanılabilir şablon değişkenleri: `{instance}`, `{subject}`.
+
+:::note Geriye dönük uyumluluk
+JSON Schema (draft 2020-12) bilinmeyen keyword'lere izin verir: standart validator'lar `x-context-*` anotasyonlarını yok sayar. Anotasyonsuz bir şema bugünkü gibi davranır — benimseme şema başına ve kademelidir.
+:::
+
 ### View ile Kullanımı
 
 - **Read-only view** (girdi yoksa): master schema doğrudan view'a `dataSchema` olarak verilebilir; mevcut durumu özetleyen ekranlar için yeterlidir.
@@ -210,7 +253,7 @@ vNext vocabulary'sinin (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-enc
 | `const` | any | Hayır | Sabit değer |
 | `default` | any | Hayır | Varsayılan değer |
 
-Standart JSON Schema alanlarına ek olarak, property seviyesinde vNext **`x-*` vocabulary uzantıları** desteklenir — alan bazlı yetkilendirme (`x-roles`), şifreleme (`x-encryption`), filtreleme (`x-filterOperators`), sıralama (`x-sortable`), görüntü formatı (`x-displayFormat`), etiketleme (`x-labels`), LOV (`x-lov`), lookup (`x-lookup`), koşullu görünürlük (`x-conditional`) vb. Tam liste ve örnekler için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+Standart JSON Schema alanlarına ek olarak, property seviyesinde vNext **`x-*` vocabulary uzantıları** desteklenir — alan bazlı yetkilendirme (`x-roles`), şifreleme (`x-encryption`), filtreleme (`x-filterOperators`), sıralama (`x-sortable`), görüntü formatı (`x-displayFormat`), etiketleme (`x-labels`), LOV (`x-lov`), lookup (`x-lookup`), koşullu görünürlük (`x-conditional`), client context bağlama (`x-context-source`, `x-context-target`) vb. Tam liste ve örnekler için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) ve [Data Context Vocabulary](#data-context-vocabulary-data-vocab).
 
 ---
 

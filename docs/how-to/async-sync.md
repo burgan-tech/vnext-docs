@@ -42,13 +42,29 @@ Workflow tanımında [`attributes.output`](/docs/components/workflow#output-mapp
 POST /api/v1/{domain}/workflows/{wf}/instances/start
 ```
 
-Response: `{ "id": "...", "status": { "code": "InProgress" } }` — işleme başlandığını gösterir.
+Response: **`202 Accepted`** + `{ "id": "...", "status": { "code": "InProgress" } }` — işleme başlandığını gösterir.
+
+:::info 202 Accepted
+Asenkron (`sync=false`) start ve transition istekleri başarı durumunda artık `200` yerine **`202 Accepted`** döner — iş tamamlanmamış, durable arkaplan işlemesi için kuyruğa alınmıştır. `sync=true` istekler, hata sonuçları ve custom output-response yolu değişmemiştir.
+:::
 
 Sonra client `GET /api/v1/{domain}/workflows/{wf}/instances/{id}/functions/state` ile long-polling yapar; `status.code = "A"` (Active) olduğunda mevcut state'e geçilmiştir.
 
 ### Deklaratif long-poll sonlandırma (`interaction.longPoll`)
 
 Bir state, açık tutulan long-poll isteğinin **ne zaman sonlandırılacağını** `interaction.longPoll` ile deklaratif olarak tanımlayabilir. Runtime, isteği bir transition gerçekleşene veya `fallbackTimeoutSeconds` dolana kadar açık tutar; `terminate` ise state'ten çıkıldığında isteğin kapatılıp kapatılmayacağını belirler. Böylece her client kendi long-poll sonlandırma mantığını uygulamak yerine, durak noktalarını süreç tasarımından okur. Tanım ve örnek için bkz. [Workflow → State Interaction (Long Poll)](/docs/components/workflow#state-interaction-long-poll).
+
+State Function yanıtındaki `interaction` objesi, state'te `interaction.longPoll` tanımlıysa `terminate` değerinden bağımsız **her zaman** döner:
+
+```json
+"interaction": {
+  "terminateLongPoll": false,
+  "fallbackTimeoutSeconds": 600
+}
+```
+
+- **`terminateLongPoll: true`** → client long-poll'u sonlandırır, girilen state'in ekranını render eder ve yanıttaki `ack` href'i ile acknowledge gönderir; süre içinde ack gelmezse zamanlanmış fallback pipeline'ı otomatik devam ettirir.
+- **`terminateLongPoll: false`** → client, **instance durumundan bağımsız olarak** durmuş bir long-poll isteği varsa yeniden başlatır ve `fallbackTimeoutSeconds` penceresi boyunca denemeye devam eder.
 
 ### Continuation işletimi (durable)
 

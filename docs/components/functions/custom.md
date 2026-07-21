@@ -13,10 +13,11 @@ description: Kullanıcı tanımlı fonksiyonlar ve C# scripting
 1. [Genel Bakış](#genel-bakış)
 2. [Function Tanımı](#function-tanımı)
 3. [Function Özellikleri](#function-özellikleri)
-4. [Tüketim Noktaları](#tüketim-noktaları)
-5. [Sistem Fonksiyonları](#sistem-fonksiyonları)
-6. [Kullanım Örnekleri](#kullanım-örnekleri)
-7. [En iyi Uygulamalar](#en-iyi-uygulamalar)
+4. [Fonksiyon Cache](#fonksiyon-cache)
+5. [Tüketim Noktaları](#tüketim-noktaları)
+6. [Sistem Fonksiyonları](#sistem-fonksiyonları)
+7. [Kullanım Örnekleri](#kullanım-örnekleri)
+8. [En iyi Uygulamalar](#en-iyi-uygulamalar)
 
 ---
 
@@ -99,6 +100,7 @@ Her fonksiyon bir task çalıştırabilir ve task sonucundaki veri mapping ile i
 | `labels` | `array` | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`) |
 | `roles` | `array` | Hayır | Yetkilendirme rolleri. Her öğe: `role` (string) + `grant` (`allow` / `deny`). DENY her zaman ALLOW'u geçersiz kılar |
 | `rawResponse` | `boolean` | Hayır | `true`: mapped rawData doğrudan response olarak döndürülür. `false` (varsayılan): platform kendi pattern modeli üzerinden çıktı verir. Legacy API'lerden vnext'e geçiş senaryolarında kullanılır |
+| `cache` <sup>New</sup> | `object` | Hayır | Read-through response cache konfigürasyonu — bkz. [Fonksiyon Cache](#fonksiyon-cache) |
 
 ### Scope Değerleri
 
@@ -210,6 +212,57 @@ public class FunctionOutputMapping : IOutputHandler
     }
 }
 ```
+
+---
+
+## Fonksiyon Cache
+
+Bir fonksiyon, isteğe bağlı **`attributes.cache`** bloğu ile **tüm yanıtını** bir Dapr state store'da cache'leyebilir. Cache **hit** olduğunda yanıt tek bir cache okumasıyla döner — task'lar hiç çalıştırılmaz; **miss** olduğunda fonksiyon normal çalışır ve sonuç cache'e yazılır (read-through). Gerçek bir konfigürasyon-değerlendirme fonksiyonunda yanıt süresi ~230ms'den ~93ms'ye düşmüştür.
+
+:::warning Yalnızca yan etkisiz fonksiyonlar
+Cache, fonksiyon başına **opt-in**'dir ve yalnızca **yan etkisiz (read) fonksiyonlar** için etkinleştirilmelidir. Yazma/aksiyon içeren bir fonksiyonu cache'lemek, task'ların atlanması nedeniyle yan etkilerin kaybolmasına yol açar.
+:::
+
+```json
+"attributes": {
+  "scope": "I",
+  "task": { "...": "..." },
+  "cache": {
+    "keyExpression": {
+      "location": "dynamicExpresso",
+      "code": "\"config:\" + Instance.Key + \":\" + Instance.Version"
+    },
+    "ttlInSeconds": 300,
+    "consistency": "Eventual",
+    "bypassOnCacheError": true
+  }
+}
+```
+
+### Cache Alanları
+
+| Alan | Tip | Zorunlu | Varsayılan | Açıklama |
+|------|-----|---------|------------|----------|
+| `keyExpression` | `object` | Hayır | — | Cache key'ini hesaplayan **Dynamic Expresso** ifadesi (`location: "dynamicExpresso"` olan bir ScriptCode). Script context üzerinden değerlendirilir ve string döner. `key`'den önceliklidir |
+| `key` | `string` | Hayır | — | Statik cache key'i (`keyExpression` yoksa kullanılır) |
+| `storeName` | `string` | Hayır | `DAPR_STATE_STORE_NAME` | Dapr state store component adı. Boşsa çalışan runtime'ın konfigürasyon değeri kullanılır |
+| `ttlInSeconds` | `integer` | Hayır | — | Cache'lenen yanıtın yaşam süresi. Null veya pozitif olmayan değer: süresiz |
+| `consistency` | `string` | Hayır | `Eventual` | Tutarlılık modu: `Eventual` veya `Strong` |
+| `bypassOnCacheError` | `boolean` | Hayır | `true` | `true`: cache okuma/yazma hataları isteği bozmaz, fonksiyon normal çalıştırılır. `false`: cache hatası isteği başarısız kılar |
+| `generationKeyExpression` | `object` | Hayır | — | Generation stamp'inin tutulduğu state key'ini çözen Dynamic Expresso ifadesi. `generationKey`'den önceliklidir |
+| `generationKey` | `string` | Hayır | — | Generation stamp'ini tutan statik state key'i |
+
+### Generation-Namespace Invalidation
+
+`generationKey` / `generationKeyExpression` tanımlandığında, runtime state store'daki **generation stamp**'ini cache key'ine katlar. Stamp'i bir kez değiştirmek (örn. bir [StateStore Task](/docs/components/tasks/state-store) `set` komutu ile), o generation'a bağlı **tüm cache girdilerini tek seferde geçersiz kılar** — aktif silme gerekmez.
+
+Ayrıca key expression'larında **`Instance.Version`** (instance'ın flow versiyonu) kullanılabilir; key'e versiyonu katlamak, yeni bir konfigürasyon versiyonunun kendi kendini geçersiz kılmasını sağlar:
+
+```
+"config:" + Instance.Key + ":" + Instance.Version
+```
+
+> Pipeline içi (task seviyesi) cache ihtiyaçları için [StateStore Task](/docs/components/tasks/state-store) ve [Cache-Aside Task](/docs/components/tasks/cache-aside) sayfalarına bakın; fonksiyon cache'i bunlardan farklı olarak **fonksiyonun tüm yanıtını** kapsar.
 
 ---
 
