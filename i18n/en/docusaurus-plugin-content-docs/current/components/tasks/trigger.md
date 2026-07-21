@@ -15,6 +15,8 @@ Four separate task types are available for workflow instance management. Each ta
 - **GetInstanceDataTask** (Type: "13") - Retrieves instance data
 - **SubProcessTask** (Type: "14") - Launches independent subprocess instances
 
+The query-side members of the same family are documented on their own pages: [GetInstances Task](/docs/components/tasks/get-instances) (Type: "15", instance list) and [GetInstance Task](/docs/components/tasks/get-instance) (Type: "19", full single-instance projection).
+
 ## Features
 
 - ✅ Start new workflow instances programmatically

@@ -42,7 +42,7 @@ Every workflow definition must include the following top-level fields (per `vnex
 - `startTransition` — start transition definition
 - `labels` — multi-language labels
 
-Optional fields include `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, and `output` (sync response mapping — see [Output Mapping](#output-mapping)).
+Optional fields include `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, `output` (sync response mapping — see [Output Mapping](#output-mapping)), and `event` (workflow-level event definition — see [Event-Driven Transitions](#event-event-driven-workflows)).
 
 ## Capability Matrix
 
@@ -134,6 +134,28 @@ The same `scripts` object can be defined on any mapping object. Mapping `encodin
 - **Subflow instances are excluded**: `/sub/instances/start` and subflow transitions keep the standard envelope (parent/child correlation relies on it).
 - If the output script fails, the platform logs the error and falls back to the standard response.
 
+### Event (Event-Driven Workflows)
+
+A workflow can react to external pub/sub events in two independent ways:
+
+- **`attributes.event`** (workflow level): an external event may **start a new instance** (`action=start`).
+- **`transition.event`** with **`"triggerType": 3`** (transition level): an external event may **run the transition** on an existing instance (`action=transition&transitionKey=<key>`). Event transitions are supported on state transitions and shared transitions only; delivery to a non-event transition is rejected with `NotAnEventTransition`.
+
+The `event` object has a single field, `mapping` — a standard `scriptCode` implementing [`IEventMapping`](/docs/components/interfaces) that turns the raw event payload into an `InstanceKey` + `Body` (or a fluent `Selector` when the payload carries no key).
+
+```json
+{
+  "key": "abort-order",
+  "target": "aborted",
+  "triggerType": 3,
+  "event": {
+    "mapping": { "location": "./src/AbortEventMapping.csx", "code": "<base64>" }
+  }
+}
+```
+
+See the [Event-Driven Workflows guide](/docs/how-to/event-driven-workflows) for correlation rules, Dapr Subscription delivery, and runtime behavior.
+
 ### Query Roles
 
 Authorization mechanism. Holds the information about **who can query** the workflow and the states within an instance. `queryRoles` can be defined at two levels: the **flow (root)** level and each **state** level. **Precedence:** the instance's **current state** `queryRoles` is evaluated first; if the state has none, the flow-level `queryRoles` is used as the base. It is enforced by the built-in **state/data/view/schema** read functions; if the caller is not allowed, the function returns **`403`**. See [Built-in Functions → QueryRoles authorization in read functions](/docs/components/functions/built-in#queryroles-authorization-in-read-functions).
@@ -187,6 +209,21 @@ A state may declare an optional `interaction.longPoll` block that makes **long-p
   }
 }
 ```
+
+#### The `interaction` object in the State response
+
+The State function response carries an `interaction` object **whenever the state declares `interaction.longPoll`** (subject to role grants) — regardless of the `terminate` value:
+
+```json
+"interaction": {
+  "terminateLongPoll": false,
+  "fallbackTimeoutSeconds": 600
+}
+```
+
+- `terminateLongPoll: true` → the client terminates its long-poll, renders the entered state, and acknowledges via the included `ack` HREF (a scheduled fallback resumes the pipeline if not acknowledged within `fallbackTimeoutSeconds`, default `60`).
+- `terminateLongPoll: false` → the client restarts the long-poll request if it has stopped — independent of the instance status — and keeps retrying within the `fallbackTimeoutSeconds` window.
+- `ack` is present only when `terminateLongPoll` is `true`.
 
 #### Long Poll Acknowledge
 

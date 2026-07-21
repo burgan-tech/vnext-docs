@@ -15,9 +15,10 @@ Function API'leri, workflow instance'ları için sistem seviyesi operasyonlar sa
 3. [Data Fonksiyonu](#data-fonksiyonu)
 4. [View Fonksiyonu](#view-fonksiyonu)
 5. [Schema Fonksiyonu](#schema-fonksiyonu)
-6. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
-7. [En iyi Uygulamalar](#en-iyi-uygulamalar)
-8. [Ilgili Dökümanlar](#ilgili-dökümanlar)
+6. [Master Fonksiyonu](#master-fonksiyonu)
+7. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
+8. [En iyi Uygulamalar](#en-iyi-uygulamalar)
+9. [Ilgili Dökümanlar](#ilgili-dökümanlar)
 
 ## Genel Bakış
 
@@ -71,6 +72,13 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
     "hasView": true,
     "loadData": true,
     "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/functions/view"
+  },
+  "master": {
+    "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/functions/master"
+  },
+  "interaction": {
+    "terminateLongPoll": false,
+    "fallbackTimeoutSeconds": 600
   },
   "state": "active",
   "status": "A",
@@ -131,6 +139,12 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `view.hasView` | `boolean` | Mevcut state için view olup olmadığı |
 | `view.href` | `string` | View fonksiyon endpoint URL'i |
 | `view.loadData` | `boolean` | View'ın instance data'ya ihtiyaç duyup duymadığı |
+| `master` <sup>New</sup> | `object` | Instance'ın bağlı olduğu **master şemayı** almak için link — bkz. [Master Fonksiyonu](#master-fonksiyonu) |
+| `master.href` | `string` | Master fonksiyon endpoint URL'i |
+| `interaction` <sup>New</sup> | `object` | Long-poll etkileşim direktifi. State'te `interaction.longPoll` tanımlıysa (rol kontrolüne tabi) `terminate` değerinden bağımsız **her zaman** döner — bkz. [Workflow → State Interaction](/docs/components/workflow#state-interaction-long-poll) |
+| `interaction.terminateLongPoll` | `boolean` | `true`: client long-poll'u sonlandırıp `ack` göndermelidir. `false`: client durmuş long-poll'u instance durumundan bağımsız yeniden başlatır ve fallback süresi boyunca dener |
+| `interaction.fallbackTimeoutSeconds` | `integer` | Fallback penceresi (varsayılan `60`) |
+| `interaction.ack` | `object` | Acknowledge endpoint href'i. **Yalnızca** `terminateLongPoll: true` iken bulunur |
 | `state` | `string` | Instance'ın mevcut durumu |
 | `status` | `string` | Instance durum kodu (A=Active, C=Completed, vb.) |
 | `activeCorrelations` | `array` | Aktif sub-flow'lar ve correlation'lar |
@@ -669,6 +683,37 @@ Accept: application/json
 ```
 
 > **İpucu:** State fonksiyonu yanıtındaki `transitions[].schema.hasSchema` alanını kontrol ederek, gereksiz schema istekleri ve 404 hatalarından kaçının.
+
+## Master Fonksiyonu
+
+Instance'ın bağlı olduğu **flow seviyesindeki master şemayı** (`Workflow.Schema`) döndürür. Schema Fonksiyonu transition'a özel input şemasını verirken, Master Fonksiyonu instance data'nın **şablon yapısını** tanımlayan master şemayı verir. Client, workflow tanımını bilmeden instance'ın master şemasına State fonksiyonu yanıtındaki `master.href` linki üzerinden ulaşır.
+
+### Endpoint
+
+```http
+GET /{domain}/workflows/{workflow}/instances/{instance}/functions/master
+```
+
+### Parametreler
+
+| Parametre | Konum | Tip | Gerekli | Açıklama |
+|-----------|-------|-----|---------|----------|
+| `domain` | Path | string | Evet | Domain adı |
+| `workflow` | Path | string | Evet | Workflow key |
+| `instance` | Path | string | Evet | Instance ID |
+
+### Davranış
+
+- Instance'ın workflow tanımındaki `attributes.schema` (master schema) referansı çözülür ve JSON Schema içeriği döndürülür.
+- **Subflow forwarding**: instance'ın aktif bir subflow instance'ı varsa, istek aktif subflow instance'ına yönlendirilir ve **onun** master şeması döner.
+- `queryRoles` yetkilendirmesi diğer read fonksiyonlarıyla aynıdır: izin yoksa **`403`** döner (bkz. [Read fonksiyonlarında queryRoles authorize](#read-fonksiyonlarında-queryroles-authorize)).
+- Workflow'da master schema tanımlı değilse **`404`** döner.
+
+### Kullanım Alanları
+
+1. **Master şema keşfi**: Client'ın instance data yapısını (filtre/sıralama vocabulary'si dahil) dinamik öğrenmesi
+2. **`x-context-target` uygulaması**: Generic client'ların master şemadaki [Data Context Vocabulary](/docs/components/schema#data-context-vocabulary-data-vocab) anotasyonlarını her instance okumasında uygulaması
+3. **Doğrulama**: Client-side instance data validation için şema kaynağı
 
 ## Yetkilendirme (Authorization)
 

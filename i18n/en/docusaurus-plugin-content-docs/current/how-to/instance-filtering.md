@@ -364,6 +364,43 @@ GET /banking/workflows/payment-workflow/instances?filter={"groupBy":{"field":"at
 
 ---
 
+## Fluent InstanceQuery Builder
+
+In script mappings (`.csx`), prefer the **fluent `InstanceQuery` builder** over hand-concatenated filter/sort JSON. One builder describes every instance query in the platform. It lives in `BBT.Workflow.Filtering`, which is part of the script engine's default imports — no `using` directive needed.
+
+How you end the chain decides what you get:
+
+| Terminal | Produces | Used for |
+|---|---|---|
+| `.First()` / `.Last()` | A filter resolving exactly **one** instance | Event correlation (`EventMappingResult.Selector`) — see [Event-Driven Workflows](/docs/how-to/event-driven-workflows) |
+| `.Build()` | An `InstanceQuerySpec` **list/report** query | `GetInstancesTask.SetFilterSpec(...)`, or wire strings for `DaprServiceTask` |
+
+```csharp
+var query = InstanceQuery.Create()
+    .Where("currentState", f => f.Eq("active"))
+    .Where("attributes.amount", f => f.Ge(1000).Lt(5000))
+    .OrGroup(
+        q => q.Where("attributes.city", f => f.Eq("London")),
+        q => q.Where("attributes.city", f => f.Eq("Paris")))
+    .OrderByDescending("createdAt");
+
+getInstancesTask.SetFilterSpec(query.Build());
+```
+
+Key points:
+
+- **Fields**: bare names address whitelisted instance columns (`id`, `key`, `flow`, `status`, `currentState`, `effectiveState`, `stage`, `createdAt`, ...); `attributes.`-prefixed dotted paths address instance-data JSON at any depth. Unknown column names throw instead of silently matching nothing.
+- **Operators** (`Eq`, `Ne`, `Gt/Ge/Lt/Le`, `Like`, `StartsWith`/`EndsWith`, `In`/`NotIn`, `Between`, `IsNull`, `Includes`) emit the same GraphQL wire JSON documented above. `Includes` (array containment) is a list-query-only feature.
+- **Composition**: top-level `Where` calls AND together; `OrGroup(...)` adds OR branches (conditions inside a branch AND together); `Not(...)` negates; operators chained on one field AND together (`f.Ge(18).Lt(65)`).
+- **Ordering**: `OrderBy` / `OrderByDescending`; default is `createdAt` ascending. Numeric attributes order numerically.
+- **GroupBy + aggregations** (`Count`, `Sum`, `Avg`, `Min`, `Max`) are list-query features; they throw at build time with `First()/Last()`.
+- **Guardrails**: `First()/Last()` with zero conditions throws; values are always serialized by the spec — escaping/injection handled for you.
+- **Serializers** for raw `DaprServiceTask` wiring: `ToFilterJson()`, `ToSortJson()`, `ToGroupByJson()`, `ToAggregationsJson()`, `ToQueryString(page, pageSize)`.
+
+Prefer `GetInstancesTask` + `SetFilterSpec(query.Build())` for new code — same-domain queries run in-process with no HTTP/Dapr hop.
+
+> 🚧 Full English translation of this section is pending. See the [Turkish page](/docs/how-to/instance-filtering) for the complete operator table, type semantics, and consumption-point examples.
+
 ## Best Practices
 
 ### 1. Use GraphQL Format for Complex Queries

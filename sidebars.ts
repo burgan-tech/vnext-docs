@@ -51,6 +51,7 @@ const sidebars: SidebarsConfig = {
             'components/tasks/script',
             'components/tasks/trigger',
             'components/tasks/get-instances',
+            'components/tasks/get-instance',
             'components/tasks/state-store',
             'components/tasks/cache-aside',
             'components/tasks/notification',
@@ -93,6 +94,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'how-to/error-handling',
         'how-to/instance-filtering',
+        'how-to/event-driven-workflows',
         'how-to/view-selection',
         'how-to/async-sync',
         {

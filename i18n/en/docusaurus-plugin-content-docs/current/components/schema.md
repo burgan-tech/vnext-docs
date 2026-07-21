@@ -75,6 +75,39 @@ A non-filterable field, or a disallowed operator, raises **`SchemaFilterValidati
 
 For a read-only view (no input), the master schema can be supplied directly as the view's `dataSchema`; for input sections, a transition-specific schema should be used instead.
 
+### Data Context Vocabulary (data-vocab)
+
+> **Vocabulary:** `vnext-schema/vocabularies/data-vocab.json`
+
+Two backwards-compatible annotations for **schema-driven client context-store binding** — a generic client wires a flow's inputs from, and persists its reusable outputs to, the client context-store purely from backend schemas, with zero per-flow client code:
+
+| Annotation | Lives on | Direction | Applied when |
+|---|---|---|---|
+| `x-context-source` | A property of a transition input schema | context-store → input | Building a start/transition payload |
+| `x-context-target` | The workflow **master schema** | instance data → context-store | On every instance read (start result, after each transition) |
+
+**`x-context-source`** marks a property as client-resolved (no form field rendered), from one of: a literal (`{ "const": <any> }`), a context-store slot (`{ "context": { "boundary": "device|user|subject", "key": "<template>", "storage"?: "memory|local|secure" } }`), or the client identity (`{ "identity": "subject" | "user" }` — e.g. the logged-in userId / JWT `sub`).
+
+```json
+"properties": {
+  "oldPassword": { "type": "string" },
+  "channel":  { "type": "string", "x-context-source": { "const": "web" } },
+  "deviceId": { "type": "string", "x-context-source": { "context": { "boundary": "device", "key": "device.id" } } },
+  "userId":   { "type": "string", "x-context-source": { "identity": "subject" } }
+}
+```
+
+**`x-context-target`** (on the master schema) maps instance-data field paths (dot-notation) to context-store slots, applied on every instance read — so values that appear only after a transition (tokens, device ids, certificates) propagate automatically and become available to later flows via `x-context-source`. Slot keys support `{instance}` / `{subject}` templating; omit `{instance}` for cross-flow singletons.
+
+```json
+"x-context-target": {
+  "deviceData.instanceId": { "context": { "boundary": "device", "key": "device.registration.{instance}" } },
+  "certificate":           { "context": { "boundary": "device", "key": "device.cert.{instance}", "storage": "secure" } }
+}
+```
+
+Standard JSON Schema validators ignore unknown `x-*` keywords, so unannotated schemas behave exactly as before — adoption is per-schema and incremental.
+
 ## Required Fields
 
 | Field | Type | Description |

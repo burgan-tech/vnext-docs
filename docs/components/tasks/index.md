@@ -53,7 +53,7 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 
 ## Görev Türleri
 
-`task-definition.schema.json` toplamda **18 task türü** tanımlar:
+`task-definition.schema.json` toplamda **19 task türü** tanımlar:
 
 | # | Görev Türü | Açıklama | Detay |
 |---|---|---|---|
@@ -75,6 +75,7 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 | 16 | **SoapTask** | SOAP 1.1 / 1.2 web servis çağrısı | [Soap](./soap) |
 | 17 | **StateStoreTask** | Dapr state store ile cache (get/set/delete) | [StateStore](./state-store) |
 | 18 | **CacheAsideTask** | Read-through cache (miss'te sourceTask çalıştırıp cache'ler) | [CacheAside](./cache-aside) |
+| 19 | **GetInstanceTask** | Tek bir instance'ın tam projeksiyonunu (metadata + data) çekme | [GetInstance](./get-instance) |
 
 ## Görev Kullanımı
 

@@ -152,3 +152,44 @@ Task<dynamic> Handler(ScriptContext context);
   }
 }
 ```
+### IEventMapping
+
+Binds an external pub/sub event to a workflow instance. Referenced by the workflow-level `attributes.event` (instance start) and by the `event` definition on `triggerType: 3` transitions (event-driven transition). See the [Event-Driven Workflows guide](/docs/how-to/event-driven-workflows).
+
+```csharp
+public interface IEventMapping
+{
+    Task<EventMappingResult> Handler(ScriptContext context);
+}
+```
+
+The raw event payload is available as **`context.EventPayload`** (CloudEvent envelopes are unwrapped by the runtime before the script runs). The handler has exactly two responsibilities: **correlation** (which instance is this event about?) and **payload shaping** (what data goes into the workflow?). The script must be deterministic and side-effect free.
+
+**`EventMappingResult` fields:**
+
+| Field | Used by | Meaning |
+|---|---|---|
+| `InstanceKey` | start + transition | Business key. For start: the new instance's key. For transition: finds the **active** instance with that key |
+| `Body` | start + transition | For start: the new instance's initial attributes. For transition: the transition's input data |
+| `Selector` | transition only | Fallback correlation built with the fluent `InstanceQuery` and terminated with `First()`/`Last()`, used when the payload carries no key. Ignored when `InstanceKey` is set |
+
+```csharp
+public class AbortEventMapping : ScriptBase, IEventMapping
+{
+    public Task<EventMappingResult> Handler(ScriptContext context)
+    {
+        var p = context.EventPayload;
+        return Task.FromResult(new EventMappingResult
+        {
+            Selector = InstanceQuery.Create()
+                .Where("currentState",      f => f.Eq("waiting-payment"))
+                .Where("attributes.userId", f => f.Eq(p.userId))
+                .OrderBy("createdAt")
+                .Last(),
+            Body = new { reason = p.reason }
+        });
+    }
+}
+```
+
+Selectors are automatically scoped to the target workflow's flow. Throwing or returning `null` yields 500 (retried by the broker); a non-matching selector/key returns 200 by design (no redelivery).

@@ -364,6 +364,186 @@ GET /banking/workflows/payment-workflow/instances?filter={"groupBy":{"field":"at
 
 ---
 
+## Fluent InstanceQuery Builder
+
+Script mapping'lerde (`.csx`) filter/sort JSON'ını elle string birleştirmek yerine **fluent `InstanceQuery` builder'ı** kullanılır. Tek bir builder, platformdaki tüm instance sorgularını tanımlar. `BBT.Workflow.Filtering` namespace'indedir ve script engine'in varsayılan import'larına dahildir — `.csx` dosyalarınızda `using` gerektirmez.
+
+### Tek builder, iki terminal
+
+Zinciri **nasıl bitirdiğiniz** ne elde ettiğinizi belirler:
+
+| Terminal | Üretir | Kullanım yeri |
+|---|---|---|
+| `.First()` / `.Last()` | Tam olarak **bir** instance çözen filtre | Event korelasyonu (`EventMappingResult.Selector`) — bkz. [Event-Driven Workflow'lar](/docs/how-to/event-driven-workflows) |
+| `.Build()` | `InstanceQuerySpec` — **liste/rapor** sorgusu | `GetInstancesTask.SetFilterSpec(...)` veya `DaprServiceTask` için wire string'leri |
+
+Terminalden önceki her şey (`Where`, `OrGroup`, `Not`, `OrderBy`) iki kullanım için de aynıdır.
+
+### Filtrelenebilir alanlar
+
+İki tür alan vardır; geçilen isimle ayrışırlar:
+
+- **Instance kolonları** — çıplak isimler, whitelist'lidir: `id`, `key`, `flow`, `status`, `currentState` (veya `state`), `effectiveState`, `effectiveStateType`, `effectiveStateSubType`, `stage`, `createdAt`, `modifiedAt`, `completedAt`. Yazım hatası sessizce boş sonuç dönmek yerine **hata fırlatır**.
+- **Instance-data attribute'ları** — `attributes.` önekiyle, iç içe alanlar için noktalı: `attributes.amount`, `attributes.address.city`, `attributes.employment.department.name`. Her derinlik çalışır.
+
+### Operatör referansı
+
+Her operatörün fluent çağrısı ve ürettiği wire JSON (yukarıdaki [Desteklenen Operatörler](#desteklenen-operatörler) ile birebir aynıdır):
+
+| Operatör | Fluent çağrı | Wire JSON |
+|---|---|---|
+| Eşit | `.Where("attributes.status", f => f.Eq("active"))` | `{"attributes":{"status":{"eq":"active"}}}` |
+| Eşit değil | `.Where("attributes.status", f => f.Ne("cancelled"))` | `{"attributes":{"status":{"ne":"cancelled"}}}` |
+| Büyük | `.Where("attributes.amount", f => f.Gt(1000))` | `{"attributes":{"amount":{"gt":1000}}}` |
+| Büyük eşit | `.Where("attributes.age", f => f.Ge(18))` | `{"attributes":{"age":{"ge":18}}}` |
+| Küçük | `.Where("attributes.amount", f => f.Lt(500))` | `{"attributes":{"amount":{"lt":500}}}` |
+| Küçük eşit | `.Where("attributes.age", f => f.Le(65))` | `{"attributes":{"age":{"le":65}}}` |
+| İçerir (case-insensitive) | `.Where("attributes.name", f => f.Like("Ada"))` | `{"attributes":{"name":{"like":"Ada"}}}` |
+| İle başlar | `.Where("attributes.email", f => f.StartsWith("info"))` | `{"attributes":{"email":{"startswith":"info"}}}` |
+| İle biter | `.Where("attributes.email", f => f.EndsWith("@x.com"))` | `{"attributes":{"email":{"endswith":"@x.com"}}}` |
+| Liste içinde | `.Where("attributes.city", f => f.In("London", "Paris"))` | `{"attributes":{"city":{"in":["London","Paris"]}}}` |
+| Liste dışında | `.Where("attributes.city", f => f.NotIn("Rome"))` | `{"attributes":{"city":{"nin":["Rome"]}}}` |
+| Aralıkta (dahil) | `.Where("attributes.age", f => f.Between(18, 65))` | `{"attributes":{"age":{"between":[18,65]}}}` |
+| Null / null değil | `.Where("attributes.phone", f => f.IsNull(false))` | `{"attributes":{"phone":{"isNull":false}}}` |
+| Dizi içinde nesne | `.Where("attributes.participants", f => f.Includes(new { userId }))` | `{"attributes":{"participants":{"includes":{"userId":"..."}}}}` |
+
+Notlar:
+
+- `Includes`, bir JSON **dizisinin** elemanlarından birinin verilen kısmi objeyi içerip içermediğini kontrol eder (PostgreSQL `jsonb @>`). Yalnızca **liste sorgusu** özelliğidir — `First()/Last()` build aşamasında reddeder.
+- Aralık operatörlerine tarihleri ISO-8601 string olarak geçin: `f.Ge("2026-07-01T00:00:00Z")`.
+
+### Koşul birleştirme
+
+**AND** — her üst seviye `Where` (ve `OrGroup`/`Not`) mantıksal AND olarak birleşir:
+
+```csharp
+InstanceQuery.Create()
+    .Where("attributes.scopeGroup", f => f.Eq("bireysel-3"))
+    .Where("currentState",          f => f.Eq("complete"))
+// -> scopeGroup = "bireysel-3" AND currentState = "complete"
+```
+
+**OR** — `OrGroup` dallar alır; en az bir dal eşleşmelidir. Bir dal birden fazla koşul içerebilir; dal içinde AND'lenir:
+
+```csharp
+.OrGroup(
+    q => q.Where("attributes.limitKey", f => f.Eq(p.limitKey))
+          .Where("attributes.amount",   f => f.Eq(p.amount)),
+    q => q.Where("attributes.scopeGroup", f => f.Eq(p.scopeGroup))
+          .Where("attributes.scope",      f => f.Eq(p.scope)))
+// -> (limitKey AND amount) OR (scopeGroup AND scope)
+```
+
+**NOT** — iç grubu olumsuzlar:
+
+```csharp
+.Not(q => q.Where("attributes.status", f => f.Eq("cancelled")))
+```
+
+**Aynı alanda birden fazla operatör** — zincirlenir, AND'lenir:
+
+```csharp
+.Where("attributes.age", f => f.Ge(18).Lt(65))
+// -> age >= 18 AND age < 65
+```
+
+Gruplar serbestçe iç içe geçebilir; koşullar düz C# olduğu için `if` ile **koşullu olarak** da eklenebilir.
+
+### Sıralama ve First/Last
+
+```csharp
+.OrderBy("createdAt")                            // artan
+.OrderByDescending("attributes.startDateTime")   // azalan; iç içe attribute çalışır
+```
+
+- Hiçbir şey belirtilmezse varsayılan sıralama `createdAt` artan yönlüdür.
+- `First()` etkin sıralamada en üstteki satırı, `Last()` en alttakini alır. "En yeni eşleşen instance" = `.OrderBy("createdAt").Last()` veya `.OrderByDescending("createdAt").First()` — aynı sonuç.
+- Sayısal attribute'lar **sayısal** sıralanır (9 < 20 < 100), metin olarak değil.
+
+### Tip semantiği (tekil çözümleme motoru)
+
+`First()/Last()` motoru, geçilen operandın .NET tipine göre karşılaştırır:
+
+| Geçilen operand | Nasıl karşılaştırılır |
+|---|---|
+| `Eq(30)`, `In(1, 2, 3)` — gerçek sayı/tarih | Tipli — `Eq(30)` saklanan `30.0` ile eşleşir |
+| `Eq("123")`, `Eq("2026-04-27")` — string (sayı/tarih görünümlü olsa da) | **Metin** — ID ve kodlar için güvenli |
+| `Gt("2026-07-01T00:00:00Z")`, `Between("2026-01-01", "2026-12-31")` | Aralık sınırları problanır: tarih benzeri string'ler timestamp, sayısal string'ler sayı olarak karşılaştırılır |
+| `Gt("M")` — düz string | Metin — alfabetik aralıklar çalışır |
+
+Pratik kural: **sayıları sayı, tarihleri ISO string, tanımlayıcıları string** olarak geçin.
+
+### GroupBy ve Aggregation'lar (yalnız liste sorguları)
+
+```csharp
+var spec = InstanceQuery.Create()
+    .Where("attributes.scopeGroup", f => f.Eq(scopeGroup))
+    .GroupBy("attributes.limitKey")     // bir veya daha fazla alan
+    .Sum("attributes.amount")           // aggregation'lar: Count(), Sum, Avg, Min, Max
+    .Count()
+    .Build();
+```
+
+- Gruplu sorgular instance yerine `GroupSummary` öğeleri döner.
+- Gruplarken aggregation'lar groupBy'ın **içine** yerleşir; motorun desteklediği tek kombinasyon budur.
+- `GroupBy` ve aggregation'lar `First()/Last()` ile **build aşamasında hata fırlatır** — liste özellikleridir.
+
+### Build-time korumaları
+
+| Kural | Sonuç |
+|---|---|
+| Sıfır koşulla `First()/Last()` | Hata — filtresiz tekil çözümlemeye izin verilmez |
+| Sıfır koşulla `Build()` | Geçerli — liste/rapor için match-all olabilir |
+| `First()/Last()` ile `Includes` | Hata — liste özelliği |
+| `First()/Last()` ile `GroupBy`/aggregation | Hata — liste özelliği |
+| Bilinmeyen kolon adı | Hata — kolonlar whitelist'lidir |
+| Operatörsüz `Where` | Hata — en az bir operatör gerekli |
+
+Değerler her zaman spec tarafından serialize edilir, asla string birleştirilmez — escaping ve injection sizin yerinize yönetilir.
+
+### Tüketim noktaları
+
+Aynı fluent dilin üç tüketim noktası vardır:
+
+**1. Event Selector** — terminal `First()/Last()`. `action=transition` için payload'da key yokken `IEventMapping` içinde kullanılır. Detay: [Event-Driven Workflow'lar](/docs/how-to/event-driven-workflows).
+
+**2. GetInstancesTask** — terminal `Build()` → `SetFilterSpec(...)` (**önerilen**). JSON yok, query string yok, endpoint URL'i yok; platform spec'i wire formatına kendisi çevirir. Aynı domain'e giden sorgular **in-process** çalışır. Detay ve örnek: [GetInstances Task → Fluent Filtreleme](/docs/components/tasks/get-instances#fluent-filtreleme-setfilterspec).
+
+**3. DaprServiceTask** — terminal `Build()` → wire string'leri. Instances liste endpoint'i zaten GraphQL-stil filter string'leri kabul eder; spec bunları tip güvenli üretir:
+
+```csharp
+var spec = InstanceQuery.Create()
+    .Where("status", f => f.Eq("A"))
+    .OrderBy("attributes.startDateTime")
+    .Build();
+
+serviceTask.SetQueryString(
+    "pageSize=100"
+    + "&filter=" + Uri.EscapeDataString(spec.ToFilterJson())
+    + "&sort="   + Uri.EscapeDataString(spec.ToSortJson()));
+// Veya tek çağrıyla: serviceTask.SetQueryString(spec.ToQueryString(page: 1, pageSize: 100));
+```
+
+`InstanceQuerySpec` serializer'ları:
+
+| Serializer | Ürettiği | Query parametresi |
+|---|---|---|
+| `ToFilterJson()` | GraphQL wire JSON filtresi (null = match-all) | `filter` |
+| `ToSortJson()` | `{"fields":[{"field":"createdAt","direction":"desc"}]}` | `sort` |
+| `ToGroupByJson()` | `{"fields":[...],"aggregations":{...}}` | `groupBy` |
+| `ToAggregationsJson()` | Bağımsız aggregation'lar (yalnız groupBy yokken) | `aggregations` |
+| `ToFilterRequestJson()` | Filtre veya groupBy/aggregation zarfı — `GetInstancesTask`'ın dahili kullandığı | `filter` |
+| `ToQueryString(page, pageSize)` | Yukarıdakilerin tamamını içeren URL-encoded query string | hepsi |
+
+**Hangisini kullanmalı?**
+
+| Durum | Kullanın |
+|---|---|
+| Event transition, payload'da business key var | `InstanceKey` — selector gerekmez |
+| Event transition, payload'da key yok | `Selector` + `First()/Last()` |
+| Task instance listesine ihtiyaç duyuyor (yeni kod) | `GetInstancesTask` + `SetFilterSpec(query.Build())` |
+| Task ham HTTP/Dapr liste endpoint'ini çağırmak zorunda (mevcut entegrasyonlar) | `DaprServiceTask` + `spec.ToFilterJson()/ToSortJson()/ToQueryString()` |
+
 ## En İyi Uygulamalar
 
 ### 1. Kompleks Sorgular için GraphQL Format Kullanın
