@@ -10,12 +10,17 @@ description: Workflow orchestration ve instance yönetim task'ları
 
 ## Task Türleri
 
-- **StartTask** (Type: `11`) - Yeni iş akışı instance'ları başlatır
-- **DirectTriggerTask** (Type: `12`) - Mevcut instance'larda transition tetikler
-- **GetInstanceDataTask** (Type: `13`) - Instance verilerini alır
-- **SubProcessTask** (Type: `14`) - Bağımsız subprocess instance'ları başlatır
+Bu sayfada belgelenen dört trigger task'ı (bağlantılar aynı sayfadaki ilgili bölüme gider):
 
-Aynı ailenin sorgu tarafındaki üyeleri ayrı sayfalarda belgelenmiştir: [GetInstances Task](/docs/components/tasks/get-instances) (Type: `15`, instance listesi) ve [GetInstance Task](/docs/components/tasks/get-instance) (Type: `19`, tek instance'ın tam projeksiyonu).
+- [**StartTask** (Type: `11`)](#1-starttask-type-11) - Yeni iş akışı instance'ları başlatır
+- [**DirectTriggerTask** (Type: `12`)](#2-directtriggertask-type-12) - Mevcut instance'larda transition tetikler
+- [**GetInstanceDataTask** (Type: `13`)](#3-getinstancedatatask-type-13) - Instance verilerini alır
+- [**SubProcessTask** (Type: `14`)](#4-subprocesstask-type-14) - Bağımsız subprocess instance'ları başlatır
+
+Aynı ailenin sorgu tarafındaki üyeleri ayrı sayfalarda belgelenmiştir:
+
+- [**GetInstances Task** (Type: `15`)](/docs/components/tasks/get-instances) - Filtre ile instance listesi
+- [**GetInstance Task** (Type: `19`)](/docs/components/tasks/get-instance) - Tek instance'ın tam projeksiyonu (metadata + data)
 
 ---
 

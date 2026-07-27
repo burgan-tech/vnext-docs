@@ -53,7 +53,7 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 
 ## Görev Türleri
 
-`task-definition.schema.json` toplamda **19 task türü** tanımlar:
+`task-definition.schema.json` toplamda **20 task türü** tanımlar:
 
 | # | Görev Türü | Açıklama | Detay |
 |---|---|---|---|
@@ -76,6 +76,7 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 | 17 | **StateStoreTask** | Dapr state store ile cache (get/set/delete) | [StateStore](./state-store) |
 | 18 | **CacheAsideTask** | Read-through cache (miss'te sourceTask çalıştırıp cache'ler) | [CacheAside](./cache-aside) |
 | 19 | **GetInstanceTask** | Tek bir instance'ın tam projeksiyonunu (metadata + data) çekme | [GetInstance](./get-instance) |
+| 20 | **DaprConversationTask** | Dapr Conversation ile LLM/AI sağlayıcı çağrısı | [DaprConversation](./dapr-conversation) |
 
 ## Görev Kullanımı
 
