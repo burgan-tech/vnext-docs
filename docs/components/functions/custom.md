@@ -251,6 +251,12 @@ Cache, fonksiyon başına **opt-in**'dir ve yalnızca **yan etkisiz (read) fonks
 | `bypassOnCacheError` | `boolean` | Hayır | `true` | `true`: cache okuma/yazma hataları isteği bozmaz, fonksiyon normal çalıştırılır. `false`: cache hatası isteği başarısız kılar |
 | `generationKeyExpression` | `object` | Hayır | — | Generation stamp'inin tutulduğu state key'ini çözen Dynamic Expresso ifadesi. `generationKey`'den önceliklidir |
 | `generationKey` | `string` | Hayır | — | Generation stamp'ini tutan statik state key'i |
+| `varyByHeaders` | `string[]` | Hayır | — | Sonucu değiştiren **tam (exact)** request-header adları. Belirtilen header'lar cache key'ine katılır |
+| `varyByHeaderPrefixes` | `string[]` | Hayır | — | Sonucu değiştiren request-header adı **prefiksleri** (ör. bir prefix ile başlayan tüm header'lar) |
+
+:::tip Vary-by header'lar (`#839`)
+`varyByHeaders` ve `varyByHeaderPrefixes`, key-expression içinde kullanılabilen `varyKey(context)` yardımcı fonksiyonunun header-adı kümesini oluşturur (ikisi birleştirilir). Böylece runtime herhangi bir header konvansiyonuna bağlı kalmadan; aynı fonksiyonun farklı header değerleri için **ayrı cache varyantları** tutar. Instance `Instance.Data["varyBy"]` ile kendi kümesini sağlamazsa, domain'de tanımlı bu iki alan kullanılır.
+:::
 
 ### Generation-Namespace Invalidation
 

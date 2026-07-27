@@ -15,7 +15,7 @@ A workflow named `tasks` is created in each domain deployment. All tasks used wi
 
 ## Task Types
 
-`vnext-schema/task-definition.schema.json` defines a total of **19 task types**. Each is listed below with its number, name, and detail page.
+`vnext-schema/task-definition.schema.json` defines a total of **20 task types**. Each is listed below with its number, name, and detail page.
 
 | # | Task Type | Description | Detail |
 |---|---|---|---|
@@ -38,8 +38,9 @@ A workflow named `tasks` is created in each domain deployment. All tasks used wi
 | 17 | **StateStoreTask** | Dapr state store caching (get/set/delete) | [StateStore](./state-store) |
 | 18 | **CacheAsideTask** | Read-through cache (runs sourceTask on miss and caches it) | [CacheAside](./cache-aside) |
 | 19 | **GetInstanceTask** | Fetch a full single-instance projection (metadata + data) | [GetInstance](./get-instance) |
+| 20 | **DaprConversationTask** | Invoke an LLM/AI provider via Dapr Conversation | [DaprConversation](./dapr-conversation) |
 
-> **Note:** Only these 19 task types defined in the schema exist. Task types not on this list are **not supported** by the system.
+> **Note:** Only these 20 task types defined in the schema exist. Task types not on this list are **not supported** by the system.
 
 ## Task Usage
 

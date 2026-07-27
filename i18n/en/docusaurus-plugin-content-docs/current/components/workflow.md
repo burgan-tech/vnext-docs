@@ -42,7 +42,7 @@ Every workflow definition must include the following top-level fields (per `vnex
 - `startTransition` — start transition definition
 - `labels` — multi-language labels
 
-Optional fields include `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, `output` (sync response mapping — see [Output Mapping](#output-mapping)), and `event` (workflow-level event definition — see [Event-Driven Transitions](#event-event-driven-workflows)).
+Optional fields include `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, `output` (sync response mapping — see [Output Mapping](#output-mapping)), `event` (workflow-level event definition — see [Event-Driven Transitions](#event-event-driven-workflows)), and `config` (flow-level configuration — currently built-in function cache tuning, `config.functionCache.ttlSeconds`; host default 60s; the State Function is managed separately by the platform).
 
 ## Capability Matrix
 
@@ -155,6 +155,10 @@ The `event` object has a single field, `mapping` — a standard `scriptCode` imp
 ```
 
 See the [Event-Driven Workflows guide](/docs/how-to/event-driven-workflows) for correlation rules, Dapr Subscription delivery, and runtime behavior.
+
+### Resource Lock
+
+Start, state-level, and shared transitions may declare an optional `resourceLock` block — a distributed lock (Dapr `lock.redis`) that prevents concurrent instances from mutating a shared resource. It runs in the **Manual** profile only. The recommended model is to `Acquire` on the entry transition and let the runtime auto-release the lock when the instance reaches a terminal state. See the [Resource Lock guide](/docs/how-to/resource-lock) for the full behavioral model, `keyExpression` authoring, conflict/409 handling, and examples.
 
 ### Query Roles
 

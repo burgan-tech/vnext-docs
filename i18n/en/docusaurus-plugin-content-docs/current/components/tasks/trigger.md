@@ -10,12 +10,17 @@ Four separate task types are available for workflow instance management. Each ta
 
 ## Task Types
 
-- **StartTask** (Type: "11") - Starts new workflow instances
-- **DirectTriggerTask** (Type: "12") - Triggers transitions on existing instances
-- **GetInstanceDataTask** (Type: "13") - Retrieves instance data
-- **SubProcessTask** (Type: "14") - Launches independent subprocess instances
+The four trigger tasks documented on this page (links jump to the section on this page):
 
-The query-side members of the same family are documented on their own pages: [GetInstances Task](/docs/components/tasks/get-instances) (Type: "15", instance list) and [GetInstance Task](/docs/components/tasks/get-instance) (Type: "19", full single-instance projection).
+- [**StartTask** (Type: "11")](#1-starttask-type-11) - Starts new workflow instances
+- [**DirectTriggerTask** (Type: "12")](#2-directtriggertask-type-12) - Triggers transitions on existing instances
+- [**GetInstanceDataTask** (Type: "13")](#3-getinstancedatatask-type-13) - Retrieves instance data
+- [**SubProcessTask** (Type: "14")](#4-subprocesstask-type-14) - Launches independent subprocess instances
+
+The query-side members of the same family are documented on their own pages:
+
+- [**GetInstances Task** (Type: "15")](/docs/components/tasks/get-instances) - Instance list with filtering
+- [**GetInstance Task** (Type: "19")](/docs/components/tasks/get-instance) - Full single-instance projection (metadata + data)
 
 ## Features
 

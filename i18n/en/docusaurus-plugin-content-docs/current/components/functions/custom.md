@@ -217,7 +217,7 @@ A function can declare an optional **`attributes.cache`** block that caches its 
 }
 ```
 
-Fields: `keyExpression` (Dynamic Expresso, takes precedence) or static `key`; `storeName` (defaults to the runtime's `DAPR_STATE_STORE_NAME`); `ttlInSeconds`; `consistency` (`Eventual`/`Strong`); `bypassOnCacheError` (default `true` — cache failures fall back to executing the function); and `generationKey` / `generationKeyExpression` for **generation-namespace invalidation** — bumping the generation stamp in the state store invalidates the whole cache family without deletes. `Instance.Version` is available in key expressions so a new config version self-invalidates.
+Fields: `keyExpression` (Dynamic Expresso, takes precedence) or static `key`; `storeName` (defaults to the runtime's `DAPR_STATE_STORE_NAME`); `ttlInSeconds`; `consistency` (`Eventual`/`Strong`); `bypassOnCacheError` (default `true` — cache failures fall back to executing the function); and `generationKey` / `generationKeyExpression` for **generation-namespace invalidation** — bumping the generation stamp in the state store invalidates the whole cache family without deletes. `Instance.Version` is available in key expressions so a new config version self-invalidates. Add `varyByHeaders` (exact request-header names) and/or `varyByHeaderPrefixes` (header-name prefixes) to keep **separate cache variants per header value** — they feed the `varyKey(context)` key-expression helper (#839).
 
 > 🚧 Full English translation of this section is pending. See the [Turkish page](/docs/components/functions/custom) for the complete field table and details.
 

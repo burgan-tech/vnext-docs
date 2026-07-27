@@ -54,6 +54,7 @@ const sidebars: SidebarsConfig = {
             'components/tasks/get-instance',
             'components/tasks/state-store',
             'components/tasks/cache-aside',
+            'components/tasks/dapr-conversation',
             'components/tasks/notification',
             'components/tasks/dapr-service',
             'components/tasks/dapr-pubsub',
@@ -95,6 +96,7 @@ const sidebars: SidebarsConfig = {
         'how-to/error-handling',
         'how-to/instance-filtering',
         'how-to/event-driven-workflows',
+        'how-to/resource-lock',
         'how-to/view-selection',
         'how-to/async-sync',
         {
