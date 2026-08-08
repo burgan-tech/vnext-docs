@@ -253,6 +253,18 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{functi
 
 ---
 
+## Function Contract & Discovery <sup>New</sup>
+
+As of v0.0.79 a function can declare a full client contract — all fields are opt-in:
+
+- **`verbs`** (`GET`/`POST`/`PATCH`/`DELETE`) — an undeclared verb returns **405** with an `Allow` header.
+- **`inputSchema`** — the request body is validated against the resolved `sys-schemas` contract (**400** with field-level errors on violation); **`outputSchema`** is declarative only.
+- **`inputView` / `outputView`** — the `sys-views` contract a client renders to collect input / present output.
+- Every slot accepts a single reference or **rule-based entries** (declaration order, first match wins, trailing rule-less fallback).
+- Discovery endpoints answer *may I run this, with which verb, and which view/schema applies now*: `GET .../functions/{function}/info`, `/view?target=input|output`, `/schema?target=input|output` — at domain and instance scope, guarded by the same scope/role policy as execution (`403` on denial).
+
+> 🚧 Full English translation is pending. See the [Turkish page](/docs/components/functions/custom) for the complete contract tables, rule-slot semantics, and discovery endpoint details.
+
 ## System Functions
 
 The vNext platform provides ready-to-use system functions for every workflow instance:

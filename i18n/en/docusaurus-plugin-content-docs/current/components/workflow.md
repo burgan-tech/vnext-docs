@@ -245,6 +245,14 @@ See [Sync vs Async execution](/docs/how-to/async-sync).
 
 The **global error handling** definition at the workflow level. Applied if no boundary is defined at task or state level.
 
+## What's New in v0.0.79
+
+- **Role-scoped `availableIn`**: each entry of `availableIn` (shared and well-known transitions) may be a bare state key or `{ "state": "...", "roles": [...] }`; the entry's roles compose with the transition's own `roles` as an **AND**. A role-less entry behaves exactly like the legacy string.
+- **`updateData` / `exit` discovery**: both are now listed in `availableTransitions` (by configured key) and their `roles` actually filter the list. Roles are still not enforced at execution — they control what a client is *offered*.
+- **Execution state gate**: well-known transitions (`cancel`/`updateData`/`exit`) can no longer be POSTed from a state excluded by `availableIn` (`Transition:100024`).
+
+> 🚧 Full English translation is pending. See the [Turkish page](/docs/components/workflow) for the full shape, validation rules, and examples.
+
 ## Related
 
 - [Workflow (conceptual)](/docs/components/workflow) — workflow as a concept

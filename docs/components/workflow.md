@@ -715,7 +715,7 @@ Girdi modelini bu ayrıma göre kurgulayın: S2S tetikleyiciler için start `sch
 | `triggerType` | integer | **Evet** | Sabit: `0` (yalnızca manual) |
 | `versionStrategy` | string | **Evet** | Versiyon stratejisi |
 | `labels` | array | **Evet** | Çoklu dil etiketleri |
-| `availableIn` | string[] | Hayır | Cancel'ın geçerli olduğu state'ler |
+| `availableIn` | (string \| object)[] | Hayır | Cancel'ın geçerli olduğu state'ler. Öğeler bare state key veya rol daraltmalı `{ state, roles }` objesi olabilir <sup>New</sup> — bkz. [availableIn ve rol daraltması](#availablein-ve-rol-daraltması) |
 | `view`, `schema`, `mapping`, `onExecutionTasks`, `roles` | — | Hayır | Standart transition alanları |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 
@@ -729,18 +729,47 @@ Cancel ile aynı yapıda. **Client implementasyonlarında** ekran çıkışları
 
 Cancel ile aynı yapıda, tek fark: `target` her zaman `$self` olmalıdır. Alt akışlardan üst akış data'sını **ara bloklarda güncellemek** için kullanılır.
 
+:::info Well-known transition'ların keşfi ve yetkisi <sup>New</sup>
+`cancel`, `updateData` ve `exit` artık State fonksiyonunun `availableTransitions` listesinde — trigger tipine ve `availableIn` kapsamına göre — **configured key**'leriyle listelenir ve `roles` tanımları diğer transition'lar gibi listeyi **filtreler** (önceden `updateData`/`exit` üzerindeki `roles` hiç değerlendirilmiyordu). Roller execution'da enforce edilmez; `roles` client'a *ne sunulacağını* belirler. Execution tarafında ise `availableIn` **state gate** olarak uygulanır: kapsam dışı bir state'ten gelen istek `Transition:100024` ile reddedilir (önceden her state'ten çağrılabiliyordu). Bkz. [Built-in Functions → Well-known transition'lar listede](/docs/components/functions/built-in#well-known-transitionlar-listede).
+:::
+
 ### Shared Transitions
 
 Birden fazla state'den erişilebilen **ortak transition**'lardır. Standart transition alanlarına ek olarak:
 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
-| `availableIn` <sup>New</sup> | string[] | Hayır | Transition'ın geçerli olduğu state key'leri. Tanımlanmazsa **tüm state'lerden** erişilebilir |
+| `availableIn` | (string \| object)[] | Hayır | Transition'ın geçerli olduğu state'ler. Öğeler bare state key veya rol daraltmalı `{ state, roles }` objesi olabilir <sup>New</sup> (aşağıya bakın). Tanımlanmazsa **tüm state'lerden** erişilebilir |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 | `event` <sup>New</sup> | object \| null | **Koşullu** | Event tanımı. `triggerType: 3` ise **zorunlu** — bkz. [Event Transition](#event-transition) |
 | `resourceLock` <sup>New</sup> | object \| null | Hayır | Dağıtık kaynak kilidi. Ayrıntı: [Kaynak Kilitleme](/docs/how-to/resource-lock) |
 
 Shared transition'larda `triggerType` yalnızca `0` (Manual), `2` (Scheduled) veya `3` (Event) olabilir.
+
+### availableIn ve rol daraltması
+
+<sup>New</sup> `availableIn` dizisinin her öğesi iki formdan biri olabilir ve iki form **aynı dizide karışabilir**:
+
+```json
+"availableIn": [
+  "review",
+  {
+    "state": "approval",
+    "roles": [
+      { "role": "backoffice.supervisor", "grant": "allow" }
+    ]
+  }
+]
+```
+
+- **Bare string** — transition o state'te herkese (transition'ın kendi `roles` gate'i dahilinde) sunulur. Eski davranışla birebir aynıdır.
+- **`{ state, roles }` objesi** — transition o state'te yalnızca `roles` daraltmasını da geçen çağıranlara sunulur.
+
+Rol bileşimi **AND**'dir: `transition.roles` global gate'tir, eşleşen `availableIn` öğesinin `roles`'u onu o state için daraltır — **ikisi de izin vermelidir**. Her iki seviye de aynı grant değerlendirme çekirdeğinden geçer; DENY-wins ve allowlist/blacklist kuralları iki seviyede özdeştir (bkz. [Yetkilendirme → Grant Değerlendirme](/docs/concepts/authorization)). Rol'süz (`roles` boş/yok) öğe hiçbir daraltma uygulamaz.
+
+Doğrulama kuralları: `state` mevcut bir state key'i olmalıdır, aynı state için **mükerrer öğe** reddedilir (ilk eşleşen kazandığı için mükerrer öğe sessizce ölü kalırdı), öğe içi rol grant'ları dynamic-role sözdizimi denetiminden geçer.
+
+`availableIn`, shared transition'ların yanı sıra `cancel` / `exit` / `updateData` well-known transition'larında da aynı iki formu destekler ve execution'da **state gate** olarak uygulanır.
 
 ---
 

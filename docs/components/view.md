@@ -110,7 +110,7 @@ State veya transition seviyesinde view tanımları yapılır. **vNext Client Wor
 |------|-----|---------|----------|
 | `type` | integer | **Evet** | View içerik tipi — aşağıdaki enum tablosuna bakın |
 | `content` | string / object / array | **Evet** | View içeriği. Kabul edilen tip, `type` değerine bağlıdır (aşağıda) |
-| `display` | string | Hayır | Gösterim modu — aşağıdaki enum tablosuna bakın |
+| `display` | string / object | Hayır | Gösterim modu. String formu SDI gösterimini bildirir (geriye dönük uyumlu); obje formu `{ sdi, mdi }` ile client moduna göre gösterim bildirir <sup>New</sup> — aşağıdaki enum tablosuna bakın |
 | `labels` | array | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`) |
 | `renderer` <sup>New</sup> | string | Hayır | UI SDK render motoru belirleyicisi. Yalnızca `type: 1` (JSON) için geçerlidir — aşağıdaki enum tablosuna bakın |
 | `_comment` | string | Hayır | Açıklama / yorum |
@@ -153,6 +153,28 @@ State veya transition seviyesinde view tanımları yapılır. **vNext Client Wor
 | `top-sheet` | Üst sayfa (top sheet) |
 | `drawer` | Yan menü / çekmece |
 | `inline` | Sayfa içi gömülü görünüm |
+
+### SDI/MDI Gösterim Modları <sup>New</sup>
+
+`display` iki biçimde yazılabilir:
+
+- **String formu** (geriye dönük uyumlu): yalnızca **SDI** (single-document interface — tek doküman gösteren client) gösterimini bildirir. `"display": "full-page"` bugüne kadarki anlamını aynen korur.
+- **Obje formu**: gösterimi client moduna göre ayrı ayrı bildirir. **MDI** (multi-document interface — birden fazla dokümanı yan yana açan client) için view'ın sekme, pencere veya bölünmüş panel olarak nasıl açılacağı ancak bu formla söylenebilir.
+
+```json
+{
+  "attributes": {
+    "type": 1,
+    "display": { "sdi": "full-page", "mdi": "popup" },
+    "renderer": "pseudo-ui",
+    "content": { }
+  }
+}
+```
+
+- `sdi` ve `mdi` alanlarından **en az biri** zorunludur; ikisi de yukarıdaki enum tablosundaki aynı değer setini kullanır.
+- Runtime response'unda `display` alanı SDI değerini taşımaya devam eder; obje formu ek olarak `modes` alanıyla döner. Mevcut client'lar etkilenmez.
+- Yalnızca SDI bildiren obje formu, component JSON'ında bare string olarak round-trip eder (dosya değişmez).
 
 ### `renderer` Enum Değerleri <sup>New</sup>
 

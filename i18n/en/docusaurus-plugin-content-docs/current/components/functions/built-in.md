@@ -760,6 +760,14 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/autho
 | `functionKey` | Function to check (function-level roles). |
 | `queryRoles` | When true, check flow and state queryRoles for the instance’s current state (and subflow context if applicable). |
 
+## What's New in v0.0.79
+
+- **`correlations` list** in the state response — the full child-correlation set, active **and** completed, ordered by `createdAt`, each entry carrying `isCompleted`, `completedAt`, `terminalOutcome` (`completed`/`faulted`/`canceled`), `currentState`, `stateChangedAt`, `createdAt`. `activeCorrelations` is unchanged.
+- **`functions` pointer** in the state response (`{ "hasFunctions": true, "href": ".../functions/catalog" }`) linking to the new built-in **Catalog function** (`GET .../instances/{instance}/functions/catalog`), which returns the workflow's declared functions in declaration order, **role-filtered**, with scope-appropriate hrefs.
+- **Well-known transitions listed**: configured `cancel`, `updateData` and `exit` transitions now appear in `transitions` (by configured key, with a `kind` discriminator) and their `roles` filter the list.
+
+> 🚧 Full English translation is pending. See the [Turkish page](/docs/components/functions/built-in) for the complete field tables and behavior notes.
+
 ## Best Practices
 
 ### 1. Use Long-Polling Efficiently
