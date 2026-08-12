@@ -72,6 +72,33 @@ Function'ı **instance context'inde** çalıştırır.
 | `QueryRoles` | query | Query roles dahil edilsin mi (boolean) |
 | `If-None-Match` | header | ETag (304 Not Modified için) |
 
+### Function Keşif Endpoint'leri <sup>New</sup>
+
+Bir function'ın kontratını (verb'ler, çağırma URL'si, aktif input/output view ve şema) çağırmadan keşfetmek için altı `GET` rotası:
+
+```http
+GET /api/v1/{domain}/functions/{function}/info
+GET /api/v1/{domain}/functions/{function}/view?target=input|output
+GET /api/v1/{domain}/functions/{function}/schema?target=input|output
+
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}/info
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}/view?target=input|output
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}/schema?target=input|output
+```
+
+| Parameter | In | Description |
+|---|---|---|
+| `target` | query | `input` veya `output` — hangi kontrat slotu (`/view` ve `/schema` için) |
+
+- `/info`, izin verilen verb'leri, çağırma URL'sini ve `hasView`/`hasSchema` bayraklarını döner.
+- Scope/rol denetimi function execution ile aynıdır; yetkisiz çağırana `403` döner. Built-in sistem function'ları için `/info` `404` döner.
+- Slot çözümü boşsa `/view` ve `/schema` `404` döner. Bu rotalarda ETag/304 desteği yoktur.
+- Ayrıntı: [Custom Functions → Fonksiyon Keşif Endpointleri](/docs/components/functions/custom)
+
+### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/catalog` <sup>New</sup>
+
+Workflow'un tanımlı function'larının **rol filtreli** listesini döner (`{ "functions": [ { "name", "version", "scope", "href" } ] }`, bildirim sırasında). State function yanıtındaki `functions.href` bu rotayı işaret eder. Ayrıntı: [Built-in Functions → Catalog](/docs/components/functions/built-in).
+
 ---
 
 ## Instance Endpoints

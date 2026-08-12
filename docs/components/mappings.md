@@ -179,6 +179,8 @@ public sealed class ScriptContext
 
     public InstanceMutations Mutations { get; }
 
+    public IRelatedInstanceAccessor Related { get; }
+
     public IRuntimeInfoProvider Runtime { get; private set; }
     public Dictionary<string, dynamic> Definitions { get; private set; }
     public Dictionary<string, dynamic?> TaskResponse { get; private set; }
@@ -247,6 +249,43 @@ var userInfo = context.Instance.Data.userInfo;
 var paymentSchedule = context.Instance.Data.paymentSchedule;
 var currentLogin = context.Instance.Data.login.currentLogin;
 ```
+
+### Related
+
+<sup>New</sup> `context.Related`, betiğin **ilişkili** bir workflow instance'ının verisini okumasını sağlar: bu instance'ı SubFlow/SubProcess olarak başlatan **parent** (bir üst seviye) veya bu instance'ın kendi **correlation'ları** (bir alt seviye). Bu API'den önce ilişkili veriye ulaşmanın tek yolu, veriyi output mapping'lerle parent/child sınırından kopyalamaktı — bu kopya hem bayatlıyor hem de instance payload'ını büyütüyordu.
+
+```csharp
+// Bir subflow'un input binding'inde — parent'ı oku
+var parent = await context.Related.ParentAsync();
+var limit  = GetPropertyValue<decimal>(parent?.Data, "creditLimit", 0m);
+
+// Parent'ta bir view condition'ında — KYC child'ı bitti mi?
+var kyc = await context.Related.SubAsync("kyc-flow");
+return kyc?.IsCompleted == true;
+
+// Tekrarlanan subprocess'ler üzerinde aggregate
+var uploads = await context.Related.SubsAsync("doc-upload");
+return uploads.Count(u => u.CorrelationCompleted == true) >= 3;
+```
+
+| Metot | Döndürdüğü |
+|-------|------------|
+| `ParentAsync()` | Bu instance'ı başlatan parent instance; parent yoksa `null` |
+| `SubAsync("key")` | Verilen sub workflow key'i ile eşleşen **en yeni** correlation (`CreatedAt`'e göre); yoksa `null` |
+| `SubsAsync("key")` | Eşleşen **tüm** correlation'lar, eskiden yeniye; yoksa boş liste |
+
+Davranış ve tasarım notları:
+
+- **`IsCompleted` ile `CorrelationCompleted` farklı alanlardır.** İlki hedef instance'ın durumudur; ikincisi ilişkinin (correlation'ın) kapanıp kapanmadığıdır ve parent yönünde `null`'dur. Subflow tamamlanma penceresi sırasında ikisi birbirinden ayrışabilir — birbirinin yerine kullanmayın.
+- **Yokluk veridir; hata fault'tur.** Parent yok / correlation yok / instance silinmiş ⇒ `null` veya boş liste. Okuma hatası veya limit aşımı ⇒ `RelatedInstanceAccessException`. Sessiz `null`, "parent yok" ile ayırt edilemeyeceği için hata asla `null`'a dönüştürülmez.
+- **Lazy + memoized**: hiçbir şey önceden çekilmez; sonuçlar context ömrü boyunca cache'lenir, `SubsAsync` tek sorguda toplu okur. Context başına çözümleme sayısı `Workflow:Scripting:RelatedAccess:MaxResolutionsPerContext` ile sınırlıdır (varsayılan **10**).
+- Tamamlanmış correlation'lar da görünürdür — biten bir subflow'un çıktısı okunabilir kalır.
+- Okuma, mevcut transition'ın **transaction'ı içinde** çalışır; aynı transition'da motorun kendi commit edilmemiş yazmalarını görür.
+- Cross-domain okuma internal endpoint'ler üzerinden, timeout / retry / circuit-breaker ile yapılır; aynı domain'de süreç dışına çıkılmaz.
+
+:::warning x-roles kopya ile taşınmaz
+`Related` okumaları **filtresizdir** (query-role kontrolü ve `x-roles` alan filtresi uygulanmaz) — çağrı, motorun kendi correlation çerçevesi içindeki deterministik bir okumadır. Bu yüzden ilişkili instance'ın `x-roles` ile kısıtlı bir alanını output mapping'le **bu** instance'ın verisine kopyalamak, o alanı bu instance'ı okuyabilen herkese açar. Kısıtlı alanları kopyalamadan, karar vermek için okuyup bırakın.
+:::
 
 ### Mutations
 

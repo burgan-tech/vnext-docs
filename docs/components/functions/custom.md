@@ -13,11 +13,13 @@ description: Kullanıcı tanımlı fonksiyonlar ve C# scripting
 1. [Genel Bakış](#genel-bakış)
 2. [Function Tanımı](#function-tanımı)
 3. [Function Özellikleri](#function-özellikleri)
-4. [Fonksiyon Cache](#fonksiyon-cache)
-5. [Tüketim Noktaları](#tüketim-noktaları)
-6. [Sistem Fonksiyonları](#sistem-fonksiyonları)
-7. [Kullanım Örnekleri](#kullanım-örnekleri)
-8. [En iyi Uygulamalar](#en-iyi-uygulamalar)
+4. [Fonksiyon Kontratı](#fonksiyon-kontratı)
+5. [Fonksiyon Cache](#fonksiyon-cache)
+6. [Tüketim Noktaları](#tüketim-noktaları)
+7. [Fonksiyon Keşif Endpointleri](#fonksiyon-keşif-endpointleri)
+8. [Sistem Fonksiyonları](#sistem-fonksiyonları)
+9. [Kullanım Örnekleri](#kullanım-örnekleri)
+10. [En iyi Uygulamalar](#en-iyi-uygulamalar)
 
 ---
 
@@ -100,7 +102,12 @@ Her fonksiyon bir task çalıştırabilir ve task sonucundaki veri mapping ile i
 | `labels` | `array` | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`) |
 | `roles` | `array` | Hayır | Yetkilendirme rolleri. Her öğe: `role` (string) + `grant` (`allow` / `deny`). DENY her zaman ALLOW'u geçersiz kılar |
 | `rawResponse` | `boolean` | Hayır | `true`: mapped rawData doğrudan response olarak döndürülür. `false` (varsayılan): platform kendi pattern modeli üzerinden çıktı verir. Legacy API'lerden vnext'e geçiş senaryolarında kullanılır |
-| `cache` <sup>New</sup> | `object` | Hayır | Read-through response cache konfigürasyonu — bkz. [Fonksiyon Cache](#fonksiyon-cache) |
+| `cache` | `object` | Hayır | Read-through response cache konfigürasyonu — bkz. [Fonksiyon Cache](#fonksiyon-cache) |
+| `verbs` <sup>New</sup> | `string[]` | Hayır | Kabul edilen HTTP verb'leri (`GET`, `POST`, `PATCH`, `DELETE`) — bkz. [Fonksiyon Kontratı](#fonksiyon-kontratı) |
+| `inputSchema` <sup>New</sup> | `object \| array` | Hayır | Request body'yi tanımlayan `sys-schemas` kontratı; runtime tarafından **valide edilir** — bkz. [Fonksiyon Kontratı](#fonksiyon-kontratı) |
+| `outputSchema` <sup>New</sup> | `object \| array` | Hayır | Response body'yi tanımlayan `sys-schemas` kontratı; yalnızca deklaratif |
+| `inputView` <sup>New</sup> | `object \| array` | Hayır | Input toplamak için render edilecek `sys-views` kontratı |
+| `outputView` <sup>New</sup> | `object \| array` | Hayır | Output sunmak için render edilecek `sys-views` kontratı |
 
 ### Scope Değerleri
 
@@ -215,6 +222,60 @@ public class FunctionOutputMapping : IOutputHandler
 
 ---
 
+## Fonksiyon Kontratı
+
+Bir fonksiyon, client'ların keşfedebileceği **deklaratif bir kontrat** taşıyabilir: hangi HTTP verb'lerini kabul ettiği, request/response body şemaları ve input/output için render edilecek view'lar. Kontrat alanlarının tamamı **opt-in**'dir — hiçbirini bildirmeyen fonksiyon eskisi gibi davranır.
+
+```json
+"attributes": {
+  "scope": "F",
+  "verbs": ["POST"],
+  "inputSchema": { "key": "calc-limit-input", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" },
+  "outputSchema": { "key": "calc-limit-output", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" },
+  "inputView": [
+    {
+      "rule": { "location": "./src/IsMobile.csx", "code": "<BASE64>" },
+      "view": { "key": "calc-limit-form-mobile", "domain": "core", "flow": "sys-views", "version": "1.0.0" }
+    },
+    {
+      "view": { "key": "calc-limit-form", "domain": "core", "flow": "sys-views", "version": "1.0.0" }
+    }
+  ]
+}
+```
+
+### Verb kısıtı (`verbs`)
+
+- Deklare edilmemiş bir verb ile çağrı **405 Method Not Allowed** döner; `Allow` header'ı deklare edilen verb'leri listeler.
+- `verbs` tanımsız veya boşsa her verb kabul edilir (önceki davranış).
+- Denetim, scope ve rol kontrollerinden **sonra**, herhangi bir task çalışmadan **önce** yapılır — yetkisiz bir çağıran fonksiyonun şekli hakkında bilgi edinemez.
+
+### Body doğrulama (`inputSchema` / `outputSchema`)
+
+| Durum | Sonuç |
+|-------|-------|
+| `inputSchema` tanımsız veya request body yok | Doğrulama yapılmaz |
+| `inputSchema` tanımlı ve body var | Body, çözümlenen şemaya karşı valide edilir; hata → **400** + alan bazlı hatalar |
+| `outputSchema` | Hiçbir zaman valide edilmez — yalnızca deklaratiftir |
+
+Şema ihlalleri, transition şema doğrulamasıyla **aynı formatta** raporlanır (culture çözümlemesi dahil).
+
+### Rule-based slot'lar
+
+`inputSchema`, `outputSchema`, `inputView` ve `outputView` alanlarının her biri üç biçimde yazılabilir:
+
+1. **Tek referans** — doğrudan `{key, domain, flow, version}` (veya `ref`).
+2. **Rule-based dizi** — her öğe `rule` (IConditionMapping uygulayan ScriptCode) + `view`/`schema` referansı taşır. Öğeler **bildirim sırasında** değerlendirilir, **ilk eşleşen kazanır**; `rule`'suz öğe her zaman eşleşir, bu yüzden **son öğe** olmalıdır (fallback).
+3. **Sarmalı form** — `{ "views": [...] }` / `{ "schemas": [...] }`.
+
+Değerlendirilemeyen bir rule loglanır ve **atlanır** (fatal değildir). Hiçbir öğe eşleşmezse slot "**kontrat yok**" olarak çözülür — bu bir hata değildir: doğrulama atlanır, `/info` `hasView`/`hasSchema` alanlarını `false` raporlar, içerik rotaları `404` döner.
+
+:::warning Ölü inputSchema
+Yalnızca body taşıyamayan verb'ler bildiren bir fonksiyonda (`"verbs": ["GET"]` gibi) `inputSchema` tanımlamak **doğrulama hatasıdır** — şema hiçbir zaman değerlendirilemez.
+:::
+
+---
+
 ## Fonksiyon Cache
 
 Bir fonksiyon, isteğe bağlı **`attributes.cache`** bloğu ile **tüm yanıtını** bir Dapr state store'da cache'leyebilir. Cache **hit** olduğunda yanıt tek bir cache okumasıyla döner — task'lar hiç çalıştırılmaz; **miss** olduğunda fonksiyon normal çalışır ve sonuç cache'e yazılır (read-through). Gerçek bir konfigürasyon-değerlendirme fonksiyonunda yanıt süresi ~230ms'den ~93ms'ye düşmüştür.
@@ -305,6 +366,30 @@ DELETE /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{fun
 :::info BFF Maliyeti
 POST, PATCH ve DELETE verb desteği, function endpoint'lerinin tam CRUD operasyonlarını karşılamasına olanak tanır. Bu sayede ayrı BFF katmanı geliştirme ihtiyacı minimize edilir.
 :::
+
+---
+
+## Fonksiyon Keşif Endpointleri
+
+<sup>New</sup> Bir client, fonksiyonu çağırmadan önce *"bunu çalıştırabilir miyim, hangi verb ile, hangi URL'de ve şu an hangi view/şema geçerli?"* sorusunu keşif endpoint'leriyle yanıtlar:
+
+```http
+GET /api/v1/{domain}/functions/{function}/info
+GET /api/v1/{domain}/functions/{function}/view?target=input|output
+GET /api/v1/{domain}/functions/{function}/schema?target=input|output
+
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}/info
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}/view?target=input|output
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}/schema?target=input|output
+```
+
+- **`/info`** — izin verilen verb'leri, çağırma URL'sini ve o an geçerli view/şema href'lerini state fonksiyonunun hyperlink stiliyle döner. `hasView` / `hasSchema` bayrakları href'i takip etmenin **şu an** içerik döndürüp döndürmeyeceğini söyler; rule request durumunu okuduğu için sonraki bir çağrıda eşleşebilir — href her durumda verilir.
+- **`/view`** ve **`/schema`** — `target=input|output` parametresiyle çözümlenen kontrat içeriğini döner; slot çözümü boşsa `404`.
+- Keşif, **execution ile aynı scope ve rol denetiminden** geçer: fonksiyonu çağıramayan bir kullanıcı şeklini de öğrenemez — yanıt `403`'tür (boş bir tanım değil).
+- Built-in sistem fonksiyonlarının (`state`, `view`, `data`, …) `sys-functions` bileşeni yoktur; `/info` bunlar için `404` döner.
+- Bu rotalarda ETag/304 desteği yoktur.
+
+Workflow'un fonksiyon listesini keşfetmek için built-in [`catalog` fonksiyonuna](/docs/components/functions/built-in#catalog-fonksiyonu) bakın.
 
 ---
 

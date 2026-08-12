@@ -572,6 +572,7 @@ public sealed class ScriptContext
     public Definitions.Workflow Workflow { get; private set; }
     public IRuntimeInfoProvider Runtime { get; private set; }
     public Transition Transition { get; private set; }
+    public IRelatedInstanceAccessor Related { get; }
     public Dictionary<string, dynamic> Definitions { get; private set; }
     public Dictionary<string, dynamic?> TaskResponse { get; private set; } = new();
     public Dictionary<string, dynamic> MetaData { get; private set; } = new();
@@ -592,6 +593,7 @@ public sealed class ScriptContext
 | `Workflow` | Workflow tanımı (state, transition, task). |
 | `Runtime` | Ortam, konfigürasyon, servis keşfi. |
 | `Transition` | Güncel geçiş bilgisi. |
+| `Related` <sup>New</sup> | İlişkili instance erişimi (`IRelatedInstanceAccessor`): `ParentAsync()`, `SubAsync(key)`, `SubsAsync(key)`. Parent veya sub-item instance verisini kopyalamadan okur — bkz. [Mappings → Related](/docs/components/mappings#related). |
 | `Definitions` | Tekrar kullanılabilir bileşen tanımları (sözlük). |
 | `TaskResponse` | Tamamlanan task'ların sonuçları (**anahtar:** camelCase task tanımlayıcısı). |
 | `MetaData` | Süre/tanılama metrikleri ve özel audit datası. |

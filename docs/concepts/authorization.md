@@ -116,6 +116,16 @@ Her iki modda da **DENY her zaman ALLOW'u geçersiz kılar.** Yalnızca `deny` i
 Yalnızca `deny` grant'ı içeren mevcut bir set artık **blacklist** olarak değerlendirilir (listelenenler dışındaki herkese açık). Niyetiniz "herkesi engelle" idiyse en az bir `allow` grant'ı ekleyerek allow-list'e çevirin.
 :::
 
+### Tek değerlendirme çekirdeği
+
+<sup>New</sup> Transition `roles`, function `roles`, flow/state `queryRoles` ve şema `x-roles` — hepsi aynı şeyi değerlendirir: bir grant setini çağıranın rollerine karşı. v0.0.79 itibarıyla bu değerlendirme **tek bir çekirdekten** (`RoleGrantEvaluator`) geçer; DENY-önceliği, allow-list/blacklist yorumu, ön tanımlı sistem rolleri ve JSONPath (dynamic) grant çözümü **her yüzeyde birebir aynıdır**. Önceden kural dört ayrı yerde kopyalanmıştı ve kopyalar birbirinden ayrışmıştı — aynı transition hakkında farklı yüzeyler farklı sonuca varabiliyordu.
+
+Bu birleştirme birkaç gözlemlenebilir davranışı değiştirir (ör. `x-roles` içinde DENY'ın tüm set genelinde uygulanması, yalnızca-DENY setlerin rolsüz çağırana açılması, human-task listesinin execution ile hizalanması). Ayrıntılar ve geçiş adımları için bkz. [Breaking Changes: v0.0.79](/blog/breaking-changes/breaking-changes-v0-0-79).
+
+### availableIn rol daraltması
+
+<sup>New</sup> Shared ve well-known transition'larda `availableIn` öğeleri `{ state, roles }` formuyla state bazında rol daraltması taşıyabilir. Bileşim **AND**'dir: transition'ın kendi `roles` seti global gate'tir, eşleşen öğenin `roles`'u o state için daraltır — ikisi de izin vermelidir. Her iki seviye de aynı değerlendirme çekirdeğinden geçer. Bkz. [Workflow → availableIn ve rol daraltması](/docs/components/workflow#availablein-ve-rol-daraltması).
+
 ---
 
 ## Nerede Değerlendirilir?
@@ -123,9 +133,23 @@ Yalnızca `deny` grant'ı içeren mevcut bir set artık **blacklist** olarak de�
 | Bağlam | Alan | Etki |
 |--------|------|------|
 | Transition | `roles` | İlgili transition'ı kimin tetikleyebileceği |
+| Transition `availableIn` öğesi | `roles` <sup>New</sup> | Transition'ın o state'te kime sunulacağı (transition `roles` ile AND) |
 | Flow / State | `queryRoles` | Instance ve state'leri kimin sorgulayabileceği (state seviyesi root'u override eder). Built-in **state/data/view/schema** read fonksiyonlarınca current state üzerinde uygulanır; izin yoksa **403** |
+| Function | `roles` | Fonksiyonu kimin çağırabileceği ve keşif (`/info`, `catalog`) yanıtlarında kimin görebileceği |
 | State `alias` | `roles` | State'in role göre maskelenmiş görünümü |
 | Master şema property | `x-roles` | Alan (column) bazlı veri görünürlüğü |
+
+### Üç yüzey hizalaması
+
+<sup>New</sup> "Bu çağıran bu transition'ı çalıştırabilir mi?" sorusunu yanıtlayan üç yüzey v0.0.79'da hizalandı:
+
+| Yüzey | `availableIn` state kontrolü | Rol kontrolü |
+|-------|:---:|:---:|
+| State fonksiyonu `availableTransitions` | ✅ | ✅ |
+| `authorize` fonksiyonu | ✅ (yeni) | ✅ |
+| Transition execution | ✅ (well-known için yeni) | ❌ (tasarım gereği) |
+
+Roller execution'da **bilinçli olarak** enforce edilmez — hiçbir transition tipi için hiçbir zaman edilmedi. `roles`, client'a *ne sunulacağını* belirleyen bir discovery kontrolüdür; tek bir transition tipine 403 eklemek tutarsız bir güvenlik modeli yaratırdı.
 
 ---
 

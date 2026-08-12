@@ -146,6 +146,12 @@ Function'lar üç çağırma şekli sağlar:
 | `labels` | array | Hayır | Çoklu dil etiketleri (`label` + `language`) |
 | `roles` | array | Hayır | Yetkilendirme rolleri (`role` + `grant`). DENY her zaman ALLOW'u geçersiz kılar |
 | `rawResponse` | boolean | Hayır | `true`: mapped rawData doğrudan response olarak döndürülür. `false` (varsayılan): platform kendi pattern modeli üzerinden çıktı verir. Legacy API'lerden vnext'e geçiş için |
+| `verbs` <sup>New</sup> | string[] | Hayır | Function'ın kabul ettiği HTTP verb'leri — aşağıdaki enum tablosuna bakın. Tanımsız/boş ise tüm verb'ler kabul edilir (geriye dönük uyumlu) |
+| `inputSchema` <sup>New</sup> | object / array | Hayır | Request body'yi tanımlayan `sys-schemas` kontratı. Tanımlıysa body, kural değerlendirmesini kazanan şemaya karşı **valide edilir** (hata → `400`). Tek referans veya rule-based dizi — bkz. [Custom Functions → Fonksiyon Kontratı](/docs/components/functions/custom) |
+| `outputSchema` <sup>New</sup> | object / array | Hayır | Response body'yi tanımlayan `sys-schemas` kontratı. **Yalnızca deklaratif** — runtime'da enforce edilmez |
+| `inputView` <sup>New</sup> | object / array | Hayır | Client'ın function input'unu toplamak için render edeceği `sys-views` kontratı. Tek referans veya rule-based dizi |
+| `outputView` <sup>New</sup> | object / array | Hayır | Client'ın function output'unu sunmak için render edeceği `sys-views` kontratı. Tek referans veya rule-based dizi |
+| `cache` | object | Hayır | Read-through cache yapılandırması — bkz. [Custom Functions → Fonksiyon Cache](/docs/components/functions/custom) |
 
 ### `scope` Enum Değerleri
 
@@ -154,6 +160,17 @@ Function'lar üç çağırma şekli sağlar:
 | `D` | **Domain** — workflow bağımsız, domain seviyesinde çalışır |
 | `F` | **Flow** — flow seviyesinde çalışır |
 | `I` | **Instance** — belirli bir instance context'inde çalışır |
+
+### `verbs` Enum Değerleri <sup>New</sup>
+
+| Değer | Açıklama |
+|-------|----------|
+| `GET` | Request body'siz okuma |
+| `POST` | Request body ile oluşturma / çağırma |
+| `PATCH` | Request body ile kısmi güncelleme |
+| `DELETE` | Silme |
+
+Deklare edilmemiş bir verb ile yapılan çağrı **405 Method Not Allowed** döner; response'un `Allow` header'ı deklare edilen verb'leri listeler. `verbs` tanımsız veya boşsa kısıtlama uygulanmaz. Yalnızca body taşıyamayan verb'ler (ör. sadece `["GET"]`) ile birlikte `inputSchema` tanımlamak doğrulama hatasıdır.
 
 ### `task` / `onExecutionTasks[*]` Yapısı
 

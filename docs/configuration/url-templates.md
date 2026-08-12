@@ -6,7 +6,7 @@ description: Gateway Base URL ve Hateoas link şablonları yapılandırması
 
 # UrlTemplates Yapılandırması
 
-vNext platformu bir API gateway arkasında deploy ederken, Hateoas tarzı response linkleri için özel URL şablonları yapılandırabilirsiniz. Bu, API response'larında dönen instance URL'lerinin gateway yönlendirme yapılandırmanızla eşleşmesini sağlar.
+vNext platformunu bir API gateway arkasında deploy ederken, HATEOAS tarzı response linklerinin (state fonksiyonundaki `href`'ler, transition/function/catalog linkleri vb.) gateway yönlendirme yapılandırmanızla eşleşmesi gerekir. v0.0.79 itibarıyla bu, endpoint başına şablon yazmak yerine **tek bir `BasePath`** ayarıyla yapılır.
 
 ## Yapılandırma
 
@@ -15,22 +15,47 @@ vNext platformu bir API gateway arkasında deploy ederken, Hateoas tarzı respon
 ```json
 {
   "UrlTemplates": {
-    "Start": "/api/{0}/workflows/{1}/instances/start",
-    "Transition": "/api/{0}/workflows/{1}/instances/{2}/transitions/{3}",
-    "FunctionList": "/api/{0}/workflows/{1}/functions/{2}",
-    "InstanceList": "/api/{0}/workflows/{1}/instances",
-    "Instance": "/api/{0}/workflows/{1}/instances/{2}",
-    "InstanceHistory": "/api/{0}/workflows/{1}/instances/{2}/transitions",
-    "Data": "/api/{0}/workflows/{1}/instances/{2}/functions/data",
-    "View": "/api/{0}/workflows/{1}/instances/{2}/functions/view",
-    "Schema": "/api/{0}/workflows/{1}/instances/{2}/functions/schema?transitionKey={3}"
+    "BasePath": "/api/v1"
   }
 }
 ```
 
-## Şablon Parametreleri
+- Path'in altındaki bölüm (`/{domain}/workflows/…`) uygulamanın kendi controller route'ları tarafından sabitlenmiştir; deployment'a göre değişen tek şey **öndeki prefix**'tir. `BasePath` tam olarak bunu bildirir.
+- Bölüm **tamamen atlanırsa** varsayılan `/api/v1` kullanılır — uygulamanın kendi servis ettiği prefix. Standart deployment'ta hiçbir `UrlTemplates` yapılandırması gerekmez.
+- Baş/son slash normalize edilir (`api/v1/` ≡ `/api/v1`). **Boş string**, prefix'siz href üretir (root'a mount edilmiş host).
 
-Her şablon, çalışma zamanında değiştirilen konumsal parametreler kullanır:
+```json
+// Monitor host örneği
+{ "UrlTemplates": { "BasePath": "/api/v1/monitor" } }
+
+// Gateway /api/{domain}/… servis ediyorsa
+{ "UrlTemplates": { "BasePath": "/api" } }
+```
+
+## Çözümleme Kuralı
+
+Her endpoint'in etkin şablonu şu şekilde hesaplanır:
+
+```
+Effective(X) = override(X) ?? Normalize(BasePath) + BuiltInRelative(X)
+```
+
+- `BuiltInRelative(X)` — uygulamanın kendi route şekli (ör. `/{0}/workflows/{1}/instances/{2}/transitions/{3}`).
+- `override(X)` — isteğe bağlı, endpoint başına tam şablon. Tanımlıysa **verbatim (olduğu gibi)** kullanılır; `BasePath` **öne eklenmez**. Bu sayede önceki tüm-şablonlar-listeli stilde yazılmış herhangi bir değer — `UrlTemplates__Transition` gibi ortam değişkeni override'ları dahil — değişmeden çalışmaya devam eder.
+
+```json
+// Endpoint-bazlı override (nadiren gerekir) — tam yol olarak yazılır
+{
+  "UrlTemplates": {
+    "BasePath": "/api/v1",
+    "Transition": "/domains/{0}/flows/{1}/instances/{2}/execute/{3}"
+  }
+}
+```
+
+### Şablon Parametreleri
+
+Override şablonları çalışma zamanında değiştirilen konumsal parametreler kullanır:
 
 | Parametre | Açıklama | Örnek |
 |-----------|----------|-------|
@@ -39,74 +64,43 @@ Her şablon, çalışma zamanında değiştirilen konumsal parametreler kullanı
 | `{2}` | Instance ID | `18075ad5-e5b2-4437-b884-21d733339113` |
 | `{3}` | Transition key veya bağlama özgü parametre | `approve`, `reject` |
 
-## Şablon Açıklamaları
-
-| Şablon | Amaç | Oluşturulan URL Örneği |
-|--------|------|------------------------|
-| **Start** | Yeni instance başlatma endpoint'i | `/api/ecommerce/workflows/payment-processing/instances/start` |
-| **Transition** | Instance üzerinde transition tetikleme | `/api/ecommerce/workflows/payment-processing/instances/abc-123/transitions/approve` |
-| **FunctionList** | HATEOAS fonksiyon keşfi şablonu (+: key ile `GET .../workflows/{workflow}/functions/{function}` **kaldırıldı**—**InstanceList** ve instance kapsamlı **Data** / **View** / **State** kullanın) | `/api/ecommerce/workflows/payment-processing/functions/view` |
-| **InstanceList** | Workflow instance'larını listeleme | `/api/ecommerce/workflows/payment-processing/instances` |
-| **Instance** | Belirli bir instance getirme | `/api/ecommerce/workflows/payment-processing/instances/abc-123` |
-| **InstanceHistory** | Instance transition geçmişi | `/api/ecommerce/workflows/payment-processing/instances/abc-123/transitions` |
-| **Data** | Instance verisi getirme | `/api/ecommerce/workflows/payment-processing/instances/abc-123/functions/data` |
-| **View** | Instance görünümü getirme | `/api/ecommerce/workflows/payment-processing/instances/abc-123/functions/view` |
-| **Schema** | Transition şeması getirme | `/api/ecommerce/workflows/payment-processing/instances/abc-123/functions/schema?transitionKey=approve` |
-
 ## Kullanım Senaryoları
 
-**Senaryo 1: Path Prefix'li Gateway**
-
-Gateway'iniz vNext API'yi belirli bir path üzerinden yönlendiriyorsa:
+**Senaryo 1: Path prefix'li gateway** — gateway vNext API'yi belirli bir path üzerinden yönlendiriyorsa tek satır yeterlidir:
 
 ```json
-{
-  "UrlTemplates": {
-    "Start": "/vnext-api/v1/{0}/workflows/{1}/instances/start",
-    "Instance": "/vnext-api/v1/{0}/workflows/{1}/instances/{2}"
-  }
-}
+{ "UrlTemplates": { "BasePath": "/vnext-api/v1" } }
 ```
 
-**Senaryo 2: Farklı Domain Yapısı**
-
-Gateway'iniz route'ları farklı organize ediyorsa:
+**Senaryo 2: Route yapısı farklı gateway** — path'in prefix'ten sonrası da farklıysa ilgili endpoint'ler tek tek override edilir (verbatim):
 
 ```json
 {
   "UrlTemplates": {
+    "BasePath": "/api/v1",
     "Start": "/domains/{0}/flows/{1}/start",
     "Transition": "/domains/{0}/flows/{1}/instances/{2}/execute/{3}"
   }
 }
 ```
 
-**Senaryo 3: Subdomain Tabanlı Yönlendirme**
-
-Domain'ler gateway seviyesinde subdomain'lere eşleniyorsa:
+**Senaryo 3: Root'a mount edilmiş host** — prefix'siz href için boş `BasePath`:
 
 ```json
-{
-  "UrlTemplates": {
-    "Start": "/api/workflows/{1}/instances/start",
-    "Instance": "/api/workflows/{1}/instances/{2}"
-  }
-}
+{ "UrlTemplates": { "BasePath": "" } }
 ```
-
-> **Not:** Gateway'iniz domain yönlendirmesini subdomain'ler üzerinden yapıyorsa, domain parametresi (`{0}`) şablonlardan çıkarılabilir.
 
 ## Faydaları
 
-- **Çapraz Domain Yönlendirme**: Tek bir gateway arkasında birden fazla domain desteği
-- **İstemci Basitliği**: İstemciler URL manipülasyonu yapmadan Hateoas linklerini takip edebilir
-- **Gateway Esnekliği**: Herhangi bir gateway yönlendirme yapılandırmasına uyum
-- **API Versiyonlama**: Hateoas kullanan istemcileri bozmadan URL yapısı değişiklikleri
+- **Tek ayar**: 19 endpoint şablonunun host başına kopyalanması yerine bir satır; yeni eklenen bir endpoint şablonu `BasePath`'i **yapısal olarak** devralır — konfigürasyonda unutulduğu için prefix'siz href üretme hatası artık mümkün değildir.
+- **Çapraz Domain Yönlendirme**: Tek bir gateway arkasında birden fazla domain desteği.
+- **İstemci Basitliği**: İstemciler URL manipülasyonu yapmadan HATEOAS linklerini takip edebilir.
+- **Gateway Esnekliği**: Override'lar herhangi bir gateway yönlendirme yapısına uyum sağlar.
 
-## Varsayılan Davranış
+## Kapsam
 
-`UrlTemplates` yapılandırılmazsa, platform standart vNext API yapısıyla eşleşen varsayılan şablonları kullanır:
+`UrlTemplates` yalnızca **client'a dönen href'leri** etkiler. Servisler arası (internal) çağrıların kullandığı `InstanceUrlTemplates` bu yapılandırmanın kapsamı dışındadır ve versiyonunu `vNextApi:ApiVersion` ayarından alır.
 
-```
-/api/{domain}/workflows/{workflow}/instances/...
-```
+:::warning v0.0.79 davranış değişikliği
+Orchestration host önceden `/api/{domain}/…` şablonlarıyla geliyordu — route'ların gerektirdiği `v1` segmenti eksikti ve üretilen href'ler uygulamanın kendisinin 404 verdiği bir yolu gösteriyordu. v0.0.79'da bölüm kaldırıldı ve href'ler `/api/v1/…` üretir. Gateway'iniz gerçekten `/api/{domain}/…` servis ediyorsa `"BasePath": "/api"` ayarlayın. Bkz. [Breaking Changes: v0.0.79](/blog/breaking-changes/breaking-changes-v0-0-79).
+:::

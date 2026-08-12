@@ -16,13 +16,14 @@ Function API'leri, workflow instance'ları için sistem seviyesi operasyonlar sa
 4. [View Fonksiyonu](#view-fonksiyonu)
 5. [Schema Fonksiyonu](#schema-fonksiyonu)
 6. [Master Fonksiyonu](#master-fonksiyonu)
-7. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
-8. [En iyi Uygulamalar](#en-iyi-uygulamalar)
-9. [Ilgili Dökümanlar](#ilgili-dökümanlar)
+7. [Catalog Fonksiyonu](#catalog-fonksiyonu)
+8. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
+9. [En iyi Uygulamalar](#en-iyi-uygulamalar)
+10. [Ilgili Dökümanlar](#ilgili-dökümanlar)
 
 ## Genel Bakış
 
-vNext Runtime platformu, her workflow instance'ı için otomatik olarak kullanılabilir olan dört temel function API'si sağlar:
+vNext Runtime platformu, her workflow instance'ı için otomatik olarak kullanılabilir olan yerleşik function API'leri sağlar:
 
 | Fonksiyon | Amaç | Endpoint Deseni |
 |-----------|------|-----------------|
@@ -30,6 +31,8 @@ vNext Runtime platformu, her workflow instance'ı için otomatik olarak kullanı
 | **Data** | Instance verisini alma | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/data` |
 | **View** | View içeriğini alma | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/view` |
 | **Schema** | Transition schema içeriğini alma | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/schema` |
+| **Master** <sup>New</sup> | Instance'ın bağlı olduğu master şemayı alma | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/master` |
+| **Catalog** <sup>New</sup> | Workflow'un fonksiyon listesini keşfetme | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/catalog` |
 
 > **Not:** Kullanıcı tanımlı fonksiyonlar için bkz. [Custom Functions](/docs/components/functions/custom).
 
@@ -80,6 +83,10 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
     "terminateLongPoll": false,
     "fallbackTimeoutSeconds": 600
   },
+  "functions": {
+    "hasFunctions": true,
+    "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/functions/catalog"
+  },
   "state": "active",
   "status": "A",
   "activeCorrelations": [
@@ -95,6 +102,27 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
       "isCompleted": false,
       "status": "Running",
       "currentState": "pending-approval"
+    }
+  ],
+  "correlations": [
+    {
+      "correlationId": "corr-122",
+      "subFlowName": "kyc-subflow",
+      "subFlowType": "SubFlow",
+      "isCompleted": true,
+      "completedAt": "2026-08-01T09:14:22Z",
+      "terminalOutcome": "completed",
+      "currentState": "kyc-approved",
+      "stateChangedAt": "2026-08-01T09:14:20Z",
+      "createdAt": "2026-08-01T09:02:41Z"
+    },
+    {
+      "correlationId": "corr-123",
+      "subFlowName": "approval-subflow",
+      "subFlowType": "SubFlow",
+      "isCompleted": false,
+      "currentState": "pending-approval",
+      "createdAt": "2026-08-01T09:15:03Z"
     }
   ],
   "transitions": [
@@ -145,10 +173,14 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `interaction.terminateLongPoll` | `boolean` | `true`: client long-poll'u sonlandırıp `ack` göndermelidir. `false`: client durmuş long-poll'u instance durumundan bağımsız yeniden başlatır ve fallback süresi boyunca dener |
 | `interaction.fallbackTimeoutSeconds` | `integer` | Fallback penceresi (varsayılan `60`) |
 | `interaction.ack` | `object` | Acknowledge endpoint href'i. **Yalnızca** `terminateLongPoll: true` iken bulunur |
+| `functions` <sup>New</sup> | `object` | Workflow'un fonksiyon kataloğuna işaretçi — bkz. [Catalog Fonksiyonu](#catalog-fonksiyonu) |
+| `functions.hasFunctions` | `boolean` | Workflow'un tanımlı fonksiyonu olup olmadığı |
+| `functions.href` | `string` | Catalog fonksiyon endpoint URL'i |
 | `state` | `string` | Instance'ın mevcut durumu |
 | `status` | `string` | Instance durum kodu (A=Active, C=Completed, vb.) |
-| `activeCorrelations` | `array` | Aktif sub-flow'lar ve correlation'lar |
-| `transitions` | `array` | Mevcut durumdan kullanılabilir transition'lar (+ role grant'a göre filtrelenir) |
+| `activeCorrelations` | `array` | Aktif sub-flow'lar ve correlation'lar (yalnızca açık olanlar — değişmedi) |
+| `correlations` <sup>New</sup> | `array` | Tüm child correlation'lar — aktif **ve** tamamlanmış, `createdAt` artan sırada — bkz. [Correlation Geçmişi](#correlation-geçmişi-correlations) |
+| `transitions` | `array` | Mevcut durumdan kullanılabilir transition'lar (+ role grant'a göre filtrelenir). `cancel`, `updateData` ve `exit` de tanımlıysa listelenir <sup>New</sup> |
 | `transitions[].view` | `object` | Transition için view bilgisi |
 | `transitions[].view.hasView` | `boolean` | Bu transition için view olup olmadığı |
 | `transitions[].schema` | `object` | Transition için şema linki (tanımlıysa) |
@@ -159,6 +191,15 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 ### Transition'ların role grant'a göre filtrelenmesi
 
 State fonksiyonunun döndürdüğü `transitions` dizisi **transition role grant**'larına göre filtrelenir. Yalnızca çağıranın izinli rolü olduğu transition'lar dahil edilir. Roller statik (örn. kimlik sağlayıcınızdan) veya ön tanımlı sistem rolleri **$InstanceStarter** (instance'ı başlatan actor) ve **$PreviousUser** (bir önceki transition'ı tetikleyen actor) olabilir. Gereksiz view veya schema istekleri ve 404'leri önlemek için `view.hasView` ve `schema.hasSchema` kullanın.
+
+### Well-known transition'lar listede
+
+<sup>New</sup> Workflow seviyesinde tanımlı **`cancel`**, **`updateData`** ve **`exit`** transition'ları da — trigger tipine ve `availableIn` kapsamına göre — `transitions` dizisinde listelenir ve aynı rol filtresinden geçer:
+
+- Listelenen anahtar, workflow tanımındaki **configured key**'dir; well-known alias'lar (`update-parent-data`, `exit`) istek tarafında kabul edilmeye devam eder.
+- Her girişin `kind` alanı transition türünü söyler: `cancel` / `updateData` / `exit` (state ve shared transition'larda ilgili tür).
+- Aktif bir subflow'un listesi, parent'ın `updateData` ve `exit` transition'larını da merge eder — client tek döngüyle hepsini sürebilir.
+- `roles` bu üç transition için de artık **etkindir**: rol eşleşmeyen çağırana listelenmez. Roller execution'da enforce edilmez (tasarım gereği — `roles` client'a *ne sunulacağını* belirler); execution yalnızca state-machine ve `availableIn` doğrulaması yapar.
 
 ### Aktif Correlation'lar
 
@@ -176,6 +217,23 @@ Bir workflow aktif sub-flow'lara veya correlation'lara sahip olduğunda, bunlar 
 | `isCompleted` | Sub-flow'un tamamlanıp tamamlanmadığı |
 | `status` | Sub-flow'un mevcut durumu |
 | `currentState` | Sub-flow'un mevcut state'i |
+
+### Correlation Geçmişi (correlations)
+
+<sup>New</sup> `activeCorrelations` yalnızca **açık** correlation'ları taşır; hangi sub item'ların çalıştığı ve her birinin nasıl bittiği bu listeden görülemez. Yeni **`correlations`** dizisi tam kümeyi verir — aktif **ve** tamamlanmış — `createdAt` artan sırada. Her giriş `activeCorrelations` alanlarına ek olarak şunları taşır:
+
+| Alan | Açıklama |
+|------|----------|
+| `isCompleted` | Correlation'ın kapanıp kapanmadığı |
+| `completedAt` | Kapanma zamanı (tamamlanmışsa) |
+| `terminalOutcome` | Sonuç: `completed` / `faulted` / `canceled` |
+| `currentState` | Sub instance'ın bilinen son state'i |
+| `stateChangedAt` | Son state değişim zamanı |
+| `createdAt` | Correlation'ın oluşturulma zamanı |
+
+- **`activeCorrelations` değişmedi** — mevcut client'lar etkilenmez. Yeni client'lar geçmişe ihtiyaç duyduğunda `correlations`'ı kullanmalıdır.
+- ETag, her correlation mutasyonunda (sub item başlama, kapanma, revert, kendi state'inin ilerlemesi) hareket eder; long-poll eden client güncel listeyi görür.
+- Eşzamanlı tamamlanma anında `correlations` içindeki aktif alt küme, `activeCorrelations`'tan **bir an daha taze** olabilir (bilinçli tasarım).
 
 ### Kullanım Alanları
 
@@ -714,6 +772,42 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/master
 1. **Master şema keşfi**: Client'ın instance data yapısını (filtre/sıralama vocabulary'si dahil) dinamik öğrenmesi
 2. **`x-context-target` uygulaması**: Generic client'ların master şemadaki [Data Context Vocabulary](/docs/components/schema#data-context-vocabulary-data-vocab) anotasyonlarını her instance okumasında uygulaması
 3. **Doğrulama**: Client-side instance data validation için şema kaynağı
+
+## Catalog Fonksiyonu
+
+<sup>New</sup> Workflow tanımında deklare edilen fonksiyonların (`attributes.functions`) keşfedilebilir listesini döndürür. Client, State fonksiyonu yanıtındaki `functions.href` işaretçisini takip ederek ikinci bir sabit URL bilmeden kataloğa ulaşır; `functions.hasFunctions` `false` ise çağrıya hiç gerek yoktur.
+
+### Endpoint
+
+```http
+GET /{domain}/workflows/{workflow}/instances/{instance}/functions/catalog
+```
+
+### Response
+
+```json
+{
+  "functions": [
+    { "name": "get-branches", "version": "1.0.0", "scope": "D", "href": "/core/functions/get-branches/info" },
+    { "name": "calc-limit", "version": "1.0.0", "scope": "F",
+      "href": "/core/workflows/onboarding/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/functions/calc-limit/info" }
+  ]
+}
+```
+
+| Alan | Tip | Açıklama |
+|------|-----|----------|
+| `functions[].name` | `string` | Fonksiyon key'i |
+| `functions[].version` | `string` | Fonksiyon versiyonu |
+| `functions[].scope` | `string` | Fonksiyon kapsamı (`D` / `F` / `I`) |
+| `functions[].href` | `string` | Fonksiyonun `/info` keşif endpoint'i — bkz. [Fonksiyon Keşif Endpointleri](/docs/components/functions/custom#fonksiyon-keşif-endpointleri) |
+
+### Davranış
+
+- Liste, workflow tanımındaki **bildirim sırasını** korur.
+- **Rol filtrelidir**: fonksiyon `roles` denetimi execution ile aynı politikadan geçer; çağıranın çalıştıramayacağı bir fonksiyon **listelenmez** — verilen her link eyleme dönüktür.
+- Her `href` fonksiyonun **scope**'unu izler: `D` domain rotasına, `F`/`I` instance rotasına işaret eder (domain rotası bu iki scope'u `403` ile reddeder).
+- Çözümlenemeyen bir fonksiyon referansı loglanır ve çağrıyı bozmadan **atlanır**.
 
 ## Yetkilendirme (Authorization)
 

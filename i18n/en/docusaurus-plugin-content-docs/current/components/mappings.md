@@ -268,6 +268,20 @@ var transitionBody = context.CurrentTransition.Data;
 var authHeader = context.CurrentTransition.Header?.authorization;
 ```
 
+#### Related <sup>New</sup>
+
+Reads a **related** workflow instance's data from a mapping script — the parent that started this instance as a SubFlow/SubProcess, or one of this instance's own sub-item correlations — without duplicating data across the boundary.
+
+```csharp
+var parent  = await context.Related.ParentAsync();      // one hop up
+var kyc     = await context.Related.SubAsync("kyc-flow");   // newest matching correlation
+var uploads = await context.Related.SubsAsync("doc-upload"); // all matching, oldest first
+```
+
+Absence returns `null` / an empty list; a read failure or cap breach throws `RelatedInstanceAccessException`. Results are memoized per script context and capped (`Workflow:Scripting:RelatedAccess:MaxResolutionsPerContext`, default 10). Reads are unfiltered by design — do not copy `x-roles`-restricted fields into this instance's data.
+
+> 🚧 Full English translation is pending. See the [Turkish page](/docs/components/mappings) for the complete method table, `IsCompleted` vs `CorrelationCompleted` semantics, transaction behavior, and cross-domain routing notes.
+
 ## ScriptResponse Class
 
 `ScriptResponse` is the standard response model returned from mapping interfaces. It carries task audit data, instance merge data, and metadata information.
