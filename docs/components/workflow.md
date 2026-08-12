@@ -704,6 +704,40 @@ Girdi modelini bu ayrıma göre kurgulayın: S2S tetikleyiciler için start `sch
 
 ---
 
+## Transition Yürütme Modeli: Lock ve Busy Check
+
+<sup>New</sup> v0.0.79 ile transition yürütmesi **Busy-as-mutex** modeline geçmiştir: instance'ın `Busy` durumu, yürütme mutex'inin kendisidir. Bir transition kabul edilirken ilk adımda kısa süreli bir **status lock** (5 sn lease) altında Active→Busy check-and-set yapılır; pipeline ve otomatik transition zinciri sonrasında kilitsiz çalışır. Önceki uzun süreli dağıtık kilit (chain-token) transition yolundan tamamen kaldırılmıştır.
+
+Her transition tipi bu modele farklı şekilde katılır ve **flow tasarımında bu davranış farkları belirleyicidir**:
+
+| Transition tipi | Status lock | Busy check | Davranış |
+|---|---|---|---|
+| `stateTransition` / `sharedTransition` | Tutar | **Uygular** | Instance `Busy` ise istek **409** ile reddedilir; Active ise Busy'ye geçirilip pipeline çalıştırılır |
+| `cancel` / `exit` | Tutar | **Muaf** | Busy bir instance'a da kabul edilir (bypass); iptal/çıkış akışını başlatır |
+| `updateData` | **Muaf** | **Muaf** | Koşulsuz (unconditional) kabul edilir; Busy'yi ne set eder ne çözer |
+
+### updateData: Reserve Transition
+
+`updateData` **reserve** bir transition'dır: tüm lock ve busy check'lerden muaf, **status-neutral** çalışır — Busy'yi asla set etmez ve asla çözmez, dolayısıyla instance'ı Busy'de bırakma riski yoktur. **Paralel isteklerin aynı instance üzerinde datayı güncellemesi ve instance'ı ilerletmesi için kullanılacak tek yöntemdir** — aynı senaryoda `stateTransition` basmak Busy çakışmasında 409 üretir.
+
+Davranış, instance'ın durumuna göre ikiye ayrılır:
+
+- **Düz instance (aktif subflow yok):** Data güncellenir ve **normal transition gibi pipeline ilerler** — `$self` state change, `onExecutionTasks` ve pipeline sonunda (order 90) otomatik transition değerlendirmesi çalışır. Koşulu sağlanan bir auto, continuation boundary'de sahipliği devralarak instance'ı ilerletir (canlı bir sahip yoksa park edilmiş Busy devralınır).
+- **Aktif subflow'da:** Instance'ta `updateData` tanımı varsa, istek **aktif subflow'da olsa bile parent olarak karşılanır ve subflow'a forward edilmez** — parent'ın datası güncellenir ve bırakılır; pipeline instance'ı ilerletmez, subflow kesintiye uğramaz.
+
+Otomatik transition'lar **her** `updateData` sonrasında değerlendirilir; böylece "veri biriktir, eşik sağlanınca ilerle" (fan-in) desenleri updateData fırtınası altında güvenle çalışır.
+
+:::tip[Flow tasarım notları]
+- Instance aktifken sürekli veri basan senaryolarda (telemetri, paralel servis sonuçları, arka plan görevleri) client'a `stateTransition` değil **`updateData`** verin.
+- Paralel `updateData` altında mapping'ler **yalnızca delta** döndürmelidir: tam echo döndüren bir mapping, eşzamanlı yazarların daha taze değerlerini bayat kopyayla ezebilir.
+- Kabul edilen her `updateData` iki data satırı üretir (istek payload'ı + task çıktısı). Data versiyonu, instance başına `FOR UPDATE` kilidi altında `MAX(VersionNo)+1` ile hesaplanır; her satır üretildiği anda kalıcılaştırılır.
+- Aynı order'daki paralel branch'ler **farklı task tanımları** kullanmalıdır (task-journal anahtarı `transition+task+order` üçlüsüdür).
+:::
+
+> **Referans:** [vnext #877](https://github.com/burgan-tech/vnext/pull/877) — Busy-as-mutex locking, status-neutral updateData ve anlık InstanceData kalıcılığı.
+
+---
+
 ## Özel Transition'lar
 
 ### Cancel Transition
@@ -727,7 +761,7 @@ Cancel ile aynı yapıda. **Client implementasyonlarında** ekran çıkışları
 
 ### Update Data Transition
 
-Cancel ile aynı yapıda, tek fark: `target` her zaman `$self` olmalıdır. Alt akışlardan üst akış data'sını **ara bloklarda güncellemek** için kullanılır.
+Cancel ile aynı yapıda, tek fark: `target` her zaman `$self` olmalıdır. Instance datasını instance'ı kilitlemeden güncellemek — ve paralel senaryolarda instance'ı ilerletmek — için kullanılır. Yürütme semantiği (lock/busy muafiyeti, subflow'da parent'ta karşılanma, auto değerlendirmesi) için bkz. [Transition Yürütme Modeli](#transition-yürütme-modeli-lock-ve-busy-check).
 
 :::info Well-known transition'ların keşfi ve yetkisi <sup>New</sup>
 `cancel`, `updateData` ve `exit` artık State fonksiyonunun `availableTransitions` listesinde — trigger tipine ve `availableIn` kapsamına göre — **configured key**'leriyle listelenir ve `roles` tanımları diğer transition'lar gibi listeyi **filtreler** (önceden `updateData`/`exit` üzerindeki `roles` hiç değerlendirilmiyordu). Roller execution'da enforce edilmez; `roles` client'a *ne sunulacağını* belirler. Execution tarafında ise `availableIn` **state gate** olarak uygulanır: kapsam dışı bir state'ten gelen istek `Transition:100024` ile reddedilir (önceden her state'ten çağrılabiliyordu). Bkz. [Built-in Functions → Well-known transition'lar listede](/docs/components/functions/built-in#well-known-transitionlar-listede).

@@ -106,7 +106,9 @@ vNext Forge Studio, bağımsız bir masaüstü uygulaması olarak da mevcuttur. 
 
 ## Tam Kullanım Kılavuzu
 
-Detaylı kullanım kılavuzu (tüm özellikler, kısayollar, troubleshooting) için:
+Forge Tools panelleri, Explorer context menüleri, tüm component tasarımcıları ve publish–CLI ilişkisi için bu portaldaki **[Forge Kullanım Kılavuzu](./forge-usage)** sayfasına bakın.
+
+Repo içindeki kaynak kılavuz (tüm özellikler, kısayollar, troubleshooting) için:
 
 **[vNext Forge Studio — Usage Guide](https://github.com/burgan-tech/vnext-forge/blob/main/docs/usage-guide/README.md)**
 

@@ -8,8 +8,7 @@ description: vNext platformunda geliştirmeye başlamak için kurulum ve ilk ad�
 
 Bu bölüm vNext platformunda geliştirmeye başlamak için pratik rehberleri içerir.
 
-- **[Local Development](./local-dev)** — Docker Compose ile local runtime kurulumu.
-- **[Multi-Domain Setup](./multi-domain)** — birden fazla domain'i izole olarak çalıştırma.
+- **[Geliştirme Ortamı Kurulumu (Forge)](./forge-setup)** — vNext Forge extension ile proje oluşturma, CLI kurulumu, runtime ve environment yönetimi.
 - **[Tutorial: İlk Workflow](./tutorial)** — ilk workflow'unuzu adım adım oluşturma rehberi.
 - **[Tutorial: SubFlow ve SubProcess](./tutorial-subflow)** — SubFlow ile alt akış ve SubProcess ile bağımsız süreç kullanımı.
 - **[Tutorial: Views ve Extensions](./tutorial-views-extensions)** — Platforma özel view seçimi ve global/lokal extension kullanımı.

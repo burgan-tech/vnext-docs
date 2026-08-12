@@ -8,8 +8,7 @@ const sidebars: SidebarsConfig = {
       label: 'Getting Started',
       link: { type: 'doc', id: 'getting-started/index' },
       items: [
-        'getting-started/local-dev',
-        'getting-started/multi-domain',
+        'getting-started/forge-setup',
         'getting-started/tutorial',
       ],
     },
@@ -28,6 +27,8 @@ const sidebars: SidebarsConfig = {
       link: { type: 'doc', id: 'tools/index' },
       items: [
         'tools/forge-studio',
+        'tools/forge-usage',
+        'tools/quick-runner',
         'tools/workflow-cli',
         'tools/template-cli',
         'tools/ai-assisted-development',
@@ -131,6 +132,17 @@ const sidebars: SidebarsConfig = {
       items: [
         'api-reference/rest-api',
         'api-reference/init-service',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Arşiv',
+      collapsible: true,
+      collapsed: true,
+      link: { type: 'doc', id: 'archive/index' },
+      items: [
+        'archive/local-dev',
+        'archive/multi-domain',
       ],
     },
   ],

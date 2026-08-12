@@ -11,7 +11,7 @@ This section is for **software engineers** building on the vNext platform. From 
 
 ## Learning path
 
-1. **[Getting Started](./getting-started/)** — local dev setup, multi-domain, first workflow instance.
+1. **[Getting Started](./getting-started/)** — development environment setup with Forge, first workflow tutorial.
 2. **[Concepts](./components/workflow)** — core concepts: workflow, state, transition, schema, view, extension.
 3. **[Components](./components/tasks/)** — task types, functions, mappings, interfaces.
 4. **[How-To](./how-to/error-handling)** — practical guides: error handling, instance filtering, view selection.

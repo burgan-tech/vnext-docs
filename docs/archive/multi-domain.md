@@ -1,10 +1,14 @@
 ---
 sidebar_position: 3
-title: Multi-Domain Kurulumu
-description: vNext platformunda birden fazla domain'i izole olarak çalıştırma
+title: Multi-Domain Kurulumu (Arşiv)
+description: vNext platformunda birden fazla domain'i izole olarak çalıştırma (arşivlenmiş rehber)
 ---
 
 # Multi-Domain Kurulumu
+
+:::warning[Bu doküman arşivlenmiştir]
+Domain kurulumu ve lokal runtime yönetimi artık **vNext Forge** VS Code extension'ı üzerinden yapılmaktadır. Güncel akış için [Geliştirme Ortamı Kurulumu (Forge)](/docs/getting-started/forge-setup) rehberini takip edin. Bu sayfa, multi-domain yapıyı elle (docker-compose/Make ile) yönetmek isteyenler için referans olarak saklanmaktadır.
+:::
 
 vNext Runtime, **aynı altyapı üzerinde birden fazla domain'i eş zamanlı çalıştırmayı** destekler. Ekipler izole domain ortamları (`core`, `sales`, `hr` gibi) aynı PostgreSQL, Redis, Vault ve Dapr servisleri üzerinde paylaşabilir.
 
