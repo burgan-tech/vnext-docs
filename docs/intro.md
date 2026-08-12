@@ -11,7 +11,7 @@ Bu bölüm, vNext platformu üzerinde **geliştirme yapan yazılım mühendisler
 
 ## Başlangıç yolculuğu
 
-1. **[Getting Started](./getting-started/)** — tutorial, local dev ortamını kur, multi-domain setup.
+1. **[Getting Started](./getting-started/)** — Forge ile geliştirme ortamı kurulumu, ilk workflow tutorial'ı.
 2. **[Developer Tools](./tools/)** — Forge Studio, Workflow CLI, Template CLI kurulum ve kullanımı.
 3. **[Workflow](./components/workflow)** — workflow, task türleri, functions, mappings, schema, view, extension.
 4. **[Core Concepts](./concepts/user-integration)** — user integration, instance data yapısı.

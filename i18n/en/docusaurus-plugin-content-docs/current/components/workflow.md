@@ -74,7 +74,7 @@ The workflow's **`schema`** field defines the main structure of **instance data*
 
 ### Update Data
 
-A specially defined transition. Typically used to **update parent flow data from sub flows** in intermediate blocks. `target` must always be `$self`.
+A specially defined transition. Used to update instance data without locking the instance — and to advance the instance under parallel load. `target` must always be `$self`. See [Transition Execution Model](#transition-execution-model-lock-and-busy-check) below for its execution semantics.
 
 ### Shared Transitions
 
@@ -245,7 +245,41 @@ See [Sync vs Async execution](/docs/how-to/async-sync).
 
 The **global error handling** definition at the workflow level. Applied if no boundary is defined at task or state level.
 
+## Transition Execution Model: Lock and Busy Check
+
+As of v0.0.79, transition execution uses the **Busy-as-mutex** model: the instance's `Busy` status is itself the execution mutex. Admission performs an Active→Busy check-and-set under a short **status lock** (5s lease); the pipeline and the auto-transition chain then run lock-free. The previous long-lease distributed lock (chain-token) is gone from the transition path entirely.
+
+Each transition type participates differently — and these differences matter in flow design:
+
+| Transition type | Status lock | Busy check | Behavior |
+|---|---|---|---|
+| `stateTransition` / `sharedTransition` | Holds | **Applies** | Request is rejected with **409** while the instance is `Busy`; when Active, it is flipped to Busy and the pipeline runs |
+| `cancel` / `exit` | Holds | **Exempt** | Admitted even on a Busy instance (bypass); starts the cancel/exit flow |
+| `updateData` | **Exempt** | **Exempt** | Admitted unconditionally; never sets or settles Busy |
+
+### updateData: Reserve Transition
+
+`updateData` is a **reserve** transition: exempt from every lock and busy check, and **status-neutral** — it never sets or settles Busy, so it cannot strand an instance in Busy. It is **the one and only way to update data and advance an instance under parallel requests** — hammering `stateTransition` in the same scenario produces 409s on Busy collisions.
+
+Its behavior splits on the instance's situation:
+
+- **Plain instance (no active subflow):** data is updated and the **normal transition pipeline runs** — `$self` state change, `onExecutionTasks`, and auto-transition evaluation at the end of the pipeline (order 90). A satisfied auto reserves ownership at the continuation boundary and advances the instance (taking over parked Busy when no live owner exists).
+- **In an active subflow:** when the instance defines `updateData`, the request is **answered by the parent even while an active subflow is running — it is never forwarded**: the parent's data is updated and left as-is; the pipeline does not advance the instance and the subflow is not disturbed.
+
+Autos are evaluated after **every** `updateData`, so "accumulate data, advance when the threshold is met" (fan-in) patterns work safely under an updateData storm.
+
+:::tip[Flow design notes]
+- In scenarios that keep pushing data while the instance is active (telemetry, parallel service results, background tasks), give the client **`updateData`**, not `stateTransition`.
+- Under parallel `updateData`, mappings should return **delta-only** output: a full echo can overwrite concurrent writers' fresher values with stale copies.
+- Each accepted `updateData` produces two data rows (request payload + task output). The data version is computed as `MAX(VersionNo)+1` under a per-instance `FOR UPDATE` lock; every row is persisted the moment it is produced.
+- Parallel branches at the same order need **distinct task definitions** (the task-journal key is the `transition+task+order` triple).
+:::
+
+> **Reference:** [vnext #877](https://github.com/burgan-tech/vnext/pull/877) — Busy-as-mutex locking, status-neutral updateData, and immediate InstanceData persistence.
+
 ## What's New in v0.0.79
+
+- **Busy-as-mutex + updateData v2**: the Busy status is the execution mutex — state/shared transitions get 409 on Busy, cancel/exit bypass the busy check, `updateData` is admitted unconditionally and is status-neutral (see [Transition Execution Model](#transition-execution-model-lock-and-busy-check)).
 
 - **Role-scoped `availableIn`**: each entry of `availableIn` (shared and well-known transitions) may be a bare state key or `{ "state": "...", "roles": [...] }`; the entry's roles compose with the transition's own `roles` as an **AND**. A role-less entry behaves exactly like the legacy string.
 - **`updateData` / `exit` discovery**: both are now listed in `availableTransitions` (by configured key) and their `roles` actually filter the list. Roles are still not enforced at execution — they control what a client is *offered*.

@@ -1,10 +1,14 @@
 ---
 sidebar_position: 2
-title: Local Development
-description: Running vNext runtime locally with Docker Compose
+title: Local Development (Archived)
+description: Running vNext runtime locally with Docker Compose (archived guide)
 ---
 
 # Local Development
+
+:::warning[This document is archived]
+The local development environment is now set up through the **vNext Forge** VS Code extension. Follow the up-to-date [Development Environment Setup (Forge)](/docs/getting-started/forge-setup) guide. This page is kept as a reference for those who want to set up the runtime manually (docker-compose/Make).
+:::
 
 This guide covers everything needed to run the vNext platform on your **local machine** via docker-compose. The `vnext-runtime` repo ships with ready-to-use templates for this setup.
 

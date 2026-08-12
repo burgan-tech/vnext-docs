@@ -1,10 +1,14 @@
 ---
 sidebar_position: 2
-title: Local Development
-description: Docker Compose ile vNext runtime'ı local makinada çalıştırma
+title: Local Development (Arşiv)
+description: Docker Compose ile vNext runtime'ı local makinada çalıştırma (arşivlenmiş rehber)
 ---
 
 # Local Development
+
+:::warning[Bu doküman arşivlenmiştir]
+Lokal geliştirme ortamı artık **vNext Forge** VS Code extension'ı üzerinden kurulmaktadır. Güncel kurulum akışı için [Geliştirme Ortamı Kurulumu (Forge)](/docs/getting-started/forge-setup) rehberini takip edin. Bu sayfa, runtime'ı elle (docker-compose/Make ile) kurmak isteyenler için referans olarak saklanmaktadır.
+:::
 
 Bu rehber, vnext platformunu **local makinanda** docker-compose üzerinden çalıştırmak için gerekli tüm adımları içerir. [`vnext-runtime`](https://github.com/burgan-tech/vnext-runtime) repo'su bu kurulum için hazır template'lerle gelir.
 

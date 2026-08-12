@@ -1,10 +1,14 @@
 ---
 sidebar_position: 3
-title: Multi-Domain Setup
-description: Running multiple isolated domains on the vNext platform
+title: Multi-Domain Setup (Archived)
+description: Running multiple isolated domains on the vNext platform (archived guide)
 ---
 
 # Multi-Domain Setup
+
+:::warning[This document is archived]
+Domain setup and local runtime management are now handled through the **vNext Forge** VS Code extension. Follow the up-to-date [Development Environment Setup (Forge)](/docs/getting-started/forge-setup) guide. This page is kept as a reference for those who want to manage the multi-domain setup manually (docker-compose/Make).
+:::
 
 vNext Runtime supports **running multiple domains simultaneously** on the same infrastructure. Teams can run isolated domain environments (`core`, `sales`, `hr`, etc.) sharing the same PostgreSQL, Redis, Vault, and Dapr services.
 

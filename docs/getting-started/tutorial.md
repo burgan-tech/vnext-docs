@@ -10,7 +10,7 @@ Bu rehberde **vNext Forge Studio** (VS Code Extension) kullanarak sektörden ba�
 
 :::tip[Ön Koşullar]
 
-- [Local Development](./local-dev) rehberini tamamlamış ve runtime çalışıyor olmalı (`http://localhost:4201`).
+- [Geliştirme Ortamı Kurulumu (Forge)](./forge-setup) rehberini tamamlamış ve lokal runtime çalışıyor olmalı.
 - VS Code'da **[vNext Forge Studio](/docs/tools/forge-studio)** extension yüklü olmalı.
 
 :::

@@ -38,6 +38,7 @@ graph TB
 ## Ne Zaman Hangisi?
 
 - **Görsel tasarım** yapmak istiyorsanız → [Forge Studio](./forge-studio)
+- **Forge panelleri, context menüleri ve publish akışının detayları** için → [Forge Kullanım Kılavuzu](./forge-usage)
 - **Terminal üzerinden hızlı deploy/sync** yapmak istiyorsanız → [Workflow CLI](./workflow-cli)
 - **Sıfırdan yeni bir workflow projesi** başlatmak istiyorsanız → [Template CLI](./template-cli)
 - **AI ile bileşen tasarlamak/üretmek** istiyorsanız → [AI Destekli Geliştirme](./ai-assisted-development)
