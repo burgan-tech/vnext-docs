@@ -34,7 +34,7 @@ urn:<namespace>:<type>:<command>:<domain>:<flow>[:<instanceId>[:<key>]]
 ```
 
 - **type** — kaynak ailesi: `flow` (akış işlemleri), `fn` (function) veya `res` (sistem bileşeni kaynağı — kendine özgü formatı vardır, aşağıda).
-- **command** — yapılacak işlem. `flow` için `start` / `transition`; `fn` için `get` / `post` / `patch` / `delete`.
+- **command** — yapılacak işlem. `flow` için `start` / `transition` / `instances` / `transitions` / `history`; `fn` için `get` / `post` / `patch` / `delete`.
 - Sondaki segmentlerin varlığı (instance, transition/function key) işleme göre değişir; aşağıdaki tablolara bakın.
 
 ### Flow Başlatma
@@ -46,6 +46,10 @@ urn:<namespace>:<type>:<command>:<domain>:<flow>[:<instanceId>[:<key>]]
 | **HTTP karşılığı** | `POST /api/v1/{domain}/workflows/{flow}/instances/start` |
 
 Belirli bir flow'un yeni bir instance'ını başlatır. Instance henüz oluşmadığı için `instanceId` taşımaz.
+
+:::info[`urn:client:flow:start` — yüzeyi açmak ≠ kaydı oluşturmak]
+`urn:vnext:flow:start:<domain>:<flowName>` **şimdi bir kayıt oluşturur**. Bir "Yeni kayıt" butonunun yaptığı ise genellikle başka bir şeydir: kullanıcı ilk adımı submit edene kadar ortada kayıt yoktur, buton yalnızca **oluşturma yüzeyini açar**. Bu, client otoritesinde bir davranıştır ve `urn:client:flow:start:<domain>:<flowName>` ile adreslenir. İki form aynı kelimeleri taşır ama otoriteleri farklıdır — ikisini tek forma indirmek, sihirbaz açan bir butonla sessizce taslak kayıt oluşturan bir butonu ayırt edilemez yapar.
+:::
 
 ### Transition İsteği (instance'a özel)
 
@@ -65,6 +69,54 @@ Belirli bir instance üzerinde adı verilen transition'ı tetikler. `instanceId`
 | **Örnek** | `urn:vnext:flow:transition:demo:sample-flow:approved` |
 
 Aktif (current) instance bağlamında transition'ı tetikler; `instanceId` taşımaz. Client, üzerinde çalıştığı instance'ı bağlamdan bildiğinde kullanılır.
+
+### Instance Koleksiyonu
+
+| | |
+|---|---|
+| **Format** | `urn:<namespace>:flow:instances:<domain>:<flowName>` |
+| **Örnek** | `urn:vnext:flow:instances:demo:sample-flow` |
+| **HTTP karşılığı** | `GET /api/v1/{domain}/workflows/{flow}/instances` |
+
+Bir flow'un **instance koleksiyonunu** — her liste ekranının üzerine kurulduğu kayıt listesini — adresler. `flow:start`'ın kardeşidir: verb 3. segmenttedir, domain 4. segmentte pozisyoneldir. Domain segmenti bilinçli olarak zorunludur; cross-domain kullanım (listeyi render eden uygulama ile listelenen kayıtların farklı domain'lerde olması) olağan durumdur ve domain'siz bir URN, onu kimin tuttuğuna göre farklı çözülürdü.
+
+**URN'in taşımadıkları.** URN **adres**tir; sayfalama, sıralama ve taban filtre **policy**'dir ve URN'in yanında kardeş alanlar olarak yaşar:
+
+```json
+{
+  "type": "Table",
+  "source": "urn:vnext:flow:instances:demo:sample-flow",
+  "pageSize": 20,
+  "sort": { "field": "createdAt", "dir": "desc" },
+  "filter": [{ "field": "branchCode", "operator": "eq", "value": "34001" }]
+}
+```
+
+Aynı kayıtların farklı sayfalanmışı yine aynı kayıtlardır; `?page=2&size=20` gibi bilgiyi identifier'a koymak tek şey için iki isim üretirdi.
+
+**Transport'u URN seçer.** Bir liste yüzeyinin `source` alanı hem instance koleksiyonu hem function URN'i alabilir; hangi taşıma yolunun kullanılacağına prop seçimi değil URN'in kendisi karar verir:
+
+| `source` | Transport | Yüzeyin aldığı |
+|---|---|---|
+| `urn:vnext:flow:instances:<domain>:<flow>` | Instance query | Sunucu taraflı sayfalama, attribute filtreleri, sıralama, `hasNext`/`hasPrev`/`lastPage` |
+| `urn:vnext:fn:<domain>:<key>` | Function | Tek fetch, dönen tüm satırlar, sayfalama yok |
+
+Pseudo UI bağlamında diğer URN'ler gibi interpolasyona girer; böylece tek bir generic yüzey, kendisini açan kayda göre hedeflenebilir:
+
+```json
+"source": "urn:vnext:flow:instances:{{$instance.parentDomain}}:{{$instance.parentFlow}}"
+```
+
+### Instance'a Bağlı Koleksiyonlar (transitions / history)
+
+Bir kaydın runtime'dan türeyen kendi listeleri de aynı ailede koleksiyon URN'iyle adreslenir:
+
+| Format | Örnek | Anlamı |
+|---|---|---|
+| `urn:<ns>:flow:transitions:<domain>:<flowName>:<instanceId>` | `urn:vnext:flow:transitions:demo:sample-flow:${param}` | Runtime'ın instance için **şu an ilan ettiği** geçişler (available transitions) |
+| `urn:<ns>:flow:history:<domain>:<flowName>:<instanceId>` | `urn:vnext:flow:history:demo:sample-flow:${param}` | Instance'ın **bugüne kadar yaptığı** geçişler |
+
+Her ikisi de sıradan liste kaynağıdır: bir tanım bunları `Menu` / `Table` gibi herhangi bir liste yüzeyiyle render edebilir — ör. bir satırın "⋯" aksiyon paneli, arkasında özel bir node olmadan, bir kez yazılmış bir view haline gelir. İlan edilen bir geçişi tetiklemek için yukarıdaki **Transition İsteği** formu kullanılır.
 
 ### Function İsteği
 

@@ -38,7 +38,7 @@ urn:<namespace>:<type>:<command>:<domain>:<flow>[:<instanceId>[:<key>]]
 ```
 
 - **type** — resource family: `flow` (flow operations), `fn` (function) or `res` (system component resource — has its own format, see below).
-- **command** — the operation. For `flow`: `start` / `transition`; for `fn`: `get` / `post` / `patch` / `delete`.
+- **command** — the operation. For `flow`: `start` / `transition` / `instances` / `transitions` / `history`; for `fn`: `get` / `post` / `patch` / `delete`.
 - Whether the trailing segments exist (instance, transition/function key) depends on the operation; see the tables below.
 
 ### Flow Start
@@ -50,6 +50,10 @@ urn:<namespace>:<type>:<command>:<domain>:<flow>[:<instanceId>[:<key>]]
 | **HTTP equivalent** | `POST /api/v1/{domain}/workflows/{flow}/instances/start` |
 
 Starts a new instance of the given flow. It carries no `instanceId` because the instance does not exist yet.
+
+:::info[`urn:client:flow:start` — opening the surface ≠ creating the record]
+`urn:vnext:flow:start:<domain>:<flowName>` **creates a record now**. What a "New record" button usually does is something else: nothing exists until the user submits the first step, so the button only **opens the creation surface**. That behavior belongs to the client authority and is addressed as `urn:client:flow:start:<domain>:<flowName>`. The two forms carry the same words but different authorities — collapsing them would make a button that opens a wizard indistinguishable from one that silently creates a draft record.
+:::
 
 ### Transition Request (instance-specific)
 
@@ -69,6 +73,54 @@ Triggers the named transition on a specific instance. `instanceId` is usually fi
 | **Example** | `urn:vnext:flow:transition:demo:sample-flow:approved` |
 
 Triggers the transition in the active (current) instance context; carries no `instanceId`. Used when the client knows the instance it operates on from context.
+
+### Instance Collection
+
+| | |
+|---|---|
+| **Format** | `urn:<namespace>:flow:instances:<domain>:<flowName>` |
+| **Example** | `urn:vnext:flow:instances:demo:sample-flow` |
+| **HTTP equivalent** | `GET /api/v1/{domain}/workflows/{flow}/instances` |
+
+Addresses a flow's **instance collection** — the record list every list screen is built on. It is deliberately `flow:start`'s sibling: the verb is the 3rd segment, the domain is 4th and positional. The domain segment is intentionally mandatory; cross-domain use (the app rendering the list and the records being listed living in different domains) is the ordinary case, and a URN without a domain would resolve differently depending on who happens to hold it.
+
+**What the URN does NOT carry.** The URN is the **address**; paging, sort and the base filter are **policy** and live beside it as sibling fields:
+
+```json
+{
+  "type": "Table",
+  "source": "urn:vnext:flow:instances:demo:sample-flow",
+  "pageSize": 20,
+  "sort": { "field": "createdAt", "dir": "desc" },
+  "filter": [{ "field": "branchCode", "operator": "eq", "value": "34001" }]
+}
+```
+
+The same records paged differently are still the same records; stuffing `?page=2&size=20` into an identifier would produce two names for one thing.
+
+**The URN decides the transport.** A list surface's `source` field accepts both an instance collection and a function URN; which transport is used is decided by the URN itself, not by a prop choice:
+
+| `source` | Transport | What the surface gets |
+|---|---|---|
+| `urn:vnext:flow:instances:<domain>:<flow>` | Instance query | Server-side paging, attribute filters, sort, `hasNext`/`hasPrev`/`lastPage` |
+| `urn:vnext:fn:<domain>:<key>` | Function | One fetch, every row it returns, no paging |
+
+In the Pseudo UI context it interpolates like any other URN, which lets one generic surface be pointed at whatever record opened it:
+
+```json
+"source": "urn:vnext:flow:instances:{{$instance.parentDomain}}:{{$instance.parentFlow}}"
+```
+
+### Instance-Bound Collections (transitions / history)
+
+A record's own runtime-derived lists are addressed with collection URNs in the same family:
+
+| Format | Example | Meaning |
+|---|---|---|
+| `urn:<ns>:flow:transitions:<domain>:<flowName>:<instanceId>` | `urn:vnext:flow:transitions:demo:sample-flow:${param}` | The moves the runtime **advertises now** for the instance (available transitions) |
+| `urn:<ns>:flow:history:<domain>:<flowName>:<instanceId>` | `urn:vnext:flow:history:demo:sample-flow:${param}` | The transitions the instance **has already made** |
+
+Both are ordinary list sources: a definition renders them with any list surface such as `Menu` / `Table` — e.g. a row's "⋯" action panel becomes a view authored once, with no dedicated node behind it. To fire an advertised move, use the **Transition Request** form above.
 
 ### Function Request
 
