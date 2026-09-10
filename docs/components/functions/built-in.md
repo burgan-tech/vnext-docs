@@ -151,8 +151,27 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
         "hasSchema": true,
         "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/functions/schema?transitionKey=reject"
       }
+    },
+    {
+      "name": "auto-timeout",
+      "kind": "scheduled",
+      "executeAtUtc": "2026-08-01T09:30:00Z",
+      "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/transitions/auto-timeout",
+      "view": {
+        "hasView": false,
+        "loadData": false,
+        "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/functions/view?transitionKey=auto-timeout"
+      },
+      "schema": {
+        "hasSchema": false,
+        "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/functions/schema?transitionKey=auto-timeout"
+      }
     }
   ],
+  "incident": {
+    "hasActiveIncident": false,
+    "history": { "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/incidents" }
+  },
   "eTag": "W/\"abc123def456\""
 }
 ```
@@ -180,12 +199,15 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `status` | `string` | Instance durum kodu (A=Active, C=Completed, vb.) |
 | `activeCorrelations` | `array` | Aktif sub-flow'lar ve correlation'lar (yalnızca açık olanlar — değişmedi) |
 | `correlations` <sup>New</sup> | `array` | Tüm child correlation'lar — aktif **ve** tamamlanmış, `createdAt` artan sırada — bkz. [Correlation Geçmişi](#correlation-geçmişi-correlations) |
-| `transitions` | `array` | Mevcut durumdan kullanılabilir transition'lar (+ role grant'a göre filtrelenir). `cancel`, `updateData` ve `exit` de tanımlıysa listelenir <sup>New</sup> |
+| `transitions` | `array` | Mevcut durumdan kullanılabilir transition'lar (+ role grant'a göre filtrelenir). `cancel`, `updateData` ve `exit` de tanımlıysa listelenir <sup>New</sup>; ayrıca çalışması zamanlanmış transition'lar `kind: "scheduled"` girişleri olarak eklenir <sup>New</sup> v0.0.80 / v0.0.84 — bkz. [Zamanlanmış transition'lar](#zamanlanmış-transitionlar-kind-scheduled) |
+| `transitions[].kind` | `string` | Girişin türü: çağıranın tetikleyebileceği transition'larda `state`/`cancel`/`updateData`/`exit`; runtime'ın otomatik ateşlemek üzere kurduğu girişte **`scheduled`** |
+| `transitions[].executeAtUtc` | `string` | **Yalnızca `kind: "scheduled"`** girişlerde bulunur — ISO 8601 UTC (`Z` sonekli) tetiklenme anı |
 | `transitions[].view` | `object` | Transition için view bilgisi |
 | `transitions[].view.hasView` | `boolean` | Bu transition için view olup olmadığı |
 | `transitions[].schema` | `object` | Transition için şema linki (tanımlıysa) |
 | `transitions[].schema.hasSchema` | `boolean` | Bu transition için şema olup olmadığı |
 | `transitions[].schema.href` | `string` | transitionKey ile Schema fonksiyon endpoint URL'i |
+| `incident` <sup>New</sup> | `object` | Instance'ın hata/incident durumunu anlatan link bloğu — bkz. [Incident bloğu](#incident-bloğu) v0.0.92 |
 | `eTag` | `string` | Cache doğrulama için ETag |
 
 ### Transition'ların role grant'a göre filtrelenmesi
@@ -200,6 +222,17 @@ State fonksiyonunun döndürdüğü `transitions` dizisi **transition role grant
 - Her girişin `kind` alanı transition türünü söyler: `cancel` / `updateData` / `exit` (state ve shared transition'larda ilgili tür).
 - Aktif bir subflow'un listesi, parent'ın `updateData` ve `exit` transition'larını da merge eder — client tek döngüyle hepsini sürebilir.
 - `roles` bu üç transition için de artık **etkindir**: rol eşleşmeyen çağırana listelenmez. Roller execution'da enforce edilmez (tasarım gereği — `roles` client'a *ne sunulacağını* belirler); execution yalnızca state-machine ve `availableIn` doğrulaması yapar.
+
+### Zamanlanmış transition'lar (`kind: "scheduled"`)
+
+<sup>New</sup> v0.0.80 ile `transitions` dizisi, runtime'ın otomatik ateşlemek üzere kurduğu (armed) transition'ları da — çağıranın tetikleyebileceği girişlerden **sonra**, `executeAtUtc`'ye göre artan sırada — `kind: "scheduled"` girişleri olarak taşır. v0.0.84 ile bu girişler diğerleriyle aynı `href`/`view`/`schema` link şeklini kazandı (`hasView`/`loadData`/`hasSchema` her zaman `false`).
+
+- `executeAtUtc`, zamanlayıcının kurulduğu anda **persist edilmiş** UTC zaman damgasıdır (`Z` sonekli ISO 8601) — timer script'inin yeniden değerlendirilmesi değil.
+- Scheduled girişler **role göre filtrelenmez**: diğer `transitions[]` öğelerinin aksine, bir zamanlanmış transition çağırandan bağımsız olarak ateşlenir; bu yüzden giriş çağıran kapasitesi değil, instance'a dair bir gerçektir.
+- Yalnızca **sorgulanan instance'ın kendi** zamanlayıcılarını gösterir; aktif bir subflow varsa onun zamanlayıcıları **birleştirilmez** (subflow instance'ını ayrıca sorgulayın).
+- `href` bir çağrı daveti **değildir** — scheduled transition'lar yürütme anında hâlâ System-actor'a kilitlidir; bir client bu href'e PATCH göndermeye çalışırsa, önceki davranışla aynı şekilde reddedilir.
+- `hasView` / `loadData` / `hasSchema` her zaman `false` döner.
+- **Bilinen ve kabul edilmiş boşluk:** zamanlanan iş kümesindeki değişiklikler state fingerprint ETag'ine **girmez** (issue #864, kabul edilmiş takım kararı). Aynı state'e geri dönen bir re-arm (`updateData`/`$self`), tek işlemde A→B→A zinciri veya lock çakışmasıyla reddedilen bir job, state/status değişmediği için client'ı `304` arkasında bayat bir `executeAtUtc` ile bırakabilir. Taze zaman gerekiyorsa client ETag'siz yeniden fetch etmelidir. Bkz. [Caching yapılandırması](/docs/configuration/caching) — `StateFunctionCache` fingerprint materyali.
 
 ### Aktif Correlation'lar
 
@@ -235,6 +268,26 @@ Bir workflow aktif sub-flow'lara veya correlation'lara sahip olduğunda, bunlar 
 - ETag, her correlation mutasyonunda (sub item başlama, kapanma, revert, kendi state'inin ilerlemesi) hareket eder; long-poll eden client güncel listeyi görür.
 - Eşzamanlı tamamlanma anında `correlations` içindeki aktif alt küme, `activeCorrelations`'tan **bir an daha taze** olabilir (bilinçli tasarım).
 
+### Incident bloğu
+
+<sup>New</sup> v0.0.92 ile response'a her zaman bir `incident` bloğu eklenir; bu blok bir Faulted veya bekleyen instance'ı açıklamak için **link taşır, içerik taşımaz**:
+
+```jsonc
+"incident": {
+  "hasActiveIncident": true,
+  "active":  { "href": "/core/workflows/oauth-flow/instances/{id}/incidents/active" },
+  "history": { "href": "/core/workflows/oauth-flow/instances/{id}/incidents" }
+}
+```
+
+- `hasActiveIncident` instance'ın denormalize edilmiş bayrağıdır. `active` **yalnızca** bu bayrak `true` iken bulunur; `history` her zaman bulunur.
+- Aynı blok, byte-for-byte, `GET …/instances/{instance}` yanıtındaki `metadata.incident`'ta ve instance listesinin her öğesinde de yer alır.
+- `hasActiveIncident` state fingerprint ETag'in bir üyesidir: bir incident'ın state/status değişmeden açılması veya kapanması bile parklanmış bir long-poll client'ın `304`'ünü kırar.
+- Aktif bir subflow'a delege eden instance'larda `active.href` incident'ın **sahibi olan subflow'u**, `history.href` her zaman **sorgulanan instance'ı** gösterir.
+- Hiçbir yüzeyde **stack trace** dönmez.
+
+Ayrıntılı model, `GET …/incidents` / `GET …/incidents/active` endpoint referansı ve incident alan tablosu için bkz. [Instance Incidents](../../concepts/incidents).
+
 ### Kullanım Alanları
 
 1. **Long-Polling**: Client'lar durum değişikliklerini tespit etmek için bu endpoint'i poll edebilir
@@ -248,7 +301,7 @@ Bir workflow aktif sub-flow'lara veya correlation'lara sahip olduğunda, bunlar 
 
 ### Telemetry
 
-Runtime genelinde yapılandırılmış loglar daha tutarlıdır; **TaskCoordinator** yürütmesi **span** ile izlenir ve **ParentInstanceId** ile birlikte gözlem arka ucunda ilişkilendirilebilir.
+Runtime genelinde yapılandırılmış loglar daha tutarlıdır; **TaskCoordinator** yürütmesi **span** ile izlenir ve **ParentInstanceId** ile birlikte gözlem arka ucunda ilişkilendirilebilir. Correlation carrier'ları, reserved header'lar, span ağacı ve script/fan-out metrikleri için bkz. [Gözlemlenebilirlik: Trace, Log ve Metrikler](../../how-to/observability).
 
 ### Trace ve logda ParentInstanceId
 
@@ -448,11 +501,16 @@ Filtreler şu formatı kullanır: `filter=attributes={alan}={operatör}:{değer}
 | `lt` | Küçüktür | `filter=attributes=count=lt:10` |
 | `le` | Küçük veya eşittir | `filter=attributes=age=le:65` |
 | `between` | İki değer arasında | `filter=attributes=amount=between:50,200` |
-| `like` | Alt dize içerir | `filter=attributes=name=like:john` |
+| `like` | Alt dize içerir (büyük/küçük harf duyarsız) | `filter=attributes=name=like:john` |
 | `startswith` | İle başlar | `filter=attributes=email=startswith:test` |
 | `endswith` | İle biter | `filter=attributes=email=endswith:.com` |
 | `in` | Liste içinde değer | `filter=attributes=status=in:active,pending` |
 | `nin` | Liste dışında değer | `filter=attributes=type=nin:test,debug` |
+| `isnull` | Null veya null değil | `filter=attributes=resolvedAt=isnull:true` |
+
+:::info Fail-closed doğrulama
+v0.0.84'ten itibaren geçersiz bir operatör veya filtrelenemez bir alan kullanıldığında istek artık sessizce yok sayılmaz — **`400 Bad Request`** (`SchemaFilterValidationException`) döner. Filtrelenebilirlik alanın şemasındaki `x-filterOperators` listesine bağlıdır. Tam operatör listesi ve şema tabanlı filtreleme kuralları için bkz. [Instance Filtreleme Kılavuzu](/docs/how-to/instance-filtering).
+:::
 
 #### Filtre Örnekleri
 

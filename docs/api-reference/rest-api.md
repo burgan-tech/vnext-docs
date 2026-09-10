@@ -198,6 +198,8 @@ Faulted instance'ı **yeniden çalıştırır**.
 - `200 OK` → `RetryInstanceOutput` (id, status, retriedTransitionId)
 - `400`, `404` → `ProblemDetails`
 
+> **Not:** Yeniden yürütülen iş **tekrar fault** olursa yanıt yine `200` ile `"status": "F"` döner ve bu durum **kalıcıdır** — instance Faulted kalır ve **ikinci bir retry kabul edilir**. Başarılı bir retry (unfault) instance'ın **tüm** açık incident'larını kapatır ve `hasActiveIncident` bayrağını yeniden hesaplar. Ayrıntı: [Instance Incidents](/docs/concepts/incidents).
+
 ### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}`
 
 Instance metadata + data döner (extension dahil).
@@ -233,6 +235,27 @@ Instance'ın **transition history**'sini döner. Her transition kaydı, geçişi
 | `stage` | string \| null | Çağıranın set ettiği stage değeri |
 
 > **Not:** `effectiveState*` ve `stage` alanları transition **tamamlanma anında** snapshot'lanır. Başarısız/tamamlanmamış transition'larda ve v0.0.68 öncesi tarihsel kayıtlarda `null` döner (backfill yapılmaz).
+
+### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/incidents` <sup>New</sup>
+
+Instance'ın error-boundary incident geçmişini **en yeniden eskiye** sayfalar. Ayrıntı: [Instance Incidents](/docs/concepts/incidents).
+
+**Query parameters:** `page` (1-based, default `1`), `pageSize` (default `20`, max `100`)
+
+**Responses:**
+- `200 OK` → `{ hasActiveIncident, items: IncidentDetail[], page, pageSize, hasNext }`
+- `403 Forbidden` → çağıran, state fonksiyonuyla aynı `queryRoles` kapısını geçemedi
+
+### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/incidents/active` <sup>New</sup>
+
+Instance'ın en yeni **çözülmemiş** incident'ını döner (`incident.active.href`'in hedefi). Ayrıntı: [Instance Incidents](/docs/concepts/incidents).
+
+**Responses:**
+- `200 OK` → `IncidentDetail`
+- `404 Not Found` (`Instance:100037`) → açık incident yok — **normal bir sonuçtur**, hata değildir (bir retry arada çözmüş olabilir)
+- `403 Forbidden` → çağıran, state fonksiyonuyla aynı `queryRoles` kapısını geçemedi
+
+> **Not (`internal/*` endpoint'leri):** `internal/subflow-forward`, `internal/busy-release` ve `internal/related-data` gibi `internal/` önekli rotalar **public API değildir** — runtime içi (Dapr sidecar-to-sidecar) çağrılar için var olan, ağ izolasyonuna dayanan dahili endpoint'lerdir ve bu referansın kapsamı dışındadır.
 
 ---
 
@@ -285,6 +308,19 @@ Instance'ın **transition history**'sini döner. Her transition kaydı, geçişi
   modifiedBy?: string;
   modifiedByBehalfOf?: string;
   stage?: string;              // max 120 chars, kullanıcı tanımlı durum bilgisi
+  incident?: IncidentHref;     // hasActiveIncident + active/history link'leri — bkz. Instance Incidents
+}
+```
+
+### IncidentHref <sup>New</sup>
+
+`GetInstanceOutput.metadata.incident` ve state fonksiyonunun `incident` bloğu **aynı** şekli paylaşır. Ayrıntı: [Instance Incidents](/docs/concepts/incidents).
+
+```typescript
+{
+  hasActiveIncident: boolean;
+  active?: { href: string };   // yalnızca hasActiveIncident true iken bulunur
+  history: { href: string };   // her zaman bulunur
 }
 ```
 
@@ -365,4 +401,5 @@ API endpoint URL'leri Url Templates konfigürasyonu ile **özelleştirilebilir**
 - [Async / Sync](/docs/how-to/async-sync)
 - [Instance Filtering](/docs/how-to/instance-filtering)
 - [Instance Data](/docs/concepts/instance-data)
+- [Instance Incidents](/docs/concepts/incidents)
 - [API Reference Index](/docs/api-reference/) — C# interface'ler

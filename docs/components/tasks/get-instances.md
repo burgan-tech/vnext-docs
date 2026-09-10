@@ -27,7 +27,7 @@ GetInstances Task, sayfalama, sıralama ve filtreleme desteğiyle diğer workflo
       "flow": "order-workflow",
       "page": 1,
       "pageSize": 10,
-      "sort": "-CreatedAt",
+      "sort": "{\"field\":\"createdAt\",\"direction\":\"desc\"}",
       "filter": ["{\"status\":{\"eq\":\"active\"}}"]
     }
   }
@@ -43,9 +43,9 @@ GetInstances Task, sayfalama, sıralama ve filtreleme desteğiyle diğer workflo
 | `flow`                | string   | Evet    | -          | Hedef workflow adı                                          |
 | `page`                | integer  | Hayır   | 1          | Sayfa numarası (1 tabanlı)                                  |
 | `pageSize`            | integer  | Hayır   | 10         | Sayfa başına öğe sayısı                                     |
-| `sort`                | string   | Hayır   | -          | Sıralama alanı ve yönü (örn: `-CreatedAt`)                  |
+| `sort`                | string   | Hayır   | -          | JSON formatında sıralama alanı ve yönü — bkz. [§ Sort Parametresi](#sort-parametresi) |
 | `filter`              | string[] | Hayır   | -          | Filtre ifadeleri                                            |
-| `useDapr`             | boolean  | Hayır   | false      | Doğrudan HTTP yerine Dapr servis çağrısı kullan             |
+| `useDapr`             | boolean  | Hayır   | false      | Doğrudan HTTP yerine [Dapr servis çağrısı](../../configuration/service-discovery) kullan |
 | `headers`             | object   | Hayır   | -          | HTTP header'ları                                            |
 | `timeoutSeconds`      | integer  | Hayır   | 30         | Timeout süresi (saniye, minimum: 1)                         |
 | `validateSsl`         | boolean  | Hayır   | true       | SSL sertifika doğrulaması                                   |
@@ -54,14 +54,26 @@ GetInstances Task, sayfalama, sıralama ve filtreleme desteğiyle diğer workflo
 
 ### Sort Parametresi
 
+`sort` alanı **JSON** formatı bekler:
 
-| Format       | Açıklama        | Örnek        |
-| ------------ | --------------- | ------------ |
-| `FieldName`  | Artan sıralama  | `CreatedAt`  |
-| `-FieldName` | Azalan sıralama | `-CreatedAt` |
+```json
+{"field":"createdAt","direction":"desc"}
+```
 
+Birden fazla alan için:
 
-Yaygın sıralama alanları: `CreatedAt`, `UpdatedAt`, `Key`
+```json
+{"fields":[{"field":"status","direction":"asc"},{"field":"createdAt","direction":"desc"}]}
+```
+
+| Alan | Açıklama |
+| --- | --- |
+| `field` | Sıralanacak alan (case-insensitive; instance data alanları için `attributes.` prefix'i gerekir, örn. `attributes.musteriNo`) |
+| `direction` | `asc` veya `desc` (case-insensitive); belirtilmezse `asc` |
+
+:::warning[`"-CreatedAt"` kısayolu hiçbir zaman desteklenmedi]
+`sort` alanı her zaman JSON beklemiştir. `"-CreatedAt"` gibi bir düz metin değeri geçerli JSON olmadığı için **hiçbir zaman parse edilmemiştir**: fail-closed doğrulamadan önce (v0.0.84) bu sessizce yok sayılıyor ve sorgu `CreatedAt DESC`'e düşüyordu; artık (fail-closed sort/filter doğrulaması) böyle bir değer **reddedilir**. Bu sayfanın önceki sürümündeki `-CreatedAt` örneği yanlıştı — yukarıdaki JSON formatını kullanın. Kaynak: `GetInstancesTask.Sort` XML dokümantasyonu (`vnext/src/BBT.Workflow.Domain/Definitions/Tasks/GetInstancesTask.cs`).
+:::
 
 ### Filter Parametresi
 
@@ -94,7 +106,7 @@ Yaygın sıralama alanları: `CreatedAt`, `UpdatedAt`, `Key`
 
 ### Fluent Filtreleme: SetFilterSpec
 
-Yeni kodda önerilen yol, filter/sort JSON'ını elle yazmak yerine fluent `InstanceQuery` builder'ını kullanıp spec'i task'a vermektir. Aynı domain'e giden sorgular **in-process** çalışır (HTTP/Dapr atlaması olmaz); cross-domain sorgular otomatik yönlendirilir:
+Yeni kodda önerilen yol, filter/sort JSON'ını elle yazmak yerine fluent `InstanceQuery` builder'ını kullanıp spec'i task'a vermektir. Aynı domain'e giden sorgular **in-process** çalışır (HTTP/Dapr atlaması olmaz); cross-domain sorgular [Service Discovery yapılandırmasına](../../configuration/service-discovery) göre otomatik yönlendirilir:
 
 ```csharp
 var query = InstanceQuery.Create()

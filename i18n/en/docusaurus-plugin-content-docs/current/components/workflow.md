@@ -263,7 +263,7 @@ Each transition type participates differently — and these differences matter i
 
 Its behavior splits on the instance's situation:
 
-- **Plain instance (no active subflow):** data is updated and the **normal transition pipeline runs** — `$self` state change, `onExecutionTasks`, and auto-transition evaluation at the end of the pipeline (order 90). A satisfied auto reserves ownership at the continuation boundary and advances the instance (taking over parked Busy when no live owner exists).
+- **Plain instance (no active subflow):** data is updated and the **normal transition pipeline runs** — `$self` state change, `onExecutionTasks`, and auto-transition evaluation at the end of the pipeline (order 80). A satisfied auto reserves ownership at the continuation boundary and advances the instance (taking over parked Busy when no live owner exists).
 - **In an active subflow:** when the instance defines `updateData`, the request is **answered by the parent even while an active subflow is running — it is never forwarded**: the parent's data is updated and left as-is; the pipeline does not advance the instance and the subflow is not disturbed.
 
 Autos are evaluated after **every** `updateData`, so "accumulate data, advance when the threshold is met" (fan-in) patterns work safely under an updateData storm.

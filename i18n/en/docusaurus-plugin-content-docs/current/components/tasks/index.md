@@ -15,7 +15,7 @@ A workflow named `tasks` is created in each domain deployment. All tasks used wi
 
 ## Task Types
 
-`vnext-schema/task-definition.schema.json` defines a total of **20 task types**. Each is listed below with its number, name, and detail page.
+The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.0.53`'s `task-definition.schema.json` defines the first **21** of them; types `22` (External HTTP) and `23` (Python) are not yet added to the published schema package (see the note below). Each is listed below with its number, name, and detail page.
 
 | # | Task Type | Description | Detail |
 |---|---|---|---|
@@ -39,8 +39,15 @@ A workflow named `tasks` is created in each domain deployment. All tasks used wi
 | 18 | **CacheAsideTask** | Read-through cache (runs sourceTask on miss and caches it) | [CacheAside](./cache-aside) |
 | 19 | **GetInstanceTask** | Fetch a full single-instance projection (metadata + data) | [GetInstance](./get-instance) |
 | 20 | **DaprConversationTask** | Invoke an LLM/AI provider via Dapr Conversation | [DaprConversation](./dapr-conversation) |
+| 21 | **FanOutTask** | Run an inner task in parallel, once per item of a runtime-resolved collection | [Fan-Out](./fan-out) |
+| 22 | **ExternalHttpTask** | Runs the HTTP call directly inside the Orchestrator instead of hopping to Execution | [External HTTP](./external-http) |
+| 23 | **PythonTask** | Built-in `main(input)` Python task, executed in the Execution service (experimental) | [Python](./python) |
 
-> **Note:** Only these 20 task types defined in the schema exist. Task types not on this list are **not supported** by the system.
+> **Note:** Only these task types exist. Task types not on this list are **not supported** by the system.
+
+:::warning[Types `22` and `23` are not in the schema package yet]
+The `task-definition.schema.json` shipped in `@burgan-tech/vnext-schema@0.0.53` does not yet include `22` (External HTTP) or `23` (Python) in the `attributes.type` enum. As a result, `npm run validate` in a domain package rejects a task definition using either type, while `publish` and runtime execution work fine. Details: [External HTTP Task](./external-http), [Python Task](./python).
+:::
 
 ## Task Usage
 

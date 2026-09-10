@@ -249,6 +249,18 @@ Topic'e yayın yapabilen her producer, vNext hakkında hiçbir şey bilmeden ça
 - **Domain izolasyonu** her şeyden önce uygulanır: her domain yalnızca kendi şemasını sorgular. Yabancı bir domain'in event'i sizin instance'larınıza dokunamaz.
 - Selector sorguları ek olarak hedef workflow'un flow'una scope'lanır.
 
+### Dağıtık event teslimi: outbox ve post-commit relay <sup>New</sup> v0.0.88 / v0.0.92
+
+Tüm dağıtık event'ler (bu sayfadaki pub/sub event'leri dahil) artık **transactional outbox** üzerinden gider: commit içinde yazılan bir outbox satırı → Outbox worker publish → broker → Inbox worker → handler. Eski senkron pre-commit/`OnCompleted` hook modeli tamamen kaldırıldı.
+
+Bazı event'ler ek olarak **post-commit relay** ile anında iletilir — outbox akışına paralel, bağımsız bir komut çağrısı:
+
+- **SubFlow terminal event'leri** (`completed`/`faulted`/`canceled`) ve **`sub:state-changed`**, commit'ten hemen sonra parent'a (aynı domain'de in-process, cross-domain'de Dapr service invocation ile) doğrudan iletilir; Inbox teslimi, dedup'lu bir **durable backup** olarak devam eder — relay başarısız olsa bile outbox satırı zaten commit edilmiştir.
+- `sub:state-changed`, bir aktivasyon episode'unun **rest point**'inde (Active olma, finish state'e ulaşma, veya bilinçli Busy — `BusyParked`/Busy-subtype) **bir kez** yayınlanır; A→B→C→D gibi bir inline auto-chain tek episode'dur ve yalnızca zincirin sonunda bir event üretir.
+- Parent'ın `effectiveState`'i, en derin aktif SubFlow halkasının state'idir — açık bir SubFlow korelasyonu varken parent'ın kendi state değişimi bu kanaldan **yayınlanmaz** (child'ın bildirimi zaten yukarı taşınır).
+
+Bu, bu sayfadaki event-driven workflow'ların doğrudan pub/sub akışını değiştirmez — yalnızca runtime'ın SubFlow/state-değişikliği bildirimlerini nasıl ilettiğini açıklar.
+
 ## Devreye alma checklist'i
 
 1. Workflow'da `attributes.event` (start) ve/veya bir transition'da `event` + `"triggerType": 3` (transition) tanımlayın.

@@ -135,7 +135,7 @@ Bu birleştirme birkaç gözlemlenebilir davranışı değiştirir (ör. `x-role
 | Transition | `roles` | İlgili transition'ı kimin tetikleyebileceği |
 | Transition `availableIn` öğesi | `roles` <sup>New</sup> | Transition'ın o state'te kime sunulacağı (transition `roles` ile AND) |
 | Flow / State | `queryRoles` | Instance ve state'leri kimin sorgulayabileceği (state seviyesi root'u override eder). Built-in **state/data/view/schema** read fonksiyonlarınca current state üzerinde uygulanır; izin yoksa **403** |
-| Function | `roles` | Fonksiyonu kimin çağırabileceği ve keşif (`/info`, `catalog`) yanıtlarında kimin görebileceği |
+| Function | `roles` | Keşif (`/info`, `catalog`) yanıtlarında kimin görebileceği. <sup>New</sup> v0.0.88 itibarıyla doğrudan custom function çağrısında bir gate **değildir** — yalnızca `authorize` fonksiyonu değerlendirir; bkz. [Çağıran rollerinin çözümlenmesi](#çağıran-rollerinin-çözümlenmesi-caller-role-provider) |
 | State `alias` | `roles` | State'in role göre maskelenmiş görünümü |
 | Master şema property | `x-roles` | Alan (column) bazlı veri görünürlüğü |
 
@@ -153,9 +153,20 @@ Roller execution'da **bilinçli olarak** enforce edilmez — hiçbir transition 
 
 ---
 
+## Çağıran rollerinin çözümlenmesi (Caller-role provider)
+
+<sup>New</sup> v0.0.88 ile yukarıdaki grant değerlendirmesinin **girdisi** — çağıranın rol kümesi — takılabilir bir provider üzerinden çözülür: `default` (eski `ICurrentUser.Roles`/`role` header davranışı, değişmeden) veya `morph-idm` (request scope başına tek bir dış IDM çağrısı, dönen operasyon kümesi yerel grant motoruyla değerlendirilir). Provider hatası **fail-closed** çalışır — 403, ve hata scope içinde memoize edilir. Ayrıntı ve yapılandırma için bkz. [Configuration → Caller Role Provider](../configuration/caller-role-provider).
+
+Provider ne olursa olsun `transition.roles`, `availableIn[].roles`, `queryRoles` ve schema `x-roles` semantiği **değişmez** — yalnızca rol kümesinin kaynağı değişir.
+
+**İstisna: custom function çağrıları.** v0.0.88 itibarıyla `function.roles`, doğrudan bir custom function çağrısında **artık bir gate değildir** — custom function'ları yetkilendirmek middle-tier'ın sorumluluğu sayılır; vNext'in işi görünürlük (discovery yanıtları) ve `authorize` fonksiyonudur. `function.roles`, yalnızca **`authorize` fonksiyonu** tarafından değerlendirilmeye devam eder. Scope kontrolü (Domain/Flow/Instance) bundan etkilenmez — bu, yetkilendirme değil call-shape doğrulamasıdır.
+
+---
+
 ## İlgili
 
 - [Workflow component](/docs/components/workflow) — `queryRoles`, transition `roles`, state `alias`
 - [Schema component](/docs/components/schema) — master şema ve alan bazlı görünürlük
 - [Built-in Functions](/docs/components/functions/built-in) — State/Data Function yetkilendirme davranışı ve authorize endpoint'leri
 - [Instance Data](/docs/concepts/instance-data) — `Instance.Data` ve ScriptContext
+- [Configuration → Caller Role Provider](../configuration/caller-role-provider) — `default`/`morph-idm` provider yapılandırması

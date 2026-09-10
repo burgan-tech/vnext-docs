@@ -30,6 +30,13 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Infrastructure',
+      items: [
+        'infrastructure/observability',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Patterns',
       link: { type: 'doc', id: 'patterns/index' },
       items: [

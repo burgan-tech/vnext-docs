@@ -73,3 +73,25 @@ minikube service vnext -n vnext
 :::info
 Minikube kurulumu, local geliştirme ve test senaryoları için uygundur. Üretim ortamları için container cluster yapılandırmasını kullanın.
 :::
+
+---
+
+## DbMigrator — Schema Migration Timeout'ları
+
+`db-migrator` Job'ı, her flow'un PostgreSQL şemasına migration uygularken `SchemaMigration` bölümünü kullanır:
+
+```json
+{
+  "SchemaMigration": {
+    "CommandTimeoutSeconds": 600,
+    "LockExpirySeconds": 900
+  }
+}
+```
+
+| Anahtar | Tip | Varsayılan | Açıklama |
+|---------|-----|------------|----------|
+| `CommandTimeoutSeconds` | integer | `600` | Şema migration sırasında her statement için komut timeout'u. Büyük tabloları yeniden yazan data migration'ları (ör. incident backfill) Npgsql'in 30 sn'lik varsayılanını kolayca aşabilir |
+| `LockExpirySeconds` | integer | `900` | Bir şemanın migration'ı etrafında tutulan distributed lock'un süresi. `CommandTimeoutSeconds`'tan **büyük** olmalıdır — aksi halde bir migration statement'ı hâlâ çalışırken lock süresi dolabilir ve ikinci bir migrator aynı şemayı eşzamanlı başlatabilir |
+
+Helm chart üzerinden `db-migrator.appEnvConfig` altında `SchemaMigration__CommandTimeoutSeconds` / `SchemaMigration__LockExpirySeconds` ortam değişkenleriyle override edilebilir; isteğe bağlıdır, tanımlanmazsa yukarıdaki kod varsayılanları geçerlidir. Migrator, herhangi bir şema başarısız olursa non-zero exit code ile çıkar.

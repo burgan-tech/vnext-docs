@@ -8,6 +8,10 @@ description: Workflow orchestration ve instance yönetim task'ları
 
 İş akışı instance yönetimi için dört ayrı task türü mevcuttur. Her task türü, farklı bir iş akışı etkileşim senaryosunu destekler ve kendi type numarasına sahiptir.
 
+:::info[`sync` varsayılanı `false`'a döndü <sup>New</sup> v0.0.86]
+`StartTask` (`11`) ve `DirectTriggerTask` (`12`) için `sync` alanının varsayılan değeri **v0.0.86**'dan itibaren (PR #917, lock-free updateData admission çalışmasının bir parçası) `true`'dan `false`'a değişti: trigger-ailesi bildirimleri artık hedef instance'ın pipeline'ı bitene kadar bloklamak yerine **enqueue edilir**. Eski senkron davranışı isteyen tanımlar `"sync": true`'yu **açıkça** yazmalıdır. `SubProcessTask` (`14`) bu değişiklikten etkilenmedi — varsayılanı zaten `false` idi.
+:::
+
 ## Task Türleri
 
 Bu sayfada belgelenen dört trigger task'ı (bağlantılar aynı sayfadaki ilgili bölüme gider):
@@ -45,7 +49,7 @@ Yeni bir iş akışı instance'ı oluşturur.
     "config": {
       "domain": "approvals",
       "flow": "approval-flow",
-      "sync": true,
+      "sync": false,
       "body": {
         "documentId": "doc-12345",
         "requestedBy": "user-123"
@@ -62,7 +66,7 @@ Yeni bir iş akışı instance'ı oluşturur.
 | `domain` | string | Evet | - | Hedef iş akışı domain'i |
 | `flow` | string | Evet | - | Hedef iş akışı flow adı |
 | `body` | object | Hayır | - | İstekle gönderilecek veri |
-| `sync` | boolean | Hayır | true | Senkron çalıştırma |
+| `sync` | boolean | Hayır | **false** <sup>New</sup> v0.0.86 | Senkron çalıştırma — `true` hedef instance'ın pipeline'ı bitene kadar bloklar |
 | `version` | string | Hayır | - | Hedef iş akışı versiyonu |
 | `key` | string | Hayır | - | Hedef iş akışı key'i |
 | `tags` | string[] | Hayır | - | Instance tag'leri |
@@ -141,7 +145,7 @@ Mevcut bir iş akışı instance'ında belirli bir transition'ı yürütür.
 | `key` | string | Koşullu | - | Hedef instance key'i (`instanceId` yoksa kullanılır) |
 | `instanceId` | string (uuid) | Koşullu | - | Hedef instance ID'si (öncelikli) |
 | `body` | object | Hayır | - | İstekle gönderilecek veri |
-| `sync` | boolean | Hayır | true | Senkron çalıştırma |
+| `sync` | boolean | Hayır | **false** <sup>New</sup> v0.0.86 | Senkron çalıştırma — `true` hedef instance'ın pipeline'ı bitene kadar bloklar |
 | `version` | string | Hayır | - | ~~Hedef versiyon~~ (Deprecated) |
 | `tags` | string[] | Hayır | - | Instance tag'leri |
 | `headers` | object | Hayır | - | HTTP header'ları |
@@ -333,7 +337,7 @@ Ana iş akışı ile paralel çalışan bağımsız bir subprocess instance'ı b
 :::tip[SubProcess vs StartTask]
 
 - **SubProcess**: Fire-and-forget, bağımsız çalışır, ana iş akışını bloke etmez (`sync` varsayılanı `false`)
-- **StartTask**: Senkron çalışır, yanıt döner, gelecekte etkileşim için `instanceId` alınabilir (`sync` varsayılanı `true`)
+- **StartTask**: Varsayılan olarak (v0.0.86'dan itibaren) asenkron enqueue edilir (`sync` varsayılanı `false`); `instanceId` yanıt olarak döner ve gelecekte etkileşim için kullanılabilir. Eski senkron davranış için `"sync": true` açıkça belirtilmelidir.
 
 :::
 
