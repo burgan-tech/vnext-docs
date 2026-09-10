@@ -86,7 +86,7 @@ Runtime toplamda **23 task türü** çalıştırır. `@burgan-tech/vnext-schema@
 :::
 
 :::info[Orchestrator-local çalışan task türleri]
-Çoğu task türü Execution servisine bir ağ hop'u ile devredilir. Üç istisna **doğrudan Orchestrator process'i içinde** çalışır: `FanOutTask` (type `21`, iç task'ı paralel çalıştırır ama kendisi orchestrator-local'dir), `ExternalHttpTask` (type `22`, HTTP çağrısını `/execution/invoke/{type}/{key}` hop'u olmadan in-process yapar). `PythonTask` (type `23`) bunun dışındadır — Execution servisinde `python` route'u üzerinden çalışır.
+Çoğu task türü Execution servisine bir ağ hop'u ile devredilir. İki istisna **doğrudan Orchestrator process'i içinde** çalışır: `FanOutTask` (type `21`, iç task'ı paralel çalıştırır ama kendisi orchestrator-local'dir), `ExternalHttpTask` (type `22`, HTTP çağrısını `/execution/invoke/{type}/{key}` hop'u olmadan in-process yapar); `PythonTask` (type `23`) ise Execution servisinde `python` route'u üzerinden çalışır.
 :::
 
 ## Görev Kullanımı

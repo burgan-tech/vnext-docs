@@ -27,8 +27,8 @@ Daha önce incident'lar `Instances.Incidents` adlı bir jsonb kolonunda, en yeni
 ```jsonc
 "incident": {
   "hasActiveIncident": true,
-  "active":  { "href": "/api/v1/core/workflows/onboarding/instances/{id}/incidents/active" },
-  "history": { "href": "/api/v1/core/workflows/onboarding/instances/{id}/incidents" }
+  "active":  { "href": "/core/workflows/onboarding/instances/{id}/incidents/active" },
+  "history": { "href": "/core/workflows/onboarding/instances/{id}/incidents" }
 }
 ```
 
@@ -101,7 +101,7 @@ Brief'te `taskKey` olarak geçen alan, kaynak koddaki gerçek adıyla **`task`**
 
 Bir failure — abort veya eşleşen kuralı olmayan unhandled bir task hatası — **tek bir** incident satırı bırakır ve bu satır boundary'nin kendi verdict'idir: bir kural eşleştiyse `boundaryAction` doludur, eşleşmediyse `null` kalır.
 
-v0.0.89 öncesinde aynı failure **iki** incident yazıyordu: boundary'nin verdict'i artı ayrı bir pipeline-seviyesi satır (`errorCode: "ErrorBoundaryAbort"`, `errorLayer: "Pipeline"`, task ataması yok). Bu ikinci satır daha yeni olduğu için `incident.active` (ve state body'sinin `incident.active`'i) haline geliyor, gerçek verdict'i gizliyordu. Bu artık **yazılmıyor**: üç task adımı (OnExecute/OnEntry/OnExit) incident'ı **kendi save'inden önce** kaydeder, böylece satır ve `HasActiveIncident` bayrağı birlikte commit edilir ve pipeline'ın fault path'i fallback satırını atlar.
+v0.0.92 öncesinde aynı failure **iki** incident yazıyordu: boundary'nin verdict'i artı ayrı bir pipeline-seviyesi satır (`errorCode: "ErrorBoundaryAbort"`, `errorLayer: "Pipeline"`, task ataması yok). Bu ikinci satır daha yeni olduğu için `incident.active` (ve state body'sinin `incident.active`'i) haline geliyor, gerçek verdict'i gizliyordu. Bu artık **yazılmıyor**: üç task adımı (OnExecute/OnEntry/OnExit) incident'ı **kendi save'inden önce** kaydeder, böylece satır ve `HasActiveIncident` bayrağı birlikte commit edilir ve pipeline'ın fault path'i fallback satırını atlar.
 
 Bir `rollback`/`notify` sonucunda, instance **Busy** iken kısa bir `hasActiveIncident=true` penceresi gözlemlenebilir — satır transition'a yönlendirilip `FinalizeTransitionStep`'te kapanana kadar. Nihai commit edilen durum değişmez; bu kabul edilmiş bir yan etkidir.
 
@@ -109,7 +109,7 @@ Bir `rollback`/`notify` sonucunda, instance **Busy** iken kısa bir `hasActiveIn
 
 `POST …/instances/{instance}/retry` yalnızca **Faulted** bir instance'ı kabul eder; aksi halde `400` (`Instance:100027`).
 
-- Yeniden yürütülen iş **tekrar fault** olursa yanıt `200` ile `"status": "F"` döner ve bu durum **kalıcıdır**: instance Faulted kalır ve **ikinci bir retry kabul edilir**. (v0.0.89 öncesinde ambient unit-of-work commit'i, iç `RequiresNew` scope'un yazdığı Faulted durumun üzerine yazıyordu; instance sağlıklı görünüyor ama bitmemiş ve bir daha retry edilemez hale geliyordu.)
+- Yeniden yürütülen iş **tekrar fault** olursa yanıt `200` ile `"status": "F"` döner ve bu durum **kalıcıdır**: instance Faulted kalır ve **ikinci bir retry kabul edilir**. (v0.0.92 öncesinde ambient unit-of-work commit'i, iç `RequiresNew` scope'un yazdığı Faulted durumun üzerine yazıyordu; instance sağlıklı görünüyor ama bitmemiş ve bir daha retry edilemez hale geliyordu.)
 - Unfault (başarılı retry) **tüm açık incident'ları kapatır**, tek en yenisini değil, ve `hasActiveIncident` bayrağını yeniden hesaplar. Geçmiş satırlar kalır, yalnız çözülmüş olarak işaretlenir; böylece `incident.active` bloktan kaybolurken `history` yanıt vermeye devam eder.
 - `ignore` / `log` aksiyonları hiç incident yazmaz.
 

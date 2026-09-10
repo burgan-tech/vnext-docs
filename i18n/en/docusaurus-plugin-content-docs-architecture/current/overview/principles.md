@@ -90,7 +90,6 @@ Observability is **not an afterthought** — it is a natural part of the archite
 - **Health endpoints** — Orchestration `4201/health`, Execution `4202/health`
 - **Cache metrics (Redis)** — hit/miss, latency, key distribution
 - **Database metrics (PostgreSQL)** — slow query, connection pool
-- **Persistent metrics (ClickHouse)** — long-term metric storage, trend analysis, SLO reporting
 
 A flow is observable the moment it goes live; no additional instrumentation is required.
 

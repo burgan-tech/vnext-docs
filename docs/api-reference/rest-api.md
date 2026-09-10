@@ -121,16 +121,38 @@ Yeni instance başlatır.
 | `attributes` | object | Initial instance data |
 | `stage` | string \| null | Kullanıcı tanımlı durum bilgisi (max 120 char, serbest metin) |
 
-:::tip[Serbest (free-form) payload]
-Gövde, top-level `attributes` anahtarı içermeyen **serbest bir JSON** de olabilir; runtime bunu otomatik olarak `{"attributes": {...}}` şekline normalize eder. Örn. `{"customer_id":"123"}` → `{"attributes":{"customer_id":"123"}}`. Mod, `x-vnext-payload-mode` header'ı ile de zorlanabilir:
+:::tip[Serbest (free-form) payload <sup>New</sup> v0.0.85]
+Gövde, standart zarfa ait bir alan içermeyen **serbest bir JSON** de olabilir; runtime bunu otomatik olarak `{"attributes": {...}}` şekline normalize eder. Örn. `{"customer_id":"123"}` → `{"attributes":{"customer_id":"123"}}`.
+
+Envelope auto-detection şu kuralı izler: top-level'da bir `attributes` alanı varsa (case-insensitive), yanında başka alanlar olsa bile gövde **her zaman** standart zarf sayılır. `attributes` yoksa, gövde standart zarf sayılır **ancak ve ancak** top-level'daki alanların **tamamı** `key`/`tags`/`stage`'den ibaretse (case-insensitive); diğer tüm durumlar — boş gövde dahil — serbest (free-form) kabul edilir. Bu nedenle yalnızca `key`/`tags`/`stage` adlı alanlardan oluşan bir serbest payload zarftan ayırt edilemez ve **belirsizdir** — böyle bir payload'ı serbest olarak göndermek için `x-vnext-payload-mode: raw` header'ı zorunludur. Case-insensitive algılama sayesinde `{"Attributes": {...}}` (PascalCase) gibi gövdeler de standart zarf olarak çalışır.
+
+Mod, `x-vnext-payload-mode` header'ı ile de zorlanabilir:
 
 | Header değeri | Etki |
 |---|---|
-| `raw` | Gövdede `attributes` olsa bile serbest payload kabul edilir |
-| `standard` | Gövdede `attributes` olmasa bile standart DTO kabul edilir |
-| (yok) | Top-level `attributes` anahtarı varsa standart, yoksa serbest mod |
+| `raw` | Gövdede zarf alanları olsa bile serbest payload kabul edilir |
+| `standard` | Gövdede zarf alanları olmasa bile standart DTO kabul edilir |
+| (yok) | Yukarıdaki şekil tabanlı kural otomatik uygulanır |
 
 Aynı davranış transition endpoint'i için de geçerlidir.
+:::
+
+:::note[Schema doğrulama hataları <sup>New</sup> v0.0.85]
+Bir `schema` içeren transition/start isteği geçersiz bir payload ile reddedildiğinde, `400` yanıtı hangi alan(lar)ın başarısız olduğunu **her zaman** adlandırır:
+
+```jsonc
+{
+  "error": {
+    "validationErrors": [
+      { "members": ["root"], "message": "Required properties [\"customer\"] are not present" },
+      { "members": ["customer.ownerUserId"], "message": "Required properties [\"ownerUserId\"] are not present" }
+    ]
+  }
+}
+```
+
+- `members` alanındaki adlar **instance path**'leridir (`root`, `customer.ownerUserId`), JSON Schema keyword'ü değil.
+- Bir root-seviyesi hata ile bir child hata **birlikte** raporlanır; biri diğerini gizlemez.
 :::
 
 :::tip[Form-urlencoded gövde desteği]
