@@ -35,7 +35,7 @@ The GetInstances Task enables fetching instance data from other workflows with s
       "flow": "order-workflow",
       "page": 1,
       "pageSize": 10,
-      "sort": "-CreatedAt",
+      "sort": "{\"field\":\"createdAt\",\"direction\":\"desc\"}",
       "filter": "{\"status\":{\"eq\":\"active\"}}"
     }
   }
@@ -50,23 +50,32 @@ The GetInstances Task enables fetching instance data from other workflows with s
 | `flow` | string | Yes | - | Target workflow name |
 | `page` | int | No | `1` | Page number (1-based index) |
 | `pageSize` | int | No | `10` | Number of items per page |
-| `sort` | string | No | - | Sort field with optional direction prefix |
+| `sort` | string | No | - | JSON-formatted sort field and direction — see [§ Sort Parameter](#sort-parameter) |
 | `filter` | string | No | - | Single filter expression (JSON or legacy string; — not an array) |
 | `useDapr` | bool | No | `false` | Use Dapr service invocation instead of direct HTTP |
 
 ### Sort Parameter
 
-The `sort` parameter specifies the field to sort by with an optional direction prefix:
+The `sort` parameter expects **JSON**:
 
-| Format | Description | Example |
-|--------|-------------|---------|
-| `FieldName` | Ascending order | `CreatedAt` |
-| `-FieldName` | Descending order | `-CreatedAt` |
+```json
+{"field":"createdAt","direction":"desc"}
+```
 
-**Common Sort Fields:**
-- `CreatedAt` - Instance creation date
-- `UpdatedAt` - Last update date
-- `Key` - Instance key
+For multiple fields:
+
+```json
+{"fields":[{"field":"status","direction":"asc"},{"field":"createdAt","direction":"desc"}]}
+```
+
+| Field | Description |
+| --- | --- |
+| `field` | The field to sort by (case-insensitive; instance-data fields need the `attributes.` prefix, e.g. `attributes.customerId`) |
+| `direction` | `asc` or `desc` (case-insensitive); defaults to `asc` when omitted |
+
+:::warning[The `"-CreatedAt"` shorthand was never supported]
+The `sort` field has always expected JSON. A plain-text value like `"-CreatedAt"` is not valid JSON, so it was **never actually parsed**: before fail-closed validation (v0.0.84) it was silently ignored and the query fell back to `CreatedAt DESC`; it is now **rejected** instead. An earlier version of this page showed a `-CreatedAt` example — that was incorrect; use the JSON format above. Source: `GetInstancesTask.Sort` XML docs (`vnext/src/BBT.Workflow.Domain/Definitions/Tasks/GetInstancesTask.cs`).
+:::
 
 ### Filter Parameter
 
@@ -144,7 +153,7 @@ Fetch instances sorted by creation date (newest first):
     "config": {
       "domain": "core",
       "flow": "customer-workflow",
-      "sort": "-CreatedAt"
+      "sort": "{\"field\":\"createdAt\",\"direction\":\"desc\"}"
     }
   }
 }
@@ -186,7 +195,7 @@ Full configuration with all parameters:
       "flow": "order-workflow",
       "page": 1,
       "pageSize": 50,
-      "sort": "-CreatedAt",
+      "sort": "{\"field\":\"createdAt\",\"direction\":\"desc\"}",
       "filter": "{\"and\":[{\"state\":{\"eq\":\"pending\"}},{\"attributes.priority\":{\"eq\":\"high\"}}]}",
       "useDapr": false
     }

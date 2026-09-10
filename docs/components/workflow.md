@@ -520,37 +520,15 @@ flowchart TD
 
 ### Yaşam Döngüsü Adımları
 
-1. **State Policy Kontrolleri**
-   - State'de tanımlı transition'lar kontrol edilir
-   - Client sadece manuel ve event transition'ları tetikleyebilir
-   - Auto ve schedule transition'lar sadece sistem tarafından çalıştırılır
+Yukarıdaki akış özetlenmiş bir görünümdür: policy kontrolü → transition'ın kendi task'ları → terk edilen state'in OnExit'i → state değişimi → yeni state'in OnEntry'si → bildirimler → state tipine göre sonlanma/subflow → auto transition kontrolü → (auto yoksa) schedule transition kontrolü.
 
-2. **Current Transition OnExecutionTasks**
-   - Mevcut transition'ın OnExecutionTask'ları çalıştırılır
+- **Client yalnızca manuel ve event transition'ları tetikleyebilir**; auto ve schedule transition'lar yalnızca sistem tarafından çalıştırılır.
+- **State değişimi yalnızca transition'lar üzerinden gerçekleşir.**
+- **State Notifications**, state girişinden sonra enqueue edilir ve durable çalışır; `rule` koşulu varsa değerlendirilir.
+- **State Tipi Kontrolü**: Finish → instance "Completed"; SubFlow → alt akış çalıştırılır.
+- **Auto önce, Schedule sonra** <sup>New</sup> v0.0.90: Auto bir kazanan seçtiyse, Schedule adımı o hop için **hiçbir timer armamaz** — eski "arm et, bir sonraki hop'ta iptal et" churn'ü kaldırıldı.
 
-3. **Current State OnExits**
-   - Mevcut state'in OnExit task'ları çalıştırılır
-
-4. **State Değişimi**
-   - Current Transition'ın target state'ine geçiş yapılır
-   - State değişimi sadece transition'lar üzerinden gerçekleşir
-
-5. **State OnEntries**
-   - Yeni state'in OnEntry task'ları çalıştırılır
-
-5.1. **State Notifications**
-   - State'de tanımlı bildirimler enqueue edilir ve durable olarak gönderilir
-   - `rule` koşulu varsa değerlendirilir; koşul sağlanmazsa bildirim atlanır
-
-6. **State Tipi Kontrolü**
-   - **Finish**: Instance durumu "Completed" olarak güncellenir
-   - **SubFlow**: Sadece SubFlow çalıştırılır
-
-7. **Auto Transition'lar**
-   - Otomatik transition'lar çalıştırılır
-
-8. **Schedule Transition'lar**
-   - Zamanlanmış transition'lar çalıştırılır
+Kanonik adım sırası (pipeline `LifecycleOrder` değerleri), her trigger tipine göre profiller ve `updateData`'nın `+Self` bileşimi için tek referans: **[Transition Pipeline](../concepts/transition-pipeline)**.
 
 ---
 
@@ -706,26 +684,30 @@ Girdi modelini bu ayrıma göre kurgulayın: S2S tetikleyiciler için start `sch
 
 ## Transition Yürütme Modeli: Lock ve Busy Check
 
-<sup>New</sup> v0.0.79 ile transition yürütmesi **Busy-as-mutex** modeline geçmiştir: instance'ın `Busy` durumu, yürütme mutex'inin kendisidir. Bir transition kabul edilirken ilk adımda kısa süreli bir **status lock** (5 sn lease) altında Active→Busy check-and-set yapılır; pipeline ve otomatik transition zinciri sonrasında kilitsiz çalışır. Önceki uzun süreli dağıtık kilit (chain-token) transition yolundan tamamen kaldırılmıştır.
+<sup>New</sup> v0.0.79 ile transition yürütmesi **Busy-as-mutex** modeline geçmiştir: instance'ın `Busy` durumu, yürütme mutex'inin kendisidir. Bir transition kabul edilirken ilk adımda kısa süreli bir **status lock** (5 sn lease) + Postgres **compare-and-set** (`UPDATE … WHERE Status='A'`, v0.0.92) altında Active→Busy geçişi yapılır; pipeline ve otomatik transition zinciri sonrasında kilitsiz çalışır. Önceki uzun süreli dağıtık kilit (chain-token) transition yolundan tamamen kaldırılmıştır. Mekanik detay ve tüm pipeline adım sırası için bkz. **[Transition Pipeline](../concepts/transition-pipeline)**.
 
 Her transition tipi bu modele farklı şekilde katılır ve **flow tasarımında bu davranış farkları belirleyicidir**:
 
 | Transition tipi | Status lock | Busy check | Davranış |
 |---|---|---|---|
 | `stateTransition` / `sharedTransition` | Tutar | **Uygular** | Instance `Busy` ise istek **409** ile reddedilir; Active ise Busy'ye geçirilip pipeline çalıştırılır |
-| `cancel` / `exit` | Tutar | **Muaf** | Busy bir instance'a da kabul edilir (bypass); iptal/çıkış akışını başlatır |
-| `updateData` | **Muaf** | **Muaf** | Koşulsuz (unconditional) kabul edilir; Busy'yi ne set eder ne çözer |
+| `cancel` / `exit` | Tutar | **Muaf** | Busy 409'dan muaftır ama **accept anında** Busy'yi set eder (pipeline'da değil, v0.0.80) — iptal/çıkış akışını başlatır |
+| `updateData` | **Tutmaz** | **Muaf** | **Lock yok, duplicate-job guard yok — hiçbir yolda** (v0.0.86). Status-neutral kabul edilir; Busy'yi ne set eder ne çözer; paralel istekler tümü kabul edilir |
 
 ### updateData: Reserve Transition
 
-`updateData` **reserve** bir transition'dır: tüm lock ve busy check'lerden muaf, **status-neutral** çalışır — Busy'yi asla set etmez ve asla çözmez, dolayısıyla instance'ı Busy'de bırakma riski yoktur. **Paralel isteklerin aynı instance üzerinde datayı güncellemesi ve instance'ı ilerletmesi için kullanılacak tek yöntemdir** — aynı senaryoda `stateTransition` basmak Busy çakışmasında 409 üretir.
+`updateData` **reserve** bir transition'dır: tüm lock ve busy check'lerden muaf, **status-neutral** çalışır — Busy'yi asla set etmez ve asla çözmez, dolayısıyla instance'ı Busy'de bırakma riski yoktur. **Paralel isteklerin aynı instance üzerinde datayı güncellemesi ve instance'ı ilerletmesi için kullanılacak tek yöntemdir** — aynı senaryoda `stateTransition` basmak Busy çakışmasında 409 üretir. v0.0.86'dan itibaren bu, yalnızca lock'suz değil aynı zamanda **duplicate-job guard'sız**dır: N eşzamanlı `updateData` isteği aynı mantıksal job kimliğini paylaşsa da her biri kendi payload'ını taşıdığı için hepsi meşrudur ve dedupe uygulanmaz.
 
 Davranış, instance'ın durumuna göre ikiye ayrılır:
 
-- **Düz instance (aktif subflow yok):** Data güncellenir ve **normal transition gibi pipeline ilerler** — `$self` state change, `onExecutionTasks` ve pipeline sonunda (order 90) otomatik transition değerlendirmesi çalışır. Koşulu sağlanan bir auto, continuation boundary'de sahipliği devralarak instance'ı ilerletir (canlı bir sahip yoksa park edilmiş Busy devralınır).
+- **Düz instance (aktif subflow yok):** Data güncellenir ve **normal transition gibi pipeline ilerler** — `$self` state change, `onExecutionTasks` ve pipeline sonunda (order 80) otomatik transition değerlendirmesi çalışır. Koşulu sağlanan bir auto, continuation boundary'de sahipliği devralarak instance'ı ilerletir (canlı bir sahip yoksa park edilmiş Busy devralınır).
 - **Aktif subflow'da:** Instance'ta `updateData` tanımı varsa, istek **aktif subflow'da olsa bile parent olarak karşılanır ve subflow'a forward edilmez** — parent'ın datası güncellenir ve bırakılır; pipeline instance'ı ilerletmez, subflow kesintiye uğramaz.
 
 Otomatik transition'lar **her** `updateData` sonrasında değerlendirilir; böylece "veri biriktir, eşik sağlanınca ilerle" (fan-in) desenleri updateData fırtınası altında güvenle çalışır.
+
+:::info $self ile updateData karıştırılmamalı <sup>New</sup> v0.0.80 (breaking)
+`updateData`'nın hedefi her zaman `$self`'tir, ama `$self` **yalnızca `updateData` için** state lifecycle'ını atlar (OnEntry/OnExit çalışmaz, scheduled job'lar yeniden armlanmaz). `target: $self` yazan **başka herhangi bir transition** — tipik olarak bir **shared transition** — trigger'ının temel profilini korur ve state'in **tam** lifecycle'ını çalıştırır: OnExit/OnEntry ateşlenir, state'in timer'ları iptal edilip yeniden armlanır. Önceden `$self` hedefli her transition lifecycle'ı atlıyordu; domain tanımlarında `"target": "$self"` için grep yapıp bu davranışa dayanan mantığı `onExecutionTasks`'e taşımak gerekebilir. Ayrıntı: [Transition Pipeline → `+Self` Bileşimi](../concepts/transition-pipeline).
+:::
 
 :::tip[Flow tasarım notları]
 - Instance aktifken sürekli veri basan senaryolarda (telemetri, paralel servis sonuçları, arka plan görevleri) client'a `stateTransition` değil **`updateData`** verin.
@@ -889,6 +871,8 @@ Workflow (global), state ve task seviyesinde tanımlanabilir. Öncelik sırası:
 - Built-in function isteği cache'lenir; **aynı instance** için tekrarlanan istekler TTL boyunca cache'ten döner.
 - **Instance değiştiğinde cache düşer** ve yeni istek yeniden cache'lenir.
 - **State Function bu kapsamın dışındadır** — State Function cache'ini **platform kendisi yönetir** (host tarafındaki `StateFunctionCache` ayarları); `config.functionCache` onu etkilemez.
+
+Host seviyesi cache katmanları (component cache, state function cache, secret cache vb.) ve varsayılan değerleri için bkz. [Cache Yapılandırması](/docs/configuration/caching).
 
 ### Resource Lock
 

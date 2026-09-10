@@ -170,6 +170,14 @@ Her seviyede, kurallar **priority** değerine göre değerlendirilir (düşük s
 - `PT5M` - 5 dakika
 - `PT1H` - 1 saat
 
+### Incident kaydı ile ilişki <sup>New</sup> v0.0.92
+
+Bir error boundary bir aksiyon aldığında (retry tükendiğinde dahil), bu **tek bir incident** satırı olarak `InstanceIncidents` tablosuna kalıcı şekilde kaydedilir — satır boundary'nin kendi verdict'ini taşır: `boundaryAction` (`Abort`, `Retry`, `Rollback`, `Notify`, `Log`, `Ignore`) ve `boundaryLevel` (`Task`/`State`/`Global`) alanlarıyla, hangi kuralın eşleştiğini gösterir. `ignore` ve `log` aksiyonları incident yazmaz.
+
+:::info Bilinen sınır
+Incident'ın `retryCount` alanı **her zaman `0`** döner — çözülmüş retry policy'si execution engine tarafından action result'a eklenmiyor. Gerçek deneme sayısını izlemek isterseniz task'ınızın mapping'inden instance data'ya yazın. Incident modeli, retry semantiği ve okuma endpoint'leri için bkz. [Instance Incidents](/docs/concepts/incidents).
+:::
+
 ---
 
 ## Örnekler
@@ -418,3 +426,4 @@ Yüksek öncelik numaralı wildcard kuralını fallback olarak ekleyin:
 - [Workflow](/docs/components/workflow) - State tanımları ve tipleri
 - [Task Yönetimi](/docs/components/tasks/) - Task tipleri ve yürütme
 - [Transition Yönetimi](/docs/components/mappings) - Mappings ve transition'lar
+- [Instance Incidents](/docs/concepts/incidents) - Incident kaydı, retry semantiği ve okuma endpoint'leri

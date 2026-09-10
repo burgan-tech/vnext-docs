@@ -1,7 +1,7 @@
 ---
 sidebar_position: 1
 title: Observability
-description: vNext gözlemlenebilirlik mimarisi — OpenTelemetry, persistent metrics (ClickHouse), Redis ve PostgreSQL metrikleri, health endpoints
+description: vNext gözlemlenebilirlik mimarisi — OpenTelemetry, Elastic APM ve OpenObserve, Redis ve PostgreSQL metrikleri, health endpoints
 ---
 
 # Observability
@@ -23,11 +23,10 @@ flowchart LR
         DPR[Dapr Sidecars]
     end
     OTel[OpenTelemetry Collector]
-    Traces[(Trace Backend<br/>Jaeger / Tempo)]
-    Logs[(Log Backend<br/>Loki / ELK)]
+    Elastic[(Elastic APM<br/>Kibana)]
+    OO[(OpenObserve)]
     Metrics[(Metrics<br/>Prometheus)]
-    CH[(ClickHouse<br/>Persistent Metrics)]
-    Dash[Dashboard<br/>Grafana]
+    Dash[Dashboard<br/>Grafana / Kibana]
 
     OAPI -->|OTLP| OTel
     EAPI -->|OTLP| OTel
@@ -36,15 +35,13 @@ flowchart LR
     RDS -->|exporter| OTel
     DPR -->|OTLP| OTel
 
-    OTel --> Traces
-    OTel --> Logs
+    OTel --> Elastic
+    OTel --> OO
     OTel --> Metrics
-    Metrics -->|long-term retention| CH
 
-    Traces --> Dash
-    Logs --> Dash
+    Elastic --> Dash
+    OO --> Dash
     Metrics --> Dash
-    CH --> Dash
 ```
 
 ## Sinyaller
@@ -68,7 +65,7 @@ flowchart LR
 - **Format**: JSON (machine-readable)
 - **Standart alanlar**: `timestamp`, `level`, `service`, `domain`, `workflow_id`, `instance_id`, `trace_id`, `span_id`, `correlation_id`
 - **Sensitive data**: PII alanları redaction layer'dan geçer
-- **Sink**: OpenTelemetry Logs → Loki / ELK
+- **Sink**: OpenTelemetry Logs → Elastic (Kibana) / OpenObserve
 
 ### Metrics
 
@@ -82,15 +79,6 @@ flowchart LR
 | **Pub/Sub** | publish rate, consume lag, DLQ rate | Dapr / broker exporter |
 | **Outbox** | drain rate, backlog size, publish failure | Outbox worker |
 | **Inbox** | inbox lag, dedupe hit, apply failure | Inbox worker |
-
-## Persistent Metrics (ClickHouse)
-
-Prometheus kısa vadeli (default 15 gün) saklama yapar. **Uzun vadeli trend ve SLO raporu** için OpenTelemetry metrics → ClickHouse pipeline'ı kullanılır:
-
-- **Saklama süresi**: Yıllar bazında konfigüre edilebilir
-- **Kullanım amacı**: SLO compliance raporu, trend analizi, kapasite planlama, audit
-- **Sorgu modeli**: SQL üzerinden time-series + analitik
-- **Avantaj**: PostgreSQL audit ile aynı analitik motor; cross-join mümkün
 
 ## Health Endpoints
 
@@ -119,3 +107,4 @@ Product roadmap **Now** fazında "Operasyonel SLO" işlendi. Bu sayfa o SLO'lar�
 - [Çekirdek Prensipler — Observable by Default](/architecture/overview/principles#7-observable-by-default)
 - [Runtime topolojisi](/architecture/runtime/)
 - [Product / Release Strategy](/product/release-strategy/) — release notes ve SLO standartları
+- [Gözlemlenebilirlik: Trace, Log ve Metrikler](/docs/how-to/observability) — correlation carrier'ları, reserved header'lar, span ağacı ve script/fan-out metrikleri için domain ekipleri rehberi

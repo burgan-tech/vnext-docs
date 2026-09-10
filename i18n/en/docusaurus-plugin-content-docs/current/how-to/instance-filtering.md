@@ -466,44 +466,13 @@ GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=2
 
 ## Error Handling
 
-### Invalid Filter Syntax
-
-```json
-{
-  "error": {
-    "code": "invalid_filter",
-    "message": "Invalid filter syntax. Valid JSON expected."
-  }
-}
-```
-
-### Unsupported Operator
-
-```json
-{
-  "error": {
-    "code": "unsupported_operator",
-    "message": "'regex' operator is not supported",
-    "supportedOperators": ["eq", "ne", "gt", "ge", "lt", "le", "between", "like", "startswith", "endswith", "in", "nin", "isnull"]
-  }
-}
-```
-
-### Invalid Column Name
-
-```json
-{
-  "error": {
-    "code": "invalid_column",
-    "message": "'invalidColumn' is not a valid Instance column. Use 'attributes.fieldName' for JSON fields.",
-    "validColumns": ["key", "flow", "status", "currentState", "createdAt", "modifiedAt", "completedAt", "isTransient"]
-  }
-}
-```
+:::note Updated for v0.0.84
+Instance-query parsing is now **fail-closed**: anything the runtime cannot execute exactly as authored (filter, sort, groupBy, aggregation) is rejected up front with HTTP 400, instead of being silently dropped and running unfiltered. The `error.code` shapes below (`invalid_filter`, `unsupported_operator`, `invalid_column`) are superseded by the `Validation:9000xx` codes documented on the [Turkish page](/docs/how-to/instance-filtering) (section "Hata Yönetimi"), with sub-codes such as `filter.unknownOperator` and `sort.invalidJson`. Full English translation of that section is pending.
+:::
 
 ### Schema Filter Validation Error
 
-Querying a field that is **not filterable** in the master schema (`x-filterOperators` empty/absent), or using a **disallowed operator**, raises **`SchemaFilterValidationException`**. The same applies to sorting via `x-sortable`. See [Schema-Driven Filterability & Sorting](#schema-driven-filterability--sorting).
+Querying a field that is **not filterable** in the master schema (`x-filterOperators` empty/absent), or using a **disallowed operator**, raises **`SchemaFilterValidationException`** (`Validation:900010`). The same applies to sorting via `x-sortable`. See [Schema-Driven Filterability & Sorting](#schema-driven-filterability--sorting).
 
 ---
 
@@ -514,6 +483,10 @@ Querying a field that is **not filterable** in the master schema (`x-filterOpera
 3. **Limit Group By Fields**: Use maximum 2-3 fields for optimal performance
 4. **Use Date Ranges Wisely**: Narrow date ranges improve query performance
 5. **Avoid Wildcard Searches on Large Datasets**: Use `startswith` or `endswith` instead of `like` when possible
+
+:::tip v0.0.86 — `attributes.*` equality filters are now indexed
+Equality (`eq`) filters on `attributes.*` fields compile to a `@>` containment predicate; a partial GIN index (`jsonb_path_ops`, `WHERE IsLatest = true`) on `InstancesData.Data` now serves it. Previously every such filter was a full table scan.
+:::
 
 ---
 

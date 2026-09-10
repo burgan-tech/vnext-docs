@@ -609,44 +609,43 @@ GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=2
 
 ## Hata Yönetimi
 
-### Geçersiz Filtre Syntax
+<sup>New</sup> v0.0.84 itibarıyla instance-query parsing **fail-closed** çalışır: runtime'ın tam olarak yazıldığı gibi çalıştıramadığı bir filtre, sıralama, groupBy veya aggregation **baştan reddedilir** (HTTP 400). Önceden bu tür girdiler sessizce yoksayılır ve sorgu yine de (genelde daha geniş bir sonuç kümesiyle) çalışırdı.
 
-```json
-{
-  "error": {
-    "code": "invalid_filter",
-    "message": "Geçersiz filtre sözdizimi. Geçerli JSON bekleniyor."
-  }
-}
-```
+### Filtre hataları — `Validation:900011`
 
-### Desteklenmeyen Operatör
+| Alt kod | Anlamı |
+|---------|--------|
+| `filter.unknownOperator` | Tanınmayan operatör — düzeltme ipucuyla birlikte döner (`gte`→`ge`, `lte`→`le`, `neq`/`notequals`→`ne`, `equals`→`eq`, `contains`→`like`, `notin`→`nin`, `null`→`isNull`) |
+| `filter.unrecognizedFormat` | Bozuk/eksik JSON |
+| `filter.unknownProperty` | Zarf içinde tanınmayan alan adı (`filter`, `groupBy`, `aggregations`, `orderBy` dışında) |
+| `filter.noOperator` | Alan verilmiş ama operatör yok (`{"amount":{}}`) |
+| `filter.emptyLogicalOperator` | Boş mantıksal operatör (`{"and":[]}`) |
+| `filter.legacyNotAggregatable` | Legacy `field=operator:value` formatı groupBy/aggregation ile birlikte kullanılmış |
 
-```json
-{
-  "error": {
-    "code": "unsupported_operator",
-    "message": "'regex' operatörü desteklenmiyor",
-    "supportedOperators": ["eq", "ne", "gt", "ge", "lt", "le", "between", "like", "startswith", "endswith", "in", "nin", "isnull"]
-  }
-}
-```
+Desteklenen wire operatörleri: `between`, `endswith`, `eq`, `ge`, `gt`, `in`, `includes`, `isNull`, `le`, `like`, `lt`, `match`, `ne`, `nin`, `startswith`. `{}` ve `{"attributes":{}}` **geçerlidir** — boş filtre "kısıtlama yok" anlamına gelir.
 
-### Geçersiz Kolon Adı
+### Sıralama hataları — `Validation:900012`
 
-```json
-{
-  "error": {
-    "code": "invalid_column",
-    "message": "'gecersizKolon' geçerli bir Instance kolonu değil. JSON alanları için 'attributes.alanAdi' kullanın.",
-    "validColumns": ["key", "flow", "status", "currentState", "createdAt", "modifiedAt", "completedAt", "isTransient"]
-  }
-}
-```
+| Alt kod | Anlamı |
+|---------|--------|
+| `sort.invalidJson` | JSON olmayan değer — **`"-field"` kısayolu artık desteklenmez**, hiçbir zaman gerçek anlamda çalışmamıştı (sessizce yoksayılıyordu). JSON forma geçin: `sort={"field":"createdAt","direction":"desc"}` |
+| `sort.invalidDirection` | `asc`/`desc` dışında bir değer |
+| `sort.unknownField` | Tanınmayan Instance kolonu — JSON alanları için `attributes.` prefix'i gerekir |
+| `sort.unsafePath` | `attributes.` sonrası her segment `^[a-zA-Z0-9_]+$` ile eşleşmeli |
 
-### Şema Filtre Doğrulama Hatası
+`GetInstancesTask`'ta `"sort": "-CreatedAt"` gibi bir kısayol artık `Result.Fail` döner — error boundary tetiklenir ve `Abort` kuralı altında **instance `Faulted` olabilir**. Migrasyon: `"sort": "{\"field\":\"createdAt\",\"direction\":\"desc\"}"`.
 
-Master şemada **filtrelenemez** bir alan (`x-filterOperators` boş/yok) sorgulandığında veya alan için **izin verilmeyen bir operatör** kullanıldığında **`SchemaFilterValidationException`** fırlatılır. Aynı kural sıralama için `x-sortable` üzerinden geçerlidir. Bkz. [Şema-Tabanlı Filtrelenebilirlik ve Sıralama](#şema-tabanlı-filtrelenebilirlik-ve-sıralama).
+### GroupBy / Aggregation hataları
+
+`Validation:900013` (`InstanceGroupByInvalid`) ve `Validation:900014` (`InstanceAggregationInvalid`), sırasıyla geçersiz `groupBy` ve `aggregations` girdilerinde döner.
+
+### Şema Filtre Doğrulama Hatası — `Validation:900010`
+
+Master şemada **filtrelenemez** bir alan (`x-filterOperators` boş/yok) sorgulandığında veya alan için **izin verilmeyen bir operatör** kullanıldığında **`SchemaFilterValidationException`** fırlatılır. Aynı kural sıralama için `x-sortable` üzerinden geçerlidir. Bu, bir **master-schema policy** reddidir — yukarıdaki grammar hatalarından ayrıdır ve drift alarmı olarak loglanmaz. Bkz. [Şema-Tabanlı Filtrelenebilirlik ve Sıralama](#şema-tabanlı-filtrelenebilirlik-ve-sıralama).
+
+:::note
+Tüm red nedenleri tek seferde (en fazla 20 tanesi) döner — çağıran tek round-trip'te düzeltebilir.
+:::
 
 ---
 
@@ -657,6 +656,10 @@ Master şemada **filtrelenemez** bir alan (`x-filterOperators` boş/yok) sorgula
 3. **Group By Alanlarını Sınırlayın**: Optimal performans için maksimum 2-3 alanda group by yapın
 4. **Tarih Aralıklarını Akıllıca Kullanın**: Dar tarih aralıkları sorgu performansını artırır
 5. **Büyük Veri Setlerinde Wildcard Aramadan Kaçının**: Mümkün olduğunda `like` yerine `startswith` veya `endswith` kullanın
+
+:::tip v0.0.86 — `attributes.*` eşitlik filtreleri artık indeksli
+`attributes.` altındaki alanlara **eşitlik** (`eq`) filtreleri `@>` containment predicate'i üretir; bu predicate'i karşılamak için `InstancesData.Data` üzerinde `IsLatest = true` koşullu, `jsonb_path_ops` opsiyonlu kısmi bir **GIN index** eklendi. Öncesinde her `attributes.*` eşitlik filtresi tam tablo taramasıydı.
+:::
 
 ---
 

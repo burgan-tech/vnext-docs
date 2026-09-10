@@ -144,7 +144,7 @@ Function'lar üç çağırma şekli sağlar:
 | `onExecutionTasks` | array | **Koşullu** | Sıralı çoklu task listesi. `task` veya `onExecutionTasks`'tan biri zorunlu |
 | `output` | object | **Koşullu** | Output mapping. `onExecutionTasks` tanımlıysa **zorunlu** |
 | `labels` | array | Hayır | Çoklu dil etiketleri (`label` + `language`) |
-| `roles` | array | Hayır | Yetkilendirme rolleri (`role` + `grant`). DENY her zaman ALLOW'u geçersiz kılar |
+| `roles` | array | Hayır | Yetkilendirme rolleri (`role` + `grant`). DENY her zaman ALLOW'u geçersiz kılar. Keşif (`/info`, `catalog`) yanıtlarında görünürlüğü belirler. <sup>New</sup> v0.0.88 itibarıyla doğrudan custom function çağrısında bir gate **değildir** — yalnızca `authorize` fonksiyonu değerlendirir; bkz. [Authorization → Çağıran rollerinin çözümlenmesi](/docs/concepts/authorization#çağıran-rollerinin-çözümlenmesi-caller-role-provider) |
 | `rawResponse` | boolean | Hayır | `true`: mapped rawData doğrudan response olarak döndürülür. `false` (varsayılan): platform kendi pattern modeli üzerinden çıktı verir. Legacy API'lerden vnext'e geçiş için |
 | `verbs` <sup>New</sup> | string[] | Hayır | Function'ın kabul ettiği HTTP verb'leri — aşağıdaki enum tablosuna bakın. Tanımsız/boş ise tüm verb'ler kabul edilir (geriye dönük uyumlu) |
 | `inputSchema` <sup>New</sup> | object / array | Hayır | Request body'yi tanımlayan `sys-schemas` kontratı. Tanımlıysa body, kural değerlendirmesini kazanan şemaya karşı **valide edilir** (hata → `400`). Tek referans veya rule-based dizi — bkz. [Custom Functions → Fonksiyon Kontratı](/docs/components/functions/custom) |

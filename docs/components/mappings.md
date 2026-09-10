@@ -190,6 +190,16 @@ public sealed class ScriptContext
 }
 ```
 
+### `ScriptContext` davranışları <sup>New</sup> v0.0.85
+
+- **`context.Instance.Data` okumaları data-version başına tek ağaçtır.** Önceden her erişimde taze bir dynamic ağaç materyalize edilirdi ve script-side mutasyonlar sessizce kaybolurdu. Artık okumalar data-version başına memoize edilir: aynı transition içinde bir mutasyon sonraki okumalara görünür — **yine de asla persist edilmez**; kalıcılık hâlâ yalnızca delta üzerinden, `ScriptResponse.Data` ile olur.
+- **Paralel branch task response değerleri referansla paylaşılır** (container'lar izole kalır): bir branch içinde önceden var olan bir response değerinin yerinde (in-place) mutasyonu, join sonrası parent'a görünür.
+- **`SetBody`, ExpandoObject/list key'lerini yazıldığı gibi korur**, camelCase'e çevirmez — önceden global serileştirme seçenekleri key'leri camelCase yapardı. Anonymous object/POCO girdileri hâlâ camelCase'e çevrilir (değişmedi).
+- **Döngüsel (self-referencing) expando derinliği 256'da throw eder.** Body/branch klonlama artık yapısal klonlama kullanır; kendi içine referans veren bir değer artık sessizce `null`'a düşmez, derinlik 256'ya ulaştığında `InvalidOperationException` fırlatır ve task normal error boundary üzerinden görünür şekilde başarısız olur.
+- **Paralel merge conflict tespiti yapısal ve sıra bağımsızdır** (`JsonElement.DeepEquals`, obje property sırası yok sayılır) — aynı içerik farklı sırada artık conflict üretmez.
+
+`PreserveNumericPrecision` (InstanceData append'inde sayısal hassasiyet) için bkz. [Configuration → Workflow Execution](../configuration/workflow-execution).
+
 ### Body
 
 İstek gövdesi veya göreve özgü yük dinamiktir.
@@ -458,6 +468,10 @@ public class MyMapping : ScriptBase, IMapping
         Task.FromResult(new ScriptResponse());
 }
 ```
+
+:::tip Secret cache ve performans
+`GetSecret`/`GetSecrets` çağrıları process-wide bir bundle cache'in arkasındadır (varsayılan TTL 30 sn, bkz. [Configuration → Scripting / Sandbox](../configuration/scripting#secret-cache)). Rotasyon sonrası bundle en fazla TTL kadar bayat kalabilir. `GetSecret` senkrondur ve cache miss'te **thread'i bloklar** — gecikmeye duyarlı yollarda `GetSecretAsync` tercih edin.
+:::
 
 ### Property yardımcıları
 
@@ -1167,6 +1181,8 @@ if (int.TryParse(context.Body?.id?.ToString(), out int id))
 ```
 
 ### Performans — async secret
+
+Secret helper'ları process-wide bir bundle cache'in (varsayılan TTL 30 sn — bkz. [Configuration → Scripting / Sandbox](../configuration/scripting#secret-cache)) arkasındadır; `GetSecret` senkrondur ve cache miss'te thread'i bloklar. Gecikmeye duyarlı yollarda `GetSecretAsync` kullanın:
 
 ```csharp
 public async Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext context)

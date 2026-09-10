@@ -450,6 +450,10 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/state
 `state` alanı, aktif state'te `alias` tanımlıysa **role göre maskelenmiş** etiketi döndürebilir. İstek yapan aktörün rolleri alias `roles` listesine göre değerlendirilir (DENY her zaman ALLOW'u geçersiz kılar) ve eşleşen alias için istek diline (Accept-Language) uygun `label` döner; o dilde label yoksa `alias.name` döner. `alias` tanımlı değilse veya hiçbir rol eşleşmezse ham `state.key` döner. Detay için bkz. [State Alias](/docs/components/workflow#state-alias-rol-tabanlı-state-maskeleme).
 :::
 
+:::note Yanıt şekli için tam referans
+Yukarıdaki örnek sadeleştirilmiştir. `kind: "scheduled"` zamanlanmış transition girişleri, `incident` (Instance Incidents) bloğu, `interaction`, `functions`, `master` ve `correlations` alanları dahil **tam** response şekli için bkz. [Built-in Functions → State Fonksiyonu](/docs/components/functions/built-in#state-fonksiyonu).
+:::
+
 ### View Function
 
 Instance'ın mevcut state veya transition için view verisini döndürür.

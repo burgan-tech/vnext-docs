@@ -121,16 +121,38 @@ Yeni instance başlatır.
 | `attributes` | object | Initial instance data |
 | `stage` | string \| null | Kullanıcı tanımlı durum bilgisi (max 120 char, serbest metin) |
 
-:::tip[Serbest (free-form) payload]
-Gövde, top-level `attributes` anahtarı içermeyen **serbest bir JSON** de olabilir; runtime bunu otomatik olarak `{"attributes": {...}}` şekline normalize eder. Örn. `{"customer_id":"123"}` → `{"attributes":{"customer_id":"123"}}`. Mod, `x-vnext-payload-mode` header'ı ile de zorlanabilir:
+:::tip[Serbest (free-form) payload <sup>New</sup> v0.0.85]
+Gövde, standart zarfa ait bir alan içermeyen **serbest bir JSON** de olabilir; runtime bunu otomatik olarak `{"attributes": {...}}` şekline normalize eder. Örn. `{"customer_id":"123"}` → `{"attributes":{"customer_id":"123"}}`.
+
+Envelope auto-detection şu kuralı izler: top-level'da bir `attributes` alanı varsa (case-insensitive), yanında başka alanlar olsa bile gövde **her zaman** standart zarf sayılır. `attributes` yoksa, gövde standart zarf sayılır **ancak ve ancak** top-level'daki alanların **tamamı** `key`/`tags`/`stage`'den ibaretse (case-insensitive); diğer tüm durumlar — boş gövde dahil — serbest (free-form) kabul edilir. Bu nedenle yalnızca `key`/`tags`/`stage` adlı alanlardan oluşan bir serbest payload zarftan ayırt edilemez ve **belirsizdir** — böyle bir payload'ı serbest olarak göndermek için `x-vnext-payload-mode: raw` header'ı zorunludur. Case-insensitive algılama sayesinde `{"Attributes": {...}}` (PascalCase) gibi gövdeler de standart zarf olarak çalışır.
+
+Mod, `x-vnext-payload-mode` header'ı ile de zorlanabilir:
 
 | Header değeri | Etki |
 |---|---|
-| `raw` | Gövdede `attributes` olsa bile serbest payload kabul edilir |
-| `standard` | Gövdede `attributes` olmasa bile standart DTO kabul edilir |
-| (yok) | Top-level `attributes` anahtarı varsa standart, yoksa serbest mod |
+| `raw` | Gövdede zarf alanları olsa bile serbest payload kabul edilir |
+| `standard` | Gövdede zarf alanları olmasa bile standart DTO kabul edilir |
+| (yok) | Yukarıdaki şekil tabanlı kural otomatik uygulanır |
 
 Aynı davranış transition endpoint'i için de geçerlidir.
+:::
+
+:::note[Schema doğrulama hataları <sup>New</sup> v0.0.85]
+Bir `schema` içeren transition/start isteği geçersiz bir payload ile reddedildiğinde, `400` yanıtı hangi alan(lar)ın başarısız olduğunu **her zaman** adlandırır:
+
+```jsonc
+{
+  "error": {
+    "validationErrors": [
+      { "members": ["root"], "message": "Required properties [\"customer\"] are not present" },
+      { "members": ["customer.ownerUserId"], "message": "Required properties [\"ownerUserId\"] are not present" }
+    ]
+  }
+}
+```
+
+- `members` alanındaki adlar **instance path**'leridir (`root`, `customer.ownerUserId`), JSON Schema keyword'ü değil.
+- Bir root-seviyesi hata ile bir child hata **birlikte** raporlanır; biri diğerini gizlemez.
 :::
 
 :::tip[Form-urlencoded gövde desteği]
@@ -198,6 +220,8 @@ Faulted instance'ı **yeniden çalıştırır**.
 - `200 OK` → `RetryInstanceOutput` (id, status, retriedTransitionId)
 - `400`, `404` → `ProblemDetails`
 
+> **Not:** Yeniden yürütülen iş **tekrar fault** olursa yanıt yine `200` ile `"status": "F"` döner ve bu durum **kalıcıdır** — instance Faulted kalır ve **ikinci bir retry kabul edilir**. Başarılı bir retry (unfault) instance'ın **tüm** açık incident'larını kapatır ve `hasActiveIncident` bayrağını yeniden hesaplar. Ayrıntı: [Instance Incidents](/docs/concepts/incidents).
+
 ### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}`
 
 Instance metadata + data döner (extension dahil).
@@ -233,6 +257,27 @@ Instance'ın **transition history**'sini döner. Her transition kaydı, geçişi
 | `stage` | string \| null | Çağıranın set ettiği stage değeri |
 
 > **Not:** `effectiveState*` ve `stage` alanları transition **tamamlanma anında** snapshot'lanır. Başarısız/tamamlanmamış transition'larda ve v0.0.68 öncesi tarihsel kayıtlarda `null` döner (backfill yapılmaz).
+
+### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/incidents` <sup>New</sup>
+
+Instance'ın error-boundary incident geçmişini **en yeniden eskiye** sayfalar. Ayrıntı: [Instance Incidents](/docs/concepts/incidents).
+
+**Query parameters:** `page` (1-based, default `1`), `pageSize` (default `20`, max `100`)
+
+**Responses:**
+- `200 OK` → `{ hasActiveIncident, items: IncidentDetail[], page, pageSize, hasNext }`
+- `403 Forbidden` → çağıran, state fonksiyonuyla aynı `queryRoles` kapısını geçemedi
+
+### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/incidents/active` <sup>New</sup>
+
+Instance'ın en yeni **çözülmemiş** incident'ını döner (`incident.active.href`'in hedefi). Ayrıntı: [Instance Incidents](/docs/concepts/incidents).
+
+**Responses:**
+- `200 OK` → `IncidentDetail`
+- `404 Not Found` (`Instance:100037`) → açık incident yok — **normal bir sonuçtur**, hata değildir (bir retry arada çözmüş olabilir)
+- `403 Forbidden` → çağıran, state fonksiyonuyla aynı `queryRoles` kapısını geçemedi
+
+> **Not (`internal/*` endpoint'leri):** `internal/subflow-forward`, `internal/busy-release` ve `internal/related-data` gibi `internal/` önekli rotalar **public API değildir** — runtime içi (Dapr sidecar-to-sidecar) çağrılar için var olan, ağ izolasyonuna dayanan dahili endpoint'lerdir ve bu referansın kapsamı dışındadır.
 
 ---
 
@@ -285,6 +330,19 @@ Instance'ın **transition history**'sini döner. Her transition kaydı, geçişi
   modifiedBy?: string;
   modifiedByBehalfOf?: string;
   stage?: string;              // max 120 chars, kullanıcı tanımlı durum bilgisi
+  incident?: IncidentHref;     // hasActiveIncident + active/history link'leri — bkz. Instance Incidents
+}
+```
+
+### IncidentHref <sup>New</sup>
+
+`GetInstanceOutput.metadata.incident` ve state fonksiyonunun `incident` bloğu **aynı** şekli paylaşır. Ayrıntı: [Instance Incidents](/docs/concepts/incidents).
+
+```typescript
+{
+  hasActiveIncident: boolean;
+  active?: { href: string };   // yalnızca hasActiveIncident true iken bulunur
+  history: { href: string };   // her zaman bulunur
 }
 ```
 
@@ -365,4 +423,5 @@ API endpoint URL'leri Url Templates konfigürasyonu ile **özelleştirilebilir**
 - [Async / Sync](/docs/how-to/async-sync)
 - [Instance Filtering](/docs/how-to/instance-filtering)
 - [Instance Data](/docs/concepts/instance-data)
+- [Instance Incidents](/docs/concepts/incidents)
 - [API Reference Index](/docs/api-reference/) — C# interface'ler

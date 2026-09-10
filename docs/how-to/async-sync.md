@@ -68,7 +68,11 @@ State Function yanıtındaki `interaction` objesi, state'te `interaction.longPol
 
 ### Continuation işletimi (durable)
 
-Asenkron continuation'lar dayanıklılık için kuyruğa alınabilir: continuation **doğrudan Dapr üzerinden** enqueue edilir, bu yol kullanılamadığında transactional **outbox** fallback devreye girer. Bu, sağlıklı koşullarda gecikmeyi azaltırken dayanıklılık garantisini korur.
+Asenkron bir kabulün (start veya manuel/event transition) **yalnızca ilk** job'ı bu şekilde kuyruğa alınır: continuation **doğrudan Dapr üzerinden** enqueue edilir (`DirectEnqueueContinuations`, varsayılan `true`), bu yol başarısız olursa transactional **outbox** fallback devreye girer. Bu, sağlıklı koşullarda gecikmeyi azaltırken dayanıklılık garantisini korur.
+
+**Auto-chain'in kendisi bu bayraktan bağımsızdır ve her zaman inline çalışır** — zincirdeki her otomatik hop, ilk job'ı başlatan çağıran tarafından **in-process** ve **awaited** olarak yürütülür; ayrı bir job enqueue edilmez. Eski **per-job** modu (her hop'un kendi job'ı, `EnqueueContinuationStrategy` / `ContinuationMode.Enqueue`) DI'dan kaldırılmıştır ve **erişilemez**; `TransitionPerJob` config alanı geriye dönük uyumluluk için okunur ama **inert**'tir (davranışsal etkisi yoktur). `DirectEnqueueContinuations`, yalnızca **ilk accept**'in enqueue yolunu değiştirir — auto-chain'in inline çalışıp çalışmayacağını asla etkilemez.
+
+Runtime-üretilen subflow start ve forward çağrıları v0.0.91'den itibaren **senkron**dur (`sync=true`) — parent'ın orijinal request modundan bağımsız olarak child'ın mevcut pipeline aktivasyonu bir dinlenme noktasına kadar beklenir. Ayrıntı: [Transition Pipeline → Auto-Chain Yürütme](../concepts/transition-pipeline) ve [Async Transition Execution Modes](https://github.com/burgan-tech/vnext/blob/master/docs/architecture/async-transition-execution-modes.md).
 
 ## Karar
 
@@ -85,3 +89,4 @@ Asenkron continuation'lar dayanıklılık için kuyruğa alınabilir: continuati
 - [Instance Data](/docs/concepts/instance-data) — instance lifecycle
 - [Built-in Functions](/docs/components/functions/built-in) — State function
 - [Workflow → State Interaction (Long Poll)](/docs/components/workflow#state-interaction-long-poll) — deklaratif long-poll sonlandırma
+- [Transition Pipeline](/docs/concepts/transition-pipeline) — admission, lock modeli ve auto-chain yürütmesi

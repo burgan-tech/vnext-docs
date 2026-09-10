@@ -12,7 +12,7 @@ Resource Lock, bir transition çalışırken paylaşılan bir kaynağı (koltuk,
 ## Genel Bakış
 
 - Kilit, transition tanımındaki `resourceLock` bloğu ile **isteğe bağlı** olarak devreye girer. `resourceLock` tanımlı olmayan transition'lar bu adımı hiç çalıştırmaz.
-- Pipeline'da **order 25** (`ResourceLockStep`) çalışır. Yalnızca **Manual** profilinde aktiftir; AutoChain / Scheduled / Event / ErrorBoundary profillerinde hariç tutulur.
+- Pipeline'da **order 25** (`ResourceLockStep`) çalışır. Yalnızca **Manual** profilinde aktiftir; AutoChain / Scheduled / Event / ErrorBoundary profillerinde hariç tutulur. Tüm pipeline adımları ve profiller için bkz. [Transition Pipeline](../concepts/transition-pipeline).
 - Kilit **sahibi (owner)** her zaman `instanceId`'dir. Yani bir kilit, onu alan instance'a aittir.
 - Kilit anahtarı (`key`), her transition'da bir C# script'i (`ITransitionMapping`) çalıştırılarak runtime'da üretilir.
 - **Kilit her zaman TTL'e sahiptir** — süresi dolunca otomatik serbest kalır. TTL, terkedilen kilitlere karşı nihai güvenlik ağıdır.

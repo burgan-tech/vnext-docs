@@ -14,6 +14,10 @@ vNext script motoru (mapping, rule, timer, vb.), helper bileşenlerini ve sandbo
     "Helpers": {
       "Enabled": true
     },
+    "SecretCache": {
+      "Enabled": true,
+      "TtlSeconds": 30
+    },
     "Sandbox": {
       "Enabled": true,
       "AllowUnsafe": false,
@@ -39,6 +43,8 @@ vNext script motoru (mapping, rule, timer, vb.), helper bileşenlerini ve sandbo
 | Alan | Tip | Açıklama |
 |------|-----|----------|
 | `Helpers.Enabled` | boolean | `sys-mappings` helper'larının ([Mapping Bileşeni](/docs/components/mapping-component)) script bağlamına dahil edilmesini açar/kapatır |
+| `SecretCache.Enabled` | boolean | Secret helper'larının (`GetSecret`/`GetSecrets`) process-wide bundle cache'ini açar/kapatır (varsayılan `true`) |
+| `SecretCache.TtlSeconds` | integer | Cache'lenmiş secret bundle'ının ömrü, saniye (varsayılan `30`) |
 | `Sandbox.Enabled` | boolean | Sandbox güvenlik kısıtlamalarını etkinleştirir |
 | `Sandbox.AllowUnsafe` | boolean | `unsafe` kod bloklarına izin (varsayılan `false`) |
 | `Sandbox.PluginDirectory` | string | Plugin/3. parti assembly'lerin yüklendiği dizin (varsayılan `/app/assemblies`) |
@@ -48,6 +54,16 @@ vNext script motoru (mapping, rule, timer, vb.), helper bileşenlerini ve sandbo
 :::info[Allow-list nasıl genişler?]
 Mapping objelerindeki ve flow-level `attributes.scripts.allowedAssemblies` değerleri, bu taban allow-list'e **eklenir**. Yani bir helper'ın ihtiyaç duyduğu assembly (ör. `Newtonsoft.Json`) global ayara dokunmadan ilgili bileşende bildirilebilir. Bkz. [Mapping Bileşeni](/docs/components/mapping-component).
 :::
+
+## Secret Cache
+
+`GetSecret`/`GetSecrets` helper'ları, Dapr secret store'a her çağrıda gitmek yerine process-wide bir **bundle cache** kullanır: anahtar `(storeName, secretStore)` çiftidir, aynı bundle'a eşzamanlı isteyen çağrılar tek bir yükleme paylaşır (single-flight). **Hata cache'lenmez** — bir okuma başarısız olursa bir sonraki çağrı yeniden dener. Rotasyon sonrası bundle en fazla `TtlSeconds` kadar bayat kalabilir; Redis'e (veya başka bir dağıtılmış depoya) gitmez, yalnızca process içi bir cache'tir.
+
+Kritik gecikmeye duyarlı yollarda (ör. `InputHandler` içinde her çağrıda secret okuma) senkron `GetSecret` yerine `GetSecretAsync` tercih edin — cache miss'te senkron API thread'i bloklar.
+
+## Script Compile Cache
+
+Derlenen script'ler içerik hash'ine (SHA-256) göre cache'lenir; aynı içerik ikinci kez derlenmez. Eşzamanlı isteyen çağrılar tek bir derlemeyi paylaşır (single-flight, async). **Hatalı bir derleme cache'lenmez** — bir sonraki çağrı yeniden derlemeyi dener.
 
 ## Varsayılan Yasak (Ban) Listesi
 

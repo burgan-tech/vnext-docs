@@ -97,7 +97,6 @@ Gözlemlenebilirlik **sonradan eklenen bir özellik değil**, mimari katmanın d
 - **Health endpoints** — Orchestration `4201/health`, Execution `4202/health`
 - **Cache metrics (Redis)** — hit/miss, latency, key dağılımı
 - **Database metrics (PostgreSQL)** — slow query, connection pool
-- **Persistent metrics (ClickHouse)** — uzun vadeli metrik saklama, trend analizi, SLO raporu
 
 Bir akış canlıya çıktığı an gözlemlenmektedir; ek enstrümantasyon gerekmez.
 

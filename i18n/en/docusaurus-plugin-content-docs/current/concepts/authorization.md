@@ -127,7 +127,7 @@ An existing deny-only set is now treated as a **blacklist** (open to everyone ex
 | Transition | `roles` | Who can trigger the transition |
 | Transition `availableIn` entry | `roles` <sup>New</sup> | Who is offered the transition in that state (AND with transition `roles`) |
 | Flow / State | `queryRoles` | Who can query instances and states (state level overrides root). Enforced by the built-in **state/data/view/schema** read functions on the current state; **403** if not allowed |
-| Function | `roles` | Who can invoke a function and see it in discovery (`/info`, `catalog`) |
+| Function | `roles` | Who sees it in discovery (`/info`, `catalog`). <sup>New</sup> As of v0.0.88 this is no longer a gate on a direct custom function call — only the `authorize` function evaluates it |
 | State `alias` | `roles` | The role-masked view of a state |
 | Master schema property | `x-roles` | Column-level data visibility |
 
@@ -136,6 +136,10 @@ An existing deny-only set is now treated as a **blacklist** (open to everyone ex
 As of v0.0.79 every grant surface — transition `roles`, function `roles`, flow/state `queryRoles`, schema `x-roles` — evaluates through a single `RoleGrantEvaluator`, so DENY-wins, allow-list/blacklist semantics, predefined system roles and JSONPath grants behave identically everywhere. This alignment changes some observable behavior (`x-roles` DENY across the whole grant set, deny-only sets for role-less callers, the human-task list) — see the [v0.0.79 breaking changes announcement](/blog/breaking-changes/breaking-changes-v0-0-79).
 
 > 🚧 Full English translation is pending. See the [Turkish page](/docs/concepts/authorization) for the surface-alignment table and `availableIn` role-narrowing details.
+
+## Caller-Role Provider <sup>New</sup> v0.0.88
+
+The caller role set that feeds the grant evaluation above is resolved through a pluggable provider — `default` (unchanged) or `morph-idm` (one memoized, fail-closed call per request scope to an external IDM). See [Configuration → Caller Role Provider](/docs/configuration/caller-role-provider) for details. `transition.roles`, `availableIn[].roles`, `queryRoles` and schema `x-roles` semantics are unaffected; only the role-set source changes. The one exception is a direct custom function call, where `function.roles` is no longer enforced — see the table above.
 
 ---
 

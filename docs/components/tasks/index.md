@@ -53,7 +53,7 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 
 ## Görev Türleri
 
-`task-definition.schema.json` toplamda **20 task türü** tanımlar:
+Runtime toplamda **23 task türü** çalıştırır. `@burgan-tech/vnext-schema@0.0.53` paketindeki `task-definition.schema.json` bunların ilk **21**'ini tanımlar; type `22` (External HTTP) ve `23` (Python) için şema desteği bekleniyor (bkz. aşağıdaki not):
 
 | # | Görev Türü | Açıklama | Detay |
 |---|---|---|---|
@@ -77,6 +77,17 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 | 18 | **CacheAsideTask** | Read-through cache (miss'te sourceTask çalıştırıp cache'ler) | [CacheAside](./cache-aside) |
 | 19 | **GetInstanceTask** | Tek bir instance'ın tam projeksiyonunu (metadata + data) çekme | [GetInstance](./get-instance) |
 | 20 | **DaprConversationTask** | Dapr Conversation ile LLM/AI sağlayıcı çağrısı | [DaprConversation](./dapr-conversation) |
+| 21 | **FanOutTask** | Çalışma zamanında çözülen koleksiyonun her elemanı için iç task'ı paralel çalıştırma | [Fan-Out](./fan-out) |
+| 22 | **ExternalHttpTask** <sup>New</sup> | HTTP çağrısını Execution'a gitmeden doğrudan Orchestrator içinde yürütme | [External HTTP](./external-http) |
+| 23 | **PythonTask** <sup>New</sup> | `main(input)` kontratlı, Execution'da çalışan built-in Python task (experimental) | [Python](./python) |
+
+:::warning[Type `22` ve `23` henüz şema paketinde yok]
+`@burgan-tech/vnext-schema@0.0.53` paketindeki `task-definition.schema.json`, `attributes.type` enum'ında `22` (External HTTP) ve `23` (Python) değerlerini henüz içermiyor. Bu nedenle domain paketlerinde `npm run validate` bu tiplerden birini kullanan bir task tanımını reddeder; runtime tarafında `publish` ve çalıştırma sorunsuzdur. Ayrıntı: [External HTTP Task](./external-http), [Python Task](./python).
+:::
+
+:::info[Orchestrator-local çalışan task türleri]
+Çoğu task türü Execution servisine bir ağ hop'u ile devredilir. İki istisna **doğrudan Orchestrator process'i içinde** çalışır: `FanOutTask` (type `21`, iç task'ı paralel çalıştırır ama kendisi orchestrator-local'dir), `ExternalHttpTask` (type `22`, HTTP çağrısını `/execution/invoke/{type}/{key}` hop'u olmadan in-process yapar); `PythonTask` (type `23`) ise Execution servisinde `python` route'u üzerinden çalışır.
+:::
 
 ## Görev Kullanımı
 
