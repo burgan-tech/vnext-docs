@@ -14,7 +14,7 @@ Bu bölümdeki sayfalar, platformun başlıca yapılandırma bloklarını host b
 | Sayfa | Özet | Host |
 |-------|------|------|
 | [URL Templates](./url-templates) | Gateway `BasePath` ve HATEOAS link şablonları | Orchestration |
-| [Service Discovery](./service-discovery) | Cross-domain endpoint çözümleme (`http`/`dapr`), registry cache | Orchestration, Execution |
+| [Service Discovery](./service-discovery) | Cross-domain endpoint çözümleme (`http`/`dapr`), registry cache | Orchestration |
 | [Caching](./caching) | Component/state/instance function cache TTL ve L1 katmanı | Orchestration |
 | [Telemetry](./telemetry) | Tracing/metrics/logging detay seviyesi, OTLP, Dapr sidecar tracing | Orchestration, Execution, DbMigrator |
 | [Workflow Execution](./workflow-execution) | Transition job timeout, fan-out eşzamanlılığı, InstanceData yazım budget'ı | Orchestration |
