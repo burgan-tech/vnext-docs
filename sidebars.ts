@@ -101,8 +101,10 @@ const sidebars: SidebarsConfig = {
       items: [
         'how-to/error-handling',
         'how-to/instance-filtering',
+        'how-to/attribute-indexes',
         'how-to/event-driven-workflows',
         'how-to/resource-lock',
+        'how-to/subflow-overrides',
         'how-to/view-selection',
         'how-to/async-sync',
         'how-to/observability',
@@ -130,6 +132,7 @@ const sidebars: SidebarsConfig = {
         'configuration/caching',
         'configuration/telemetry',
         'configuration/workflow-execution',
+        'configuration/task-invocation',
         'configuration/caller-role-provider',
         'configuration/python',
         'configuration/scripting',

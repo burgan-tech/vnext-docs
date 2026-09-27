@@ -36,6 +36,7 @@ workflow --version # tam isim
 
 ### Gereksinimler
 
+- CLI **≥ 1.0.14** (runtime v0.0.95+ ile `publish/completed` sinyali ve `wf indexes generate` için)
 - Node.js >= 14.0.0
 - PostgreSQL (veritabanı işlemleri için)
 - Docker (opsiyonel, PostgreSQL container için)
@@ -88,6 +89,10 @@ API bağlantısı, veritabanı durumu ve component klasörlerini kontrol eder.
 
 Veritabanında olmayan component'leri publish eder, mevcut olanları atlar. İlk kurulum ve yeni component ekleme senaryoları için idealdir.
 
+:::info `publish/completed` sinyali — CLI ≥ 1.0.14 / runtime v0.0.95
+`sync`, `update` ve `reset`, en az bir component publish ettikten sonra **bir kez** `POST /api/v1/definitions/publish/completed` çağırır ve dönen hook sonuçlarını satır satır yazar (`discovery-cache: Refreshed` | `SkippedNotOwner` | `Disabled` | `Failed`). Bu çağrı runtime'ın discovery endpoint cache'inin **tek otomatik geçersiz kılma** yoludur; atlanırsa cross-domain çağrılar bir sonraki deployment'a kadar eski adreslerle çözülür. Eski `GET definitions/re-initialize` çağrısı kaldırılmıştır; v0.0.95 öncesi bir runtime'a karşı çalışan yeni CLI `404` alır ve bunu yalnızca **uyarı** olarak gösterir (exit code değişmez). Bkz. [Service Discovery → Cache](/docs/configuration/service-discovery#cache).
+:::
+
 ### `wf update` — Değişenleri Güncelle
 
 Git'te değişen dosyaları tespit eder, veritabanından siler ve yeniden publish eder.
@@ -105,6 +110,38 @@ wf update --file x.json  # Tek dosya işle
 ```bash
 wf reset  # İnteraktif menü açılır
 ```
+
+### `wf indexes generate` — Attribute Index SQL'i <sup>New</sup> CLI 1.0.14
+
+Master şemada `x-indexed: true` işaretli alanlar için DBA'nın inceleyip çalıştıracağı **offline** attribute-index SQL'i üretir. Komut API'ye ve veritabanına **hiç bağlanmaz**, SQL çalıştırmaz; `sync` / `update` / Master publish bu komutu tetiklemez.
+
+```bash
+wf indexes generate                                   # tüm workflow'lar → ./index-sql/
+wf indexes generate --flow money-transfer -o ./index-sql
+wf indexes generate --flow money-transfer --retire-obsolete
+```
+
+| Seçenek | Varsayılan | Açıklama |
+|---|---|---|
+| `--flow <key>` | tümü | Tek bir workflow key'i (yerel tüm versiyonları dahil) |
+| `-o, --output <dir>` | `index-sql` | Yeni, değişmez batch klasörünün oluşturulacağı üst klasör |
+| `--retire-obsolete` | kapalı | Artık hiçbir yerel versiyonun kullanmadığı projeksiyonları emekliye ayırır — yalnızca **tüm aktif workflow versiyonları** yerelde varken ve runtime okuyucu/yazıcıları drenajlanmışken |
+
+Her çalıştırma `<output>/<ISO-zaman-damgası>-XXXXXX/` altında yeni bir batch klasörü açar (öncekiler korunur):
+
+| Dosya | İçerik |
+|---|---|
+| `<flow_key>.sql` | Workflow başına bir dosya: advisory lock + **ACCESS EXCLUSIVE** tablo kilidi (5 sn `lock_timeout`), veri doğrulama, `q_<24hex>` adlı **stored generated column**'lar (tek tablo rewrite), index'ler (`contains`/`like`/`startswith`/`endswith` için trigram GIN — `public` şemasında `pg_trgm` ve `tr-TR-x-icu` gerekir), `AttributeIndexCatalog` güncellemesi — hepsi tek transaction |
+| `manifest.json` | Kaynak dosya yolları, versiyonlar, SHA-256 checksum'ları, fiziksel index tanımları, `retireObsolete` bayrağı |
+| `README.txt` | DBA yürütme notları |
+
+**DBA akışı:** manifest'teki kaynak versiyonları deploy edilenlerle karşılaştırın, her SQL dosyasını bakım penceresinde tek tek çalıştırın:
+
+```bash
+psql -X -v ON_ERROR_STOP=1 --dbname=vNext_MyDomainDb --file=index-sql/<batch>/money_transfer.sql
+```
+
+Yapısal olarak eşleşen mevcut index'ler (eski adlarla olsa bile) **yeniden kullanılır**; değişen sahipli index'ler yeniden kurulur; yönetilmeyen çakışmalar script'i durdurur (`CASCADE` yok). Değişmemiş bir batch'i yeniden çalıştırmak OID'leri korur ve rewrite/ANALYZE'ı atlar. Bu **concurrent DDL değildir** — rewrite için disk/WAL/replica kapasitesini planlayın. Runtime tarafında yönlendirme `AttributeIndexes:Enabled` ile açılır, geri alma `AttributeIndexes:DisabledFlows` ile yapılır; index'ler filtre/sıralama iznini değiştirmez (`x-filterOperators` / `x-sortable` geçerli kalır). Ayrıntı: [Attribute Index'leri](/docs/how-to/attribute-indexes).
 
 ### `wf csx` — CSX → Base64 Dönüşümü
 
@@ -124,6 +161,7 @@ wf csx --file x.csx # Tek dosya
 | `update` | Evet | Sil + Publish | Publish | Değişenleri güncelle |
 | `reset` | Evet | Sil + Publish | Publish | Zorla sıfırla |
 | `csx` | Hayır | — | — | Sadece CSX→JSON güncelle |
+| `indexes generate` <sup>New</sup> 1.0.14 | Hayır (offline) | — | — | `x-indexed` alanlar için DBA'ya SQL üret |
 
 ## Multidomain Desteği
 

@@ -17,7 +17,7 @@ flowchart TD
   Start(["Instance Start"]) --> StateFn["State Function<br/><i>client long-polling</i>"]
 
   StateFn --> AckCheck{"Ack\nneeded?"}
-  AckCheck -->|Yes| Ack["PATCH longpoll/ack"]
+  AckCheck -->|Yes| Ack["POST longpoll/ack"]
   AckCheck -->|No| StatusCheck
   Ack --> StatusCheck
   StatusCheck{"status.code?"} -->|"A (Active)"| ViewCheck{"View needed?"}
@@ -57,7 +57,7 @@ flowchart TD
 ## Step by Step
 
 1. **Start instance**: `POST /api/v1/{domain}/workflows/{wf}/instances/start` (typically `sync=false`)
-2. **Long-polling**: Client calls `GET /functions/state` and waits until `status.code = "A"` (Active). Once the response is consumed, the client sends `PATCH /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack` to acknowledge. If the client fails or cannot send the request, the platform closes the connection automatically after `fallbackTimeoutSeconds`
+2. **Long-polling**: Client calls `GET /functions/state` and waits until `status.code = "A"` (Active). Once the response is consumed, the client sends `POST /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack` to acknowledge. If the client fails or cannot send the request, the platform closes the connection automatically after `fallbackTimeoutSeconds`
 3. **State response**: Once an active state is reached, the response includes the current state and whether a view is required
 4. **View request**: If a view exists, the client fetches the view definition via `GET /functions/view`
 5. **Data request**: If the view needs data, the client fetches via `GET /functions/data`

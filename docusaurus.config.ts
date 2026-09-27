@@ -199,9 +199,9 @@ const config: Config = {
       { property: 'og:description', content: 'Teknik, mimari, business ve ürün dokümantasyonu' },
     ],
     announcementBar: {
-      id: 'v0_0_92_release',
+      id: 'v0_0_97_release',
       content:
-        '🚀 vNext <b>v0.0.92</b> yayınlandı — <a href="/vnext-docs/blog/release-v0-0-92">Release Notes</a>',
+        '🚀 vNext <b>v0.0.97</b> yayınlandı — <a href="/vnext-docs/blog/release-v0-0-96-97">Release Notes</a>',
       backgroundColor: '#2563eb',
       textColor: '#ffffff',
       isCloseable: true,

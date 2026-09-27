@@ -17,9 +17,12 @@ Function API'leri, workflow instance'ları için sistem seviyesi operasyonlar sa
 5. [Schema Fonksiyonu](#schema-fonksiyonu)
 6. [Master Fonksiyonu](#master-fonksiyonu)
 7. [Catalog Fonksiyonu](#catalog-fonksiyonu)
-8. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
-9. [En iyi Uygulamalar](#en-iyi-uygulamalar)
-10. [Ilgili Dökümanlar](#ilgili-dökümanlar)
+8. [Tasks Fonksiyonu](#tasks-fonksiyonu)
+9. [Actions Fonksiyonu](#actions-fonksiyonu)
+10. [Human Task Fonksiyonu](#human-task-fonksiyonu)
+11. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
+12. [En iyi Uygulamalar](#en-iyi-uygulamalar)
+13. [Ilgili Dökümanlar](#ilgili-dökümanlar)
 
 ## Genel Bakış
 
@@ -33,11 +36,14 @@ vNext Runtime platformu, her workflow instance'ı için otomatik olarak kullanı
 | **Schema** | Transition schema içeriğini alma | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/schema` |
 | **Master** <sup>New</sup> | Instance'ın bağlı olduğu master şemayı alma | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/master` |
 | **Catalog** <sup>New</sup> | Workflow'un fonksiyon listesini keşfetme | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/catalog` |
+| **Tasks** <sup>New</sup> v0.0.93 | Instance'ın task geçmişi (task journal, metadata) | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/tasks` |
+| **Actions** <sup>New</sup> v0.0.93 | Bir task kaydının yürütme alt adımları | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/actions?taskId=` |
+| **Human Task** | Çağıranın sorumlu olduğu human task listesi (domain seviyesi) | `GET /{domain}/functions/human-task` |
 
-> **Not:** Kullanıcı tanımlı fonksiyonlar için bkz. [Custom Functions](/docs/components/functions/custom).
+> **Not:** Kullanıcı tanımlı fonksiyonlar için bkz. [Custom Functions](/docs/components/functions/custom). Sistem fonksiyon key'leri (`state`, `data`, `tasks`, `actions`, …) aynı adlı bir custom function'ı **gölgeler**.
 
-:::caution[QueryRoles yetkilendirmesi]
-Dört read fonksiyonu da (**state**, **data**, **view**, **schema**) çağıranı instance'ın **mevcut (current) state**'i ve flow seviyesindeki `queryRoles` tanımına göre authorize eder. Çağıranın izinli (`allow`) rolü yoksa fonksiyon **`403`** döner. Ayrıntı için bkz. [Read fonksiyonlarında queryRoles authorize](#read-fonksiyonlarında-queryroles-authorize).
+:::caution[QueryRoles yetkilendirmesi — karar noktası gateway'dedir]
+Read fonksiyonlarının tamamı (**state**, **data**, **view**, **schema**, **master**, **tasks**, **actions**, incident rotaları) tek bir `queryRoles` cevabını paylaşır: `state`'i okuyamayan çağıran `data`'yı da okuyamaz. <sup>New</sup> v0.0.95 itibarıyla bu karar fonksiyonların **içinde** verilmez; Internal Gateway isteği iletmeden önce [`authorize?queryRoles=true`](#instance-authorize) fonksiyonunu çağırır ve `403`'ü gateway üretir. Ayrıntı için bkz. [Read fonksiyonlarında queryRoles authorize](#read-fonksiyonlarında-queryroles-authorize).
 :::
 
 Bu fonksiyonlar şunları sağlar:
@@ -156,6 +162,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
       "name": "auto-timeout",
       "kind": "scheduled",
       "executeAtUtc": "2026-08-01T09:30:00Z",
+      "annotations": { "ui/intent": "close" },
       "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/transitions/auto-timeout",
       "view": {
         "hasView": false,
@@ -172,9 +179,19 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
     "hasActiveIncident": false,
     "history": { "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/incidents" }
   },
+  "timeout": {
+    "key": "abandoned",
+    "target": "cancelled",
+    "executeAtUtc": "2026-08-01T10:00:00Z",
+    "annotations": { "ui/countdown": "visible" }
+  },
   "eTag": "W/\"abc123def456\""
 }
 ```
+
+:::note ResponseShapeVersion v12 <sup>New</sup> v0.0.95
+`timeout` bloğu, scheduled girişlerdeki `annotations` ve `interaction` bloğunun yeni yayın kuralı aynı sürümde geldi; state gövdesinin `ResponseShapeVersion`'ı **v12**'ye yükseltildi. Bu, mevcut tüm state ETag'lerini **bir kez** geçersiz kılar — 304 arkasında park etmiş client'lar bir sonraki poll'da 200 alır. Bu geçişte `StateFunctionCache`'i **kapatmayın**; versiyon değişimi cache tarafından yönetilir.
+:::
 
 ### Response Alanları
 
@@ -188,20 +205,26 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `view.loadData` | `boolean` | View'ın instance data'ya ihtiyaç duyup duymadığı |
 | `master` <sup>New</sup> | `object` | Instance'ın bağlı olduğu **master şemayı** almak için link — bkz. [Master Fonksiyonu](#master-fonksiyonu) |
 | `master.href` | `string` | Master fonksiyon endpoint URL'i |
-| `interaction` <sup>New</sup> | `object` | Long-poll etkileşim direktifi. State'te `interaction.longPoll` tanımlıysa (rol kontrolüne tabi) `terminate` değerinden bağımsız **her zaman** döner — bkz. [Workflow → State Interaction](/docs/components/workflow#state-interaction-long-poll) |
-| `interaction.terminateLongPoll` | `boolean` | `true`: client long-poll'u sonlandırıp `ack` göndermelidir. `false`: client durmuş long-poll'u instance durumundan bağımsız yeniden başlatır ve fallback süresi boyunca dener |
-| `interaction.fallbackTimeoutSeconds` | `integer` | Fallback penceresi (varsayılan `60`) |
-| `interaction.ack` | `object` | Acknowledge endpoint href'i. **Yalnızca** `terminateLongPoll: true` iken bulunur |
+| `interaction` <sup>New</sup> | `object` | Long-poll etkileşim direktifi. <sup>New</sup> v0.0.95 **yalnızca instance gerçekten ack beklerken** (`terminate: true` state'inde pipeline duraklamışken) ve çağıran etkileşimin `roles`/`rule` kolunu geçiyorsa döner; `terminate: false` bir state hiç blok yayınlamaz — bkz. [Workflow → State Interaction](/docs/components/workflow#state-interaction-long-poll) |
+| `interaction.terminateLongPoll` | `boolean` | State'in `interaction.longPoll.terminate` değeri (blok yalnızca ack beklerken döndüğü için pratikte `true`) — client long-poll'u sonlandırıp `ack` göndermelidir |
+| `interaction.fallbackTimeoutSeconds` | `integer` | Etkin fallback penceresi (varsayılan `60`; parent subflow override'ı varsa o değer) |
+| `interaction.ack` | `object` | Acknowledge endpoint href'i (`{ "href": "…" }`). Aktif subflow zincirinde her seviye href'i kendi endpoint'ine yeniden yazar |
+| `timeout` <sup>New</sup> v0.0.95 | `object` | Sorgulanan instance için **armlanmış workflow seviyesi timeout** (deadline). Yalnızca deadline gerçekten bekliyorken bulunur; instance terminal olduğunda veya timeout tanımı yoksa **hiç dönmez** — client alanın varlığına göre dallanır. Aktif subflow'dan merge edilmez (subflow'un kendi deadline'ı için onu sorgulayın). `transitions` içinde **değildir** (arkasında çağrılabilir bir transition yoktur, sanal `$timeout` ile kaydedilir) |
+| `timeout.key` | `string` | Timeout tanımının `key`'i (ya da parent'ın `subFlow.overrides.timeout` key'i) |
+| `timeout.target` | `string` | Deadline dolunca instance'ın çekileceği state |
+| `timeout.executeAtUtc` | `string` | Zamanlayıcının kurulduğu anda persist edilmiş UTC tetiklenme anı (`Z` sonekli ISO 8601); yeniden hesaplanmaz. ETag'e girer (scheduled girişlerin aksine 304 arkasında bayatlamaz) |
+| `timeout.annotations` | `object` | Timeout tanımının `annotations` değeri (passthrough, string değerler). Parent override'ı bloğu annotations dahil bütün olarak değiştirir. Tanımlı değilse alan yoktur |
 | `functions` <sup>New</sup> | `object` | Workflow'un fonksiyon kataloğuna işaretçi — bkz. [Catalog Fonksiyonu](#catalog-fonksiyonu) |
 | `functions.hasFunctions` | `boolean` | Workflow'un tanımlı fonksiyonu olup olmadığı |
 | `functions.href` | `string` | Catalog fonksiyon endpoint URL'i |
 | `state` | `string` | Instance'ın mevcut durumu |
-| `status` | `string` | Instance durum kodu (A=Active, C=Completed, vb.) |
+| `status` | `string` | Client'ın gözlemlediği durum kodu (A=Active, C=Completed, vb.). <sup>New</sup> v0.0.93 aktif bir subflow varsa **zincirin** durumu yansıtılır (parent kendi başına `Busy` olsa da child human task bekliyorsa `A`); GetInstance yanıtındaki `metadata.effectiveStatus` ile aynı değerdir — bkz. [Instance zarfı ve metadata](#instance-zarfı-ve-metadata) |
 | `activeCorrelations` | `array` | Aktif sub-flow'lar ve correlation'lar (yalnızca açık olanlar — değişmedi) |
 | `correlations` <sup>New</sup> | `array` | Tüm child correlation'lar — aktif **ve** tamamlanmış, `createdAt` artan sırada — bkz. [Correlation Geçmişi](#correlation-geçmişi-correlations) |
 | `transitions` | `array` | Mevcut durumdan kullanılabilir transition'lar (+ role grant'a göre filtrelenir). `cancel`, `updateData` ve `exit` de tanımlıysa listelenir <sup>New</sup>; ayrıca çalışması zamanlanmış transition'lar `kind: "scheduled"` girişleri olarak eklenir <sup>New</sup> v0.0.80 / v0.0.84 — bkz. [Zamanlanmış transition'lar](#zamanlanmış-transitionlar-kind-scheduled) |
 | `transitions[].kind` | `string` | Girişin türü: çağıranın tetikleyebileceği transition'larda `state`/`cancel`/`updateData`/`exit`; runtime'ın otomatik ateşlemek üzere kurduğu girişte **`scheduled`** |
 | `transitions[].executeAtUtc` | `string` | **Yalnızca `kind: "scheduled"`** girişlerde bulunur — ISO 8601 UTC (`Z` sonekli) tetiklenme anı |
+| `transitions[].annotations` | `object` | Transition tanımının `annotations` değeri (passthrough). <sup>New</sup> v0.0.95 `kind: "scheduled"` girişlerde de bulunur — job'ın kaynak state'indeki transition tanımından çözülür |
 | `transitions[].view` | `object` | Transition için view bilgisi |
 | `transitions[].view.hasView` | `boolean` | Bu transition için view olup olmadığı |
 | `transitions[].schema` | `object` | Transition için şema linki (tanımlıysa) |
@@ -232,6 +255,7 @@ State fonksiyonunun döndürdüğü `transitions` dizisi **transition role grant
 - Yalnızca **sorgulanan instance'ın kendi** zamanlayıcılarını gösterir; aktif bir subflow varsa onun zamanlayıcıları **birleştirilmez** (subflow instance'ını ayrıca sorgulayın).
 - `href` bir çağrı daveti **değildir** — scheduled transition'lar yürütme anında hâlâ System-actor'a kilitlidir; bir client bu href'e PATCH göndermeye çalışırsa, önceki davranışla aynı şekilde reddedilir.
 - `hasView` / `loadData` / `hasSchema` her zaman `false` döner.
+- <sup>New</sup> v0.0.95 Giriş, zamanlayıcıyı kuran transition'ın `annotations` değerini taşır (job'ın kaynak state'i üzerinden çözülür); tanımlı değilse alan yoktur.
 - **Bilinen ve kabul edilmiş boşluk:** zamanlanan iş kümesindeki değişiklikler state fingerprint ETag'ine **girmez** (issue #864, kabul edilmiş takım kararı). Aynı state'e geri dönen bir re-arm (`updateData`/`$self`), tek işlemde A→B→A zinciri veya lock çakışmasıyla reddedilen bir job, state/status değişmediği için client'ı `304` arkasında bayat bir `executeAtUtc` ile bırakabilir. Taze zaman gerekiyorsa client ETag'siz yeniden fetch etmelidir. Bkz. [Caching yapılandırması](/docs/configuration/caching) — `StateFunctionCache` fingerprint materyali.
 
 ### Aktif Correlation'lar
@@ -394,7 +418,16 @@ Body döndürülmez, bu da bant genişliği ve işlem süresinden tasarruf sağl
 
 ### Instance zarfı ve metadata
 
-GetInstance ve GetInstances yanıtları, **instance zarfı** bilgisini içerebilir: `id`, `key`, `flow`, `domain`, `flowVersion`, `etag`, `tags`, **metadata** (örn. `currentState`, `effectiveState`, `status`, `createdAt`, `modifiedAt`, `createdBy`, `modifiedBy`, `createdByBehalfOf`, `modifiedByBehalfOf`), `attributes` ve `extensions`. Böylece veri yüküyle birlikte instance kimliği ve audit bilgisi sunulur.
+GetInstance ve GetInstances yanıtları, **instance zarfı** bilgisini içerebilir: `id`, `key`, `flow`, `domain`, `flowVersion`, `etag`, `tags`, **metadata** (örn. `currentState`, `effectiveState`, `status`, `effectiveStatus`, `type`, `createdAt`, `modifiedAt`, `createdBy`, `modifiedBy`, `createdByBehalfOf`, `modifiedByBehalfOf`), `attributes` ve `extensions`. Böylece veri yüküyle birlikte instance kimliği ve audit bilgisi sunulur.
+
+| Metadata alanı | Açıklama |
+|---|---|
+| `effectiveStatus` <sup>New</sup> v0.0.94 | Client'ın gözlemlediği durum: aktif bir SubFlow çalışıyorsa **en derin aktif child'ın** durumu, yoksa instance'ın kendi `status`'u — `effectiveState`'in durum karşılığı ve State Function'ın `status` alanıyla aynı değer. Servis edilen değer: instance'ın kendi status'u ya da effectiveStatus terminal ise `status`, aksi halde `effectiveStatus`. GetInstance, liste sorguları, GetInstances task'ı ve sync start/transition yanıtlarında bulunur; liste sorgularında `effectiveStatus` ile **filtrelenebilir ve sıralanabilir** |
+| `type` <sup>New</sup> v0.0.94 | Instance'ın **nasıl başlatıldığı** — `R` root, `S` SubFlow child, `P` SubProcess child. Oluşturulurken damgalanır ve **değişmez** (canlı ilişkiyi değil başlangıç kökenini söyler). Liste sorgularında `instanceType` adıyla filtrelenir/sıralanır |
+
+:::info Sync start/transition yanıtlarında `extensions` <sup>New</sup> v0.0.93
+`sync=true` start ve transition yanıtları artık Extensions **değerlendirmez** (performans); zarftaki `extensions` anahtarı korunur ve **her zaman `{}`** döner. Bu iki endpoint'te `?extensions=` query parametresi yok sayılır (reddedilmez). Read yüzeyleri (Data Function, GetInstance) değişmemiştir.
+:::
 
 ### ETag Desteği
 
@@ -822,7 +855,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/master
 
 - Instance'ın workflow tanımındaki `attributes.schema` (master schema) referansı çözülür ve JSON Schema içeriği döndürülür.
 - **Subflow forwarding**: instance'ın aktif bir subflow instance'ı varsa, istek aktif subflow instance'ına yönlendirilir ve **onun** master şeması döner.
-- `queryRoles` yetkilendirmesi diğer read fonksiyonlarıyla aynıdır: izin yoksa **`403`** döner (bkz. [Read fonksiyonlarında queryRoles authorize](#read-fonksiyonlarında-queryroles-authorize)).
+- `queryRoles` yetkilendirmesi diğer read fonksiyonlarıyla aynı cevabı paylaşır; <sup>New</sup> v0.0.95 karar gateway'in çağırdığı `authorize?queryRoles=true` ile verilir, fonksiyon in-process `403` üretmez (bkz. [Read fonksiyonlarında queryRoles authorize](#read-fonksiyonlarında-queryroles-authorize)).
 - Workflow'da master schema tanımlı değilse **`404`** döner.
 
 ### Kullanım Alanları
@@ -867,6 +900,119 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/catalog
 - Her `href` fonksiyonun **scope**'unu izler: `D` domain rotasına, `F`/`I` instance rotasına işaret eder (domain rotası bu iki scope'u `403` ile reddeder).
 - Çözümlenemeyen bir fonksiyon referansı loglanır ve çağrıyı bozmadan **atlanır**.
 
+## Tasks Fonksiyonu
+
+<sup>New</sup> v0.0.93 Instance'ın **tam task geçmişini** (task journal, `InstanceTasks`) yürütme sırasında (`startedAt` artan) döndürür. Per-instance geçmiş ailesini — transition'lar (`…/transitions`), incident'lar (`…/incidents`) — o transition'ların **içinde ne çalıştığı** bilgisiyle tamamlar.
+
+### Endpoint
+
+```http
+GET /{domain}/workflows/{workflow}/instances/{instance}/functions/tasks
+```
+
+`{instance}` instance id veya business key olabilir. Yanıt **sayfalanmaz** — tam küme tek seferde döner (liste, instance'ın kendi transition sayısıyla sınırlıdır).
+
+### Response
+
+```json
+{
+  "items": [
+    {
+      "id": "6f9c…",
+      "taskKey": "send-otp",
+      "transitionKey": "approve",
+      "fromState": "draft",
+      "toState": "approved",
+      "triggerType": "manual",
+      "status": "completed",
+      "businessStatus": "success",
+      "startedAt": "2026-09-14T09:12:41Z",
+      "finishedAt": "2026-09-14T09:12:41Z",
+      "durationMs": 184.2,
+      "error": null
+    }
+  ]
+}
+```
+
+| Alan | Tip | Açıklama |
+|------|-----|----------|
+| `items[].id` | `string` | Journal satırı id'si — [Actions Fonksiyonu](#actions-fonksiyonu)'nun aldığı `taskId` |
+| `items[].taskKey` | `string` | Task tanımının key'i |
+| `items[].transitionKey` / `fromState` / `toState` | `string` | Task'ı çalıştıran transition ve state bağlamı. `toState`, transition hâlâ sürüyorsa `null` |
+| `items[].triggerType` | `string` | Transition'ın trigger tipi (`manual`, `auto`, `scheduled`, `event`) |
+| `items[].status` | `string` | Platform durumu: `waiting` \| `busy` \| `completed` \| `faulted` |
+| `items[].businessStatus` | `string` | İş sonucu: `unknown` \| `success` \| `failed` |
+| `items[].startedAt` / `finishedAt` / `durationMs` | — | Zamanlama bilgisi |
+| `items[].error` | `string \| null` | Yalnızca `faulted` satırlarda fault nedeni; asla stack trace değil |
+
+### Davranış
+
+- **Yalnızca metadata.** Journal'ın `Request`, `Response` ve `InvocationResult` payload'ları bilinçli olarak **sunulmaz**: mapping betikleri oluşturdukları header'ları (secret store'dan çözülen auth materyali dahil) bu kolonlara yazar; tam payload operatör materyalidir ve Monitor API host'u kaldırıldığından (v0.0.93) hiçbir API tarafından servis edilmez — operatörler journal tablosunu doğrudan okur. Tek payload-türevi alan `error`'dur.
+- Yetkilendirme diğer read fonksiyonlarıyla aynı `queryRoles` cevabını paylaşır: bir instance'ın state'ini poll edebilen çağıran, üzerinde ne çalıştığını da okuyabilir (bkz. [Read fonksiyonlarında queryRoles authorize](#read-fonksiyonlarında-queryroles-authorize)).
+- Subflow'a **inmez**: incident geçmişi gibi her zaman adreslenen instance için cevap verir.
+- State gövdesine task linki eklenmez; `ResponseShapeVersion` ve fingerprint ETag'i bu fonksiyondan etkilenmez.
+
+## Actions Fonksiyonu
+
+<sup>New</sup> v0.0.93 Bir journal satırının (task kaydının) kaydedilmiş **yürütme alt adımlarını** (`InstanceActions`) yürütme sırasında döndürür.
+
+### Endpoint
+
+```http
+GET /{domain}/workflows/{workflow}/instances/{instance}/functions/actions?taskId={id}
+```
+
+| Parametre | Konum | Gerekli | Açıklama |
+|-----------|-------|---------|----------|
+| `taskId` | Query | Evet | Sahip journal satırının id'si (Tasks yanıtındaki `items[].id`). Eksik veya GUID değilse **`400`** (`Instance:100039`) |
+
+### Response
+
+Yanıt sahip `taskId`/`taskKey`'i yansıtır ve `{ id, status, startedAt, finishedAt, durationMs, detail }` öğelerini yürütme sırasında listeler; **sayfalanmaz**.
+
+### Davranış
+
+- Fonksiyon, adreslenen task'ın rotadaki instance'a ait olduğunu doğrular; değilse **`404`** (`Instance:100038`) döner — bir task asla başka bir instance'ın rol gate'i üzerinden okunamaz.
+- Yetkilendirme ve subflow davranışı Tasks Fonksiyonu ile aynıdır.
+- **Bilinen boşluk:** runtime bugün `InstanceAction` satırı **yazmamaktadır**; okuma sözleşmesi hazırdır ve yazıcı gelene kadar fonksiyon her task için boş liste döner.
+
+## Human Task Fonksiyonu
+
+`GET /api/v1/{domain}/functions/human-task` tek bir soruya cevap verir: **bu çağıranın üzerine düşen human task'lar hangileri?** Instance seviyesi değil **domain seviyesi** bir fonksiyondur; tüketicisi (ör. morph-idm-api) discovery `domain-list` fonksiyonunu okur, kayıtlı her domain için bu rotayı bir kez çağırır ve cevapları client için birleştirir. Yanıt gövdesi düz bir JSON dizisidir; her satır **root** instance'ın `id`/`key`'ini ve **leaf** state'in `humanTask.title` / `description` metnini taşır.
+
+<sup>New</sup> v0.0.94 Fonksiyon yeniden tasarlandı:
+
+- **Tek tarama.** Domain'deki tüm flow şemaları üzerinde tek bir `UNION ALL` ifadesi (`Type IN (R,P)`, `Status IN (A,B)`, `EffectiveStatus = A`, `EffectiveStateSubType = 6`) aday root'ları bulur; her flow için subflow zinciri **leaf**'e kadar paralel inilir (cross-domain hop'lar dahili `POST {domain}/workflows/{wf}/internal/human-task-leaf/batch` rotası üzerinden).
+- **Gate leaf state'in `queryRoles`'udur** (görünürlük sorusu): sırasıyla parent'ın damgaladığı `subFlow.overrides.states.<s>.queryRoles`, leaf state'in kendi `queryRoles`'u, leaf workflow'un root `queryRoles`'u. Bu, state/data/view/schema/incident okumalarının kullandığı çözümlemenin aynısıdır — liste ile açıldığı ekran artık tek gate'e cevap verir. Önceden liste transition `roles`'larını OR'luyordu ve rolsüz bir `cancel` her çağırana her instance'ı açıyordu.
+- **Tanımsız state düşer, yayınlanmaz.** State ve workflow ikisi de `queryRoles` bildirmiyorsa leaf **fail-closed** düşürülür (log 20459) — tek-instance okumalarının aksine "kural yazılmamış" burada "herkese" demek değildir.
+- **allow/deny bileşimi tüm rol kümesi üzerinden** `DenyGroupOk AND AllowGroupOk` olarak değerlendirilir (bkz. [Yetkilendirme → Grant Değerlendirme](/docs/concepts/authorization#grant-değerlendirme-allow-listesi-vs-yalnızca-deny-blacklist)); **daha kısıtlayıcıdır** — rol rol OR'lanan eski modelde `ht-approver,ht-blocked` taşıyan bir çağıran 159 task görürken şimdi 0 görür.
+
+### Yapılandırma
+
+| Anahtar | Varsayılan | Sınırladığı şey |
+|---|---:|---|
+| `HumanTaskFunction:PerSchemaLimit` | `200` | Flow başına aday satır (SQL'de). Sıralamayı ve yanıtı sınırlar, taramayı değil |
+| `HumanTaskFunction:ResultCap` | `500` | Yetkilendirme ve sıralama sonrası birleşik yanıttaki satır sayısı |
+| `HumanTaskFunction:MaxDescentDepth` | `10` | Bir adayın çözülemez sayılmadan önce inilecek SubFlow seviyesi |
+| `HumanTaskFunction:FlowsPerScanStatement` | `64` | Tarama ifadesi başına arm sayısı (round-trip, bağlantı değil) |
+| `HumanTaskFunction:FanoutParallelism` | `10` | Tek istek içindeki descent dalı sayısı |
+| `HumanTaskFunction:MaxConcurrentDescents` | `32` | Tüm in-flight istekler genelinde descent dalı; `FanoutParallelism`'in üstünde, bağlantı havuzunun altında tutun |
+| `HumanTaskFunctionCache:Enabled` | `true` | TTL cache kill switch'i |
+| `HumanTaskFunctionCache:TtlSeconds` | `60` | Düz TTL (fingerprint doğrulaması yok — B'nin tamamladığı task A'ya 60 sn daha listelenebilir) |
+| `HumanTaskFunctionCache:AllowClientOverride` | `true` | `X-VNext-Cache-Override` header'ının kabul edilip edilmediği |
+
+Cache anahtarı `domain + caller scope + auth-header hash`'tir; rol, kimlik, kültür ve volatile olmayan tüm header'lar anahtara girer (dynamic role grant'lar yazarın seçtiği header'ı okuyabildiği için).
+
+### Header'lar
+
+| Header | Yön | Açıklama |
+|---|---|---|
+| `X-VNext-Cache-Override` | İstek | Cache okumasını atlar ve tam yeniden hesaplar (`AllowClientOverride` true iken). Yazma atlanmaz; yeniden hesaplama sıradan miss ile aynı single-flight gate'ten geçer |
+| `X-VNext-HumanTask-Truncated` | Yanıt | Liste `ResultCap` ile kırpıldıysa bulunur — gövde düz dizi olduğu için sinyal header'dadır. Sessizce kırpılmış liste yanlış cevaptır, kısa cevap değil |
+
+Migration notu: v0.0.94 dağıtımı `AddHumanTaskOwnColumnsIndex` migration'ını uygular; eski indeks ayrı bir adımda (`DropLegacyHumanTaskIndex`) kaldırılır.
+
 ## Yetkilendirme (Authorization)
 
 Workflow'larda fonksiyon, flow, state ve transition seviyesinde **roles** ve **queryRoles** tanımlanabilir. Aşağıdaki sistem fonksiyon endpoint'leri yetki bilgilerini ve yetkilendirme kontrolünü sunar.
@@ -881,13 +1027,18 @@ State Function'ın döndürdüğü `transitions` dizisi de bu grant'lara göre f
 
 ### Read fonksiyonlarında queryRoles authorize
 
-**state**, **data**, **view** ve **schema** fonksiyonları veri dönmeden önce çağıranı, instance'ın **mevcut (current) state**'inin `queryRoles` tanımına göre değerlendirir. Değerlendirme sırası:
+:::warning Tek karar noktası: `authorize` <sup>New</sup> v0.0.95
+Read fonksiyonları (**state**, **data**, **view**, **schema**, **master**, **tasks**, **actions**, `incidents`, `incidents/active`) ve `POST …/longpoll/ack` endpoint'i `queryRoles`'u / etkileşim gate'ini artık **in-process denetlemez** ve kendileri `403` üretmez. Hedef dağıtım, çağıranı tanıyıp isteği iletmeden önce **`authorize`** fonksiyonuna danışan bir **Internal Gateway**'dir; aynı soruya iki karar noktası zamanla ayrışır (bu repoda iki kez yaşandı) — bir soru, bir cevap, bir yer. **Önünde bu gateway olmayan bir runtime bu okumaları reddetmez**; `queryRoles` çağırana ne gösterileceğini tarif eder ve gateway'in kabul ettiği cevaptır, tek başına bu process'in savunduğu bir sınır değildir. Rol **çözümü** değişmemiştir: `availableTransitions` filtreleme, state alias, `x-roles` alan filtreleme, human-task listesi ve `CallerScopeHash` cache anahtarı çağıranın rollerini değerlendirmeye devam eder — görünürlük kaldı, enforcement gateway'e taşındı.
+:::
 
-1. State seviyesinde `queryRoles` tanımlıysa **flow (root) seviyesini override eder**; yoksa flow seviyesindeki `queryRoles` kullanılır.
-2. Çağıranın rolleri `allow`/`deny` olarak değerlendirilir (**DENY her zaman ALLOW'u geçersiz kılar**).
-3. Sonuç `allow` değilse fonksiyon **`403 Forbidden`** döner.
+`queryRoles` cevabı, instance'ın **mevcut (current) state**'i üzerinde `authorize?queryRoles=true` ile hesaplanır ve tüm read yüzeyleri tarafından paylaşılır (`state`'i okuyamayan `data`'yı da okuyamaz; built-in fonksiyonların kendine ait selector'ı yoktur). Değerlendirme sırası her seviye için:
 
-Böylece bir instance, bulunduğu state'e göre farklı izleyici kitlelerine açılıp kapatılabilir (ör. backoffice incelemesindeyken yalnızca operatör rolleri görür). Bir rolün belirli bir state üzerinde yetkili olup olmadığını önceden kontrol etmek için aşağıdaki **Instance Authorize** (`queryRoles=true`) endpoint'i kullanılabilir. `queryRoles` tanımı için bkz. [Workflow → Query Roles](/docs/components/workflow#query-roles) ve [Yetkilendirme](/docs/concepts/authorization).
+1. Parent'ın child'a damgaladığı `subFlow.overrides.states.<currentState>.queryRoles` (varsa; override **replace** eder, merge etmez).
+2. State seviyesinde `queryRoles` tanımlıysa **flow (root) seviyesini override eder**; yoksa flow seviyesindeki `queryRoles` kullanılır. Boş grant kümesi izin verir.
+3. Çağıranın **tüm rol kümesi** `allow`/`deny` olarak tek seferde değerlendirilir (**DENY her zaman ALLOW'u geçersiz kılar**; rolsüz çağıran rol-bağlı bir DENY'ı geçemez — bkz. [Yetkilendirme → Grant Değerlendirme](/docs/concepts/authorization#grant-değerlendirme-allow-listesi-vs-yalnızca-deny-blacklist)).
+4. Aktif bir SubFlow zinciri varsa cevap sorgulanan instance'ın kendi kararı **VE** en derin aktif yaprağa kadar her seviyenin kararıdır (**conjunction**); her hop kendi `CurrentState`'i ve kendi damgasıyla değerlendirilir.
+
+Böylece bir instance, bulunduğu state'e göre farklı izleyici kitlelerine açılıp kapatılabilir (ör. backoffice incelemesindeyken yalnızca operatör rolleri görür). `queryRoles` tanımı için bkz. [Workflow → Query Roles](/docs/components/workflow#query-roles) ve [Yetkilendirme](/docs/concepts/authorization).
 
 ### Flow Authorize
 
@@ -902,21 +1053,45 @@ GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?transitionKey=subm
 
 ### Instance Authorize
 
-Flow Authorize ile aynı yanıt. `queryRoles=true` ile yetki, instance'ın mevcut state'ine (flow ve state queryRoles) göre değerlendirilir. Subflow içindeki instance'larda aktif subflow instance kullanılır.
+Runtime'ın yetkilendirme **oracle**'ıdır: bir çağıran hakkındaki soruyu cevaplar, kendisi hiçbir şeyi korumaz. <sup>New</sup> v0.0.95 itibarıyla bu soruların cevaplandığı **tek yerdir** — read yüzeyleri ve ack endpoint'i in-process denetim yapmaz; Internal Gateway bu fonksiyonu çağırıp cevabına göre isteği kabul veya reddeder. Bu yüzden `authorize` hiçbir zaman **gevşek** olmamalıdır: fazla cömert bir read yüzeyi görüntü hatasıdır, fazla cömert bir oracle ise erişim kontrolü hatası.
 
 ```http
-GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/authorize?queryRoles=true&role=morph-idm.viewer
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/authorize?queryRoles=true
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/authorize?ack=true
 ```
+
+**Yanıt 200:** `{ "allowed": true }` — **Yanıt 403:** `{ "allowed": false }`. Karar **her iki durumda da gövdededir**; yalnızca 200'ü okuyan bir tüketici her reddi "cevap yok"a çevirir. Rol çözümü başarısız olursa (provider ulaşılamaz, 5xx, timeout) bu bir **hata**dır (4xx/5xx zarfı), ret değil.
+
+| Selector | Değerlendirdiği | Aktif SubFlow'a iner mi? |
+|---|---|---|
+| `?transitionKey=` | Transition instance'ın **mevcut state**'inde sunuluyor mu (state transition'ı için o state'te bildirilmiş olmalı; shared/well-known için `availableIn`, boş liste = her state) **VE** `transition.roles` **VE** o state'in `availableIn` öğesinin `roles`'u (AND) | Yalnızca parent transition'ı **kendinde tutmuyorsa** |
+| `?functionKey=` | Custom function'ın kendi `roles`'u — `roles` tanımsızsa **izinli** | Evet |
+| `?queryRoles=true` | State'in (ya da root'un) `queryRoles`'u — sırasıyla parent damgası → state → root | Evet; cevap **conjunction** (her seviye izin vermeli) |
+| `?ack=true` <sup>New</sup> v0.0.95 | Girilen state'in `interaction.longPoll` kolu — `roles` **veya** koşul `rule`'u (endpoint'in eskiden kullandığı aynı `ILongPollInteractionGate`). Zincirde ack bekleyen instance yoksa **izinli** (endpoint de orada idempotent `200` döner) | Endpoint'in kuralıyla aynı: "hangi instance duraklamış" (`IsAwaitingLongPollAck`) |
+
+**Parent'ta kalan transition'lar.** Açık bir SubFlow correlation'ı varken `cancel`, `exit`, `updateData` ve **parent'ın mevcut state'inde sunulan shared transition**'lar **parent'a göre** cevaplanır, subflow'a inilmez — execution ile birebir aynı (pipeline'da bu dört tür forward edilmez).
 
 ### Authorize Query Parametreleri
 
 | Parametre | Açıklama |
 |-----------|----------|
-| `role` | Kontrol edilecek rol. |
-| `version` | İsteğe bağlı. Flow versiyonu; varsayılan latest. |
-| `transitionKey` | Kontrol edilecek transition (transition seviye roles). |
-| `functionKey` | Kontrol edilecek fonksiyon (function seviye roles). |
-| `queryRoles` | true ise instance'ın mevcut state'i için flow ve state queryRoles kontrol edilir (subflow bağlamı varsa ona göre). |
+| `transitionKey` | Kontrol edilecek transition (transition seviye roles + `availableIn` state/rol kontrolü). |
+| `functionKey` | Kontrol edilecek custom fonksiyon (function seviye roles). Built-in fonksiyonların kendi selector'ı yoktur; okuma yetkisi `queryRoles=true` ile sorulur. |
+| `queryRoles` | `true` ise instance'ın mevcut state'i için flow ve state queryRoles, aktif subflow zinciri boyunca her hop için (parent override'ları dahil) değerlendirilir. |
+| `ack` <sup>New</sup> v0.0.95 | `true` ise `POST …/longpoll/ack` çağrılabilir mi sorusu — `interaction.longPoll.roles`/`rule` kolu. |
+| `role` | İsteğe bağlı, **tek** bir rol. Çağıranın kimliği **değildir**; provider'a göre bileşimi değişir (aşağıya bakın). |
+| `version` | İsteğe bağlı. Workflow tanım versiyonunu sabitler; verilmezse instance'ın kendi versiyonu. |
+
+**Dört selector'dan tam olarak biri** bulunmalıdır; sıfır veya iki selector istek hatasıdır (`AuthorizeRequiresExactlyOneTarget`), sessiz bir varsayılan değil — selector'ı unutan çağıran başka bir soruya cevap almamalıdır. Header'lar, query string ve route değerleri `$.context.Headers` / `$.context.QueryParameters` / `$.context.RouteValues` olarak dynamic role grant'lara taşınır.
+
+**`role` parametresinin bileşimi** — çağıranın rolleri her zaman yapılandırılmış [Caller Role Provider](/docs/configuration/caller-role-provider)'dan çözülür; `role` parametresi bunun üstüne provider'ın modu (`RoleParameterMode`) ile eklenir:
+
+| Provider (mod) | `transitionKey`, `functionKey`, `queryRoles` | `ack` |
+|---|---|---|
+| `default` (`Fallback`) | **Fallback** — yalnızca provider hiç rol çözemediyse kullanılır; bir `role` header'ı her zaman kazanır | <sup>New</sup> v0.0.96 **Additive** — her yolda provider'ın rollerine **eklenir** |
+| `morph-idm` (`AsRoleHeader`) <sup>New</sup> v0.0.97 | İstekte `role` header'ı yoksa `?role=X` **o header gibi** davranır: rol kümesi `[X]` olur ve morph-idm **çağrılmaz**; gerçek bir header parametreyi ezer | Diğer hedeflerle aynı |
+
+Değerlendirme her zaman **tüm rol kümesiyle tek çağrıdır**, rol rol dönen bir döngü değil — deny grubu çağıranın taşıdığı her rol üzerinde AND'dir. Her karar `WorkflowLogs.AuthorizeRequest` (EventId 50030) ile domain, workflow, **instance id**, sorulan soru (`transition:{key}` / `function:{key}` / `queryRoles` / `ack`), **çözülen** rol kümesi ve karar bilgisiyle loglanır.
 
 ## En iyi Uygulamalar
 

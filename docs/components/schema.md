@@ -80,6 +80,8 @@ Zorunluluk ve sıkı doğrulama, master schema'da değil **transition schema**'l
 
 Buna karşılık master schema'da **`pattern`**, ana omurga şablonu, vocabulary tanımları (`x-*`) ve filtering tanımları kıymetlidir ve korunmalıdır.
 
+**Attribute index hazırlığı (`x-indexed`)** <sup>New</sup> v0.0.94 — Master şema (`attributes.type` değeri tam olarak `master` olan schema bileşeni) içindeki skaler alanlar `x-indexed: true` ile **manuel index hazırlığına** dahil edilebilir. Runtime bu işaretten index üretmez; `wf indexes generate` CLI komutu SQL üretir, DBA çalıştırır ve runtime `AttributeIndexes` etkinse `AttributeIndexCatalog` üzerinden bu kolonları filtre/sıralama sorgularında kullanır. `x-indexed` bir izin değildir: alanın filtrelenebilirliği yine `x-filterOperators` / `x-sortable` ile belirlenir. Master olmayan bir şemada `x-indexed` (değeri `false` olsa bile) publish sırasında reddedilir. Ayrıntı: [Attribute Index'leri](/docs/how-to/attribute-indexes).
+
 ### Filtering ve Data Function'daki Rolü
 
 Data Function veriyi response ederken master schema **aktif rol alır**. [Instance filtering](/docs/how-to/instance-filtering) sırasında, instance data gibi dinamik alanların **tiplerini şemadan çözerek** gelişmiş (advance) filtre esnekliği kazandırır. Master schema olmadan dinamik alanlarda tip-duyarlı filtreleme mümkün olmaz. Bir alanın hangi operatörlerle filtrelenebileceği ve sıralanabilirliği `x-filterOperators` / `x-sortable` ile bildirilir (aşağıda).
@@ -118,6 +120,7 @@ Bir JSON (`attributes.*`) alanının **filtrelenip sıralanabilirliği** master 
 | `x-filterOperators` | string[] | Hayır | İzin verilen filtre operatörleri. **Boş veya yok ise alan filtrelenemez** |
 | `x-sortable` | boolean | Hayır | `true` ise alan sıralanabilir. Yok ise sıralanabilir değil |
 | `x-displayFormat` | string | Hayır | UI'a yönelik format ipucu (örn. `yyyy-MM-dd'T'HH:mm:ssXXX`) |
+| `x-indexed` <sup>New</sup> v0.0.94 | boolean | Hayır | **Yalnızca master şemada** (`attributes.type: "master"`). `true` ise alan, `wf indexes generate` ile üretilen SQL'de stored generated column + index adayı olur. Sadece sabit `properties` yolları altındaki skaler `string` / `number` / `integer` / `boolean` alanlarda; dizi, obje, `$ref` ve koşullu/birleşik düğümlerde reddedilir. **İzin değildir** — filtre/sıralama yetkisini değiştirmez. Bkz. [Attribute Index'leri](/docs/how-to/attribute-indexes) |
 
 **`x-filterOperators` değerleri:** `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `between`, `match`, `like`, `startswith`, `endswith`, `in`, `nin` (`uniqueItems`).
 
@@ -211,21 +214,20 @@ vNext vocabulary'sinin (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-enc
 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
-| `type` | string | **Evet** | Schema tipi — aşağıdaki enum tablosuna bakın |
+| `type` | string | **Evet** | Schema tipi — serbest metin (schema 0.0.54'ten itibaren enum yok). Tam olarak `master` değeri şemayı **master şema** olarak işaretler ve `x-indexed`'i etkinleştirir; aşağıya bakın |
 | `schema` | object | **Evet** | JSON Schema tanımı (Draft 2020-12). Aşağıdaki iç yapı tablosuna bakın |
 | `labels` | array | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`) |
 
-### `attributes.type` Enum Değerleri
+### `attributes.type` Değerleri
 
-| Değer | Açıklama |
-|-------|----------|
-| `workflow` | Workflow bileşeni tanımı |
-| `task` | Task bileşeni tanımı |
-| `function` | Function bileşeni tanımı |
-| `view` | View bileşeni tanımı |
-| `schema` | Schema bileşeni tanımı |
-| `extension` | Extension bileşeni tanımı |
-| `headers` | Headers schema tanımı |
+<sup>New</sup> v0.0.94 — `attributes.type` **serbest metin** bir string'dir; schema paketi 0.0.54 ile önceki enum kaldırılmıştır. Eski ve özel değerler (`workflow`, `task`, `function`, `view`, `schema`, `extension`, `headers`, …) doğrulamadan geçer ve yalnızca sınıflandırma amaçlıdır. Tek özel değer **`master`**'dır:
+
+| Değer | Anlamı |
+|-------|--------|
+| `master` | Şema **master şema** olarak işaretlenir; property'lerde `x-indexed` kullanımına izin verilir ([Attribute Index'leri](/docs/how-to/attribute-indexes)). Karşılaştırma tam eşleşmedir: `Master`, boş, `null` veya başka bir değer master anlamına gelmez |
+| diğer | Serbest sınıflandırma etiketi. `x-indexed` (değeri `false` olsa bile) bu şemalarda publish sırasında reddedilir |
+
+Bileşen kökünde (`key`/`version`/`domain` seviyesinde) bir `type` alanı **yoktur**; JSON Schema içindeki `type` keyword'ü (`object`, `string`, …) ise standart anlamını korur.
 
 ### `attributes.schema` İç Yapısı (JSON Schema)
 

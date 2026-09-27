@@ -4,7 +4,13 @@ title: External HTTP Task
 description: HTTP çağrısını Execution servisine gitmeden doğrudan Orchestrator içinde yürüten task
 ---
 
-# External HTTP Task (Type: `22`) <sup>New</sup> v0.0.88
+# External HTTP Task (Type: `22`)
+
+:::warning Deprecated — v0.0.94
+Type `22`, v0.0.94 ile **deprecated** edilmiştir. Aynı sürümden itibaren standart [HTTP Task](./http) (type `6`) varsayılan olarak zaten Orchestrator içinde çalışır (`Workflow:TaskInvocation:Modes:http = "Local"`), yani type `22`'nin tek farkı olan "hop'suz çağrı" artık type `6`'nın da davranışıdır. Yeni tanımlarda type `6` kullanın; mevcut type `22` tanımları çalışmaya devam eder ancak `@burgan-tech/vnext-schema` enum'una eklenmeyecektir. Ayrıntı: [Task Invocation Yapılandırması](../../configuration/task-invocation).
+:::
+
+<sup>New</sup> v0.0.88 ile eklendi.
 
 External HTTP Task, [HTTP Task](./http) (type `6`) ile **birebir aynı konfigürasyon ve script yüzeyine** sahip bir HTTP çağrısı task'ıdır. Tek fark çalıştığı yerdir: type 6 çağrıyı Execution servisine `/execution/invoke/{type}/{key}` hop'u ile devrederken, type 22 çağrıyı **doğrudan Orchestrator process'i içinde** yürütür.
 
@@ -86,7 +92,7 @@ Property erişimi ve setter metodları (`SetUrl`, `SetHeaders`, `AddHeader`, `Re
 | Çağrı, veritabanını da barındıran host içinde mi çalışmalı? | Hayır (izole) | **Dikkat** — Orchestrator veritabanını da barındıran host'tur |
 
 :::warning[Şema paketi type `22`'yi henüz taşımıyor]
-`@burgan-tech/vnext-schema@0.0.53` paketindeki `task-definition.schema.json`, `attributes.type` enum'ında `22` değerini **içermiyor**. Bu nedenle domain paketlerinde `npm run validate` bir External HTTP task tanımını **reddeder**; runtime tarafında `publish` ve çalıştırma sorunsuz çalışır.
+`@burgan-tech/vnext-schema@0.0.54` paketindeki `task-definition.schema.json`, `attributes.type` enum'ında `22` değerini **içermiyor** (type `22` deprecated olduğundan eklenmesi planlanmamaktadır). Bu nedenle domain paketlerinde `npm run validate` bir External HTTP task tanımını **reddeder**; runtime tarafında `publish` ve çalıştırma sorunsuz çalışır.
 :::
 
 :::info

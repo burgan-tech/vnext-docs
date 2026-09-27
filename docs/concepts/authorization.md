@@ -112,6 +112,32 @@ Bir `roles` / `queryRoles` setinin **niyeti**, içerdiği grant'lara göre iki �
 
 Her iki modda da **DENY her zaman ALLOW'u geçersiz kılar.** Yalnızca `deny` içeren bir set "X hariç herkese izin ver" kuralını, izinli her rolü tek tek saymadan ifade etmenizi sağlar.
 
+Kanonik kural, grant seti ve çağıranın **tüm rol kümesi** üzerinde iki grup olarak değerlendirilir:
+
+```text
+authorized   = DenyGroupOk AND AllowGroupOk
+DenyGroupOk  = hiçbir deny grant'ı çağıranın HİÇBİR rolüyle eşleşmez   (deny'lar üzerinde AND)
+AllowGroupOk = hiç allow grant'ı yok (blacklist)
+               VEYA en az bir allow grant'ı en az bir rolle eşleşir     (allow'lar üzerinde OR)
+boş grant seti → izinli
+```
+
+1. **DENY grubu AND'dir ve önce değerlendirilir** — tek bir ihlal reddeder.
+2. **ALLOW grubu OR'dur** — herhangi bir allow herhangi bir rolle eşleşirse kabul.
+3. **ALLOW'suz set blacklist'tir** — açıkça reddedilmedikçe izinli.
+4. **Boş set izinlidir.**
+5. <sup>New</sup> v0.0.96 **Rolsüz çağıran, rol-bağlı bir DENY'ı geçemez.** Statik bir rol (`blocked`) ya da `$role.$.context…` referansı çağıranın *rolleri* hakkında bir ifadedir; karşılaştırılacak rol yokken "hiçbir şey eşleşmedi", çağıranın reddedilen kişi olmadığının kanıtı değildir — deny **reddeder**. Kimlik-bağlı deny'lar (dört sistem rolü ve `$user.` / `$userBehalfOf.`) çağıranın kimliğiyle eşleştiği için normal değerlendirmelerini korur.
+
+| Grant seti | Çağıran rolleri | Sonuç |
+|---|---|---|
+| `[deny: blocked]` | `[teller]` | izinli (blacklist) |
+| `[deny: blocked]` | yok | **ret** (kural 5) |
+| `[deny: $InstanceStarter]` | yok, çağıran starter değil | izinli (kimlik-bağlı) |
+| `[allow: $InstanceStarter, deny: blocked]` | yok, çağıran starter | **ret** (kural 5) |
+| `[allow: teller]` | yok | ret (allow-list, eşleşme yok) |
+
+Kural 5, rolsüz çağıranın nadir olmamasından doğar: anonim/cihaz token'ı, rol taşımayan bir process token'ı ve — `morph-idm` altında — operasyon kümesi çekilemeyen her çağıran boş kümeyle gelir. Bu "geç" okunduğunda her blacklist bunların tümü için genel izne dönüşüyordu. Kural tüm provider'lar ve tüm yüzeyler için geçerlidir (`availableTransitions`, `authorize`, `x-roles`, human-task listesi, function `roles`); v0.0.79'un "yalnızca-DENY set rolsüz çağırana açılır" davranışını rol-bağlı deny'lar için **tersine çevirir** (daha kısıtlayıcı).
+
 :::warning Geriye dönük etki
 Yalnızca `deny` grant'ı içeren mevcut bir set artık **blacklist** olarak değerlendirilir (listelenenler dışındaki herkese açık). Niyetiniz "herkesi engelle" idiyse en az bir `allow` grant'ı ekleyerek allow-list'e çevirin.
 :::
@@ -134,10 +160,23 @@ Bu birleştirme birkaç gözlemlenebilir davranışı değiştirir (ör. `x-role
 |--------|------|------|
 | Transition | `roles` | İlgili transition'ı kimin tetikleyebileceği |
 | Transition `availableIn` öğesi | `roles` <sup>New</sup> | Transition'ın o state'te kime sunulacağı (transition `roles` ile AND) |
-| Flow / State | `queryRoles` | Instance ve state'leri kimin sorgulayabileceği (state seviyesi root'u override eder). Built-in **state/data/view/schema** read fonksiyonlarınca current state üzerinde uygulanır; izin yoksa **403** |
+| Flow / State | `queryRoles` | Instance ve state'leri kimin sorgulayabileceği (state seviyesi root'u override eder; aktif subflow zincirinde her hop için conjunction). <sup>New</sup> v0.0.95 **Gateway** → `authorize?queryRoles=true` — read fonksiyonları in-process denetlemez (aşağıdaki tablo) |
 | Function | `roles` | Keşif (`/info`, `catalog`) yanıtlarında kimin görebileceği. <sup>New</sup> v0.0.88 itibarıyla doğrudan custom function çağrısında bir gate **değildir** — yalnızca `authorize` fonksiyonu değerlendirir; bkz. [Çağıran rollerinin çözümlenmesi](#çağıran-rollerinin-çözümlenmesi-caller-role-provider) |
+| State `interaction.longPoll` | `roles` / `rule` <sup>New</sup> v0.0.94 | Long-poll sonlandırma sinyalini kimin alacağı ve ack'i kimin gönderebileceği. <sup>New</sup> v0.0.95 **Gateway** → `authorize?ack=true` |
 | State `alias` | `roles` | State'in role göre maskelenmiş görünümü |
 | Master şema property | `x-roles` | Alan (column) bazlı veri görünürlüğü |
+
+### Read yüzeyleri: in-process gate kaldırıldı
+
+<sup>New</sup> v0.0.95 `queryRoles` tanım ve cevap olarak tamamen yaşıyor — `GET …/functions/authorize?queryRoles=true` onu aktif correlation zinciri boyunca hop hop, tam olarak değerlendirir. Runtime'ın artık yapmadığı şey aynı soruyu kendi read yolunda **ikinci kez** değerlendirmektir. Hedef dağıtım, çağıranı tanıyıp isteği iletmeden önce `authorize`'a danışan bir **Internal Gateway**'dir; aynı soruya iki karar noktası ayrışır.
+
+| Yüzey | Kim karar verir |
+|---|---|
+| `state`, `data`, `view`, `schema`, `master` | Internal Gateway → `authorize?queryRoles=true` |
+| `tasks`, `actions`, `incidents`, `incidents/active` | aynı |
+| `POST …/longpoll/ack` | Internal Gateway → `authorize?ack=true` (etkileşimin `rule` kolu bir C# betiğidir; gateway'in kendisi değerlendiremez, oracle aynı gate'ten geçer) |
+
+**Rol çözümü değişmedi:** `availableTransitions` filtreleme, state alias, `x-roles` alan filtreleme, human-task listesi ve `CallerScopeHash` cache anahtarı çağıranın rollerini değerlendirmeye devam eder. Görünürlük kaldı, enforcement gateway'e taşındı. **Tanım yazarının bilmesi gereken sonuç:** önünde bu gateway olmayan bir runtime bu okumaları reddetmez. Ayrıntı: [Built-in Functions → Instance Authorize](/docs/components/functions/built-in#instance-authorize).
 
 ### Üç yüzey hizalaması
 
@@ -155,7 +194,10 @@ Roller execution'da **bilinçli olarak** enforce edilmez — hiçbir transition 
 
 ## Çağıran rollerinin çözümlenmesi (Caller-role provider)
 
-<sup>New</sup> v0.0.88 ile yukarıdaki grant değerlendirmesinin **girdisi** — çağıranın rol kümesi — takılabilir bir provider üzerinden çözülür: `default` (eski `ICurrentUser.Roles`/`role` header davranışı, değişmeden) veya `morph-idm` (request scope başına tek bir dış IDM çağrısı, dönen operasyon kümesi yerel grant motoruyla değerlendirilir). Provider hatası **fail-closed** çalışır — 403, ve hata scope içinde memoize edilir. Ayrıntı ve yapılandırma için bkz. [Configuration → Caller Role Provider](../configuration/caller-role-provider).
+<sup>New</sup> v0.0.88 ile yukarıdaki grant değerlendirmesinin **girdisi** — çağıranın rol kümesi — takılabilir bir provider üzerinden çözülür: `default` (eski `ICurrentUser.Roles`/`role` header davranışı, değişmeden) veya `morph-idm` (request scope başına tek bir dış IDM çağrısı, dönen operasyon kümesi yerel grant motoruyla değerlendirilir). Ayrıntı ve yapılandırma için bkz. [Configuration → Caller Role Provider](../configuration/caller-role-provider).
+
+- <sup>New</sup> v0.0.96 **`morph-idm` boş kümeye fail-open çalışır.** Provider hatası (hata durum kodu, timeout, transport, ayrıştırılamayan gövde) ve `204` artık **403** (`Authorization:110004`) üretmez; rol kümesi `[]` olur ve istek onunla değerlendirilir. Boş küme zaten önemli olanı reddeder: allow-list eşleşmez ve **kural 5** her rol-bağlı deny'ı reddettirir — bir kesinti çağıranın gördüğünü daraltır, asla genişletmez. `act_sub` da `client_id` de taşımayan çağıranlar için morph-idm hiç çağrılmaz.
+- <sup>New</sup> v0.0.97 **`morph-idm` altında `role` header'ı önceliklidir.** Boş olmayan bir `role` header'ı taşıyan istek o rollerle değerlendirilir ve morph-idm **çağrılmaz** (replace, merge değil); yalnızca header'sız istek servise gider. `authorize`'ın `?role=` parametresi, istekte header yokken o header gibi davranır (rol kümesi `[X]`, morph-idm çağrılmaz); gerçek header parametreyi ezer. Tasarım gereği **daha izinlidir** — header'ı üreten gateway'in otoritesine güvenilir.
 
 Provider ne olursa olsun `transition.roles`, `availableIn[].roles`, `queryRoles` ve schema `x-roles` semantiği **değişmez** — yalnızca rol kümesinin kaynağı değişir.
 

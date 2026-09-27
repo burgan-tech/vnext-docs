@@ -52,19 +52,26 @@ Sonra client `GET /api/v1/{domain}/workflows/{wf}/instances/{id}/functions/state
 
 ### Deklaratif long-poll sonlandırma (`interaction.longPoll`)
 
-Bir state, açık tutulan long-poll isteğinin **ne zaman sonlandırılacağını** `interaction.longPoll` ile deklaratif olarak tanımlayabilir. Runtime, isteği bir transition gerçekleşene veya `fallbackTimeoutSeconds` dolana kadar açık tutar; `terminate` ise state'ten çıkıldığında isteğin kapatılıp kapatılmayacağını belirler. Böylece her client kendi long-poll sonlandırma mantığını uygulamak yerine, durak noktalarını süreç tasarımından okur. Tanım ve örnek için bkz. [Workflow → State Interaction (Long Poll)](/docs/components/workflow#state-interaction-long-poll).
+Bir state, açık tutulan long-poll isteğinin **ne zaman sonlandırılacağını** `interaction.longPoll` ile deklaratif olarak tanımlayabilir. Böylece her client kendi long-poll sonlandırma mantığını uygulamak yerine, durak noktalarını süreç tasarımından okur. Tanım, `rule` örneği ve tam davranış modeli için bkz. [Workflow → State Interaction (Long Poll)](/docs/components/workflow#state-interaction-long-poll).
 
-State Function yanıtındaki `interaction` objesi, state'te `interaction.longPoll` tanımlıysa `terminate` değerinden bağımsız **her zaman** döner:
+**`terminate` semantiği (özet):**
+
+- **`terminate: true`** → state'e girişte OnEntry tamamlandıktan sonra pipeline **duraklar**: instance `Busy` kalır, ack token'ı armlanır ve `fallbackTimeoutSeconds` (varsayılan 60) için fallback job'ı kurulur. Client `interaction` bloğunu görünce long-poll'u sonlandırır, ekranı render eder ve `ack` href'ine `POST` gönderir; ack gelmezse fallback pipeline'ı otomatik devam ettirir.
+- **`terminate: false`** → pipeline **duraklamaz**, ack beklenmez; <sup>New</sup> v0.0.95 bu state için `interaction` bloğu hiç yayınlanmaz.
+
+State Function yanıtındaki `interaction` objesi <sup>New</sup> v0.0.95 **yalnızca instance gerçekten ack beklerken** döner (state tanımında `longPoll` bulunması yeterli değildir):
 
 ```json
 "interaction": {
-  "terminateLongPoll": false,
-  "fallbackTimeoutSeconds": 600
+  "terminateLongPoll": true,
+  "fallbackTimeoutSeconds": 60,
+  "ack": { "href": "/api/v1/core/workflows/account-opening/instances/{id}/longpoll/ack" }
 }
 ```
 
-- **`terminateLongPoll: true`** → client long-poll'u sonlandırır, girilen state'in ekranını render eder ve yanıttaki `ack` href'i ile acknowledge gönderir; süre içinde ack gelmezse zamanlanmış fallback pipeline'ı otomatik devam ettirir.
-- **`terminateLongPoll: false`** → client, **instance durumundan bağımsız olarak** durmuş bir long-poll isteği varsa yeniden başlatır ve `fallbackTimeoutSeconds` penceresi boyunca denemeye devam eder.
+- **Yetkilendirme kolu:** etkileşimi `roles` ile ya da <sup>New</sup> v0.0.94 bir `rule` (`IConditionMapping` koşul betiği) ile sınırlayabilirsiniz — tam olarak biri. `rule` fail-closed çalışır (false/hata/derlenemez → sinyal yok, ack 403).
+- **Ack gate'i gateway'dedir** <sup>New</sup> v0.0.95: `POST …/longpoll/ack` yetkiyi in-process denetlemez; Internal Gateway isteği iletmeden önce [`authorize?ack=true`](/docs/components/functions/built-in#instance-authorize) fonksiyonunu çağırır. Önünde gateway olmayan bir runtime ack'i reddetmez.
+- Parent bir subflow tüketicisi olarak child state'in `fallbackTimeoutSeconds` ve `roles` değerlerini override edebilir (`terminate` ve `rule` edilemez) — bkz. [SubFlow Overrides](./subflow-overrides).
 
 ### Continuation işletimi (durable)
 

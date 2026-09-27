@@ -32,6 +32,38 @@ Component (workflow, task, function, schema, view, extension) **deploy** etmek i
 
 **Response:** `200 OK`.
 
+### POST `/api/v1/definitions/publish/completed`
+
+<sup>New</sup> v0.0.95 — Bir paketin **son** `publish` çağrısından sonra, deployment'a ait runtime işlerini (bugün tek hook: `discovery-cache`, discovery registry'sinin tam yeniden okunması) tetiklemek için **bir kez** çağrılır. `wf sync` / `update` / `reset` (CLI ≥ 1.0.14) ve init host bunu otomatik çağırır; kendi CD pipeline'ınız varsa publish döngüsünün sonuna ekleyin.
+
+**Request body** (tüm alanlar opsiyonel):
+
+| Field | Type | Description |
+|---|---|---|
+| `domain` | string | Verilirse runtime'ın kendi domain'iyle karşılaştırılır — yanlış runtime'a yönlenen pipeline sessizce başkasının cache'ini yenilemek yerine hata alır |
+| `packageName` | string | Log/trace kimliği (örn. `@burgan-tech/vnext-onboarding`) |
+| `version` | string | Log/trace kimliği |
+
+**Response:** HTTP durum kodu **her zaman `200`**; sonuç gövdedeki `success` alanından okunur:
+
+```json
+{
+  "success": true,
+  "hooks": [ { "name": "discovery-cache", "outcome": "Refreshed", "message": null } ]
+}
+```
+
+| `hooks[].outcome` | Anlamı |
+|---|---|
+| `Refreshed` | Registry yeniden okundu |
+| `SkippedNotOwner` | Başka bir replica şu an okuyor; sonucu cluster geneline uygulanır (başarı) |
+| `Disabled` | Yenilenecek bir şey yok: `ServiceDiscovery:Enabled=false`, `Provider=dapr` veya `Cache:Enabled=false` |
+| `Failed` | Registry okunamadı — **yeniden deneyin**; `success: false` döner |
+
+:::warning `GET /api/v1/definitions/re-initialize` kaldırıldı
+v0.0.95 itibarıyla bu endpoint **yoktur** (`404`). Zaten no-op'tu; eski CLI ve init host bu 404'ü yalnızca uyarı olarak loglar, exit code değişmez — ancak discovery cache yenilenmez. Bkz. [Service Discovery → Cache](/docs/configuration/service-discovery).
+:::
+
 ---
 
 ## Function Endpoints
@@ -72,6 +104,46 @@ Function'ı **instance context'inde** çalıştırır.
 | `QueryRoles` | query | Query roles dahil edilsin mi (boolean) |
 | `If-None-Match` | header | ETag (304 Not Modified için) |
 
+### GET `…/instances/{instance}/functions/tasks` ve `…/functions/actions` <sup>New</sup> v0.0.93
+
+Instance'ın **task geçmişi** ve bir task'ın **aksiyon geçmişi** için iki yerleşik sistem fonksiyonu (transition ve incident geçmişinin tamamlayıcısı):
+
+```http
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/tasks
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/actions?taskId={id}
+```
+
+| Parameter | In | Description |
+|---|---|---|
+| `instance` | path | Instance id veya business key |
+| `taskId` | query | **Yalnız `actions` için, zorunlu** — `tasks` yanıtındaki bir öğenin `id`'si (journal satırı) |
+
+- `tasks`: instance'ın tüm task journal'ı, **sayfalanmadan**, yürütme sırasında (StartedAt artan). Her öğe: `id`, `taskKey`, `transitionKey`, `fromState`, `toState`, `triggerType`, `status` (`waiting` / `busy` / `completed` / `faulted`), `businessStatus` (`unknown` / `success` / `failed`), `startedAt`, `finishedAt`, `durationMs`, `error`. **Yalnız metadata** — `Request` / `Response` payload'ları hiçbir API'de dönmez (mapping'lerin ürettiği auth header'ları içerebilir).
+- `actions`: verilen journal satırının alt adımları (`{ id, status, startedAt, finishedAt, durationMs, detail }`), yürütme sırasında. `taskId` yok/GUID değil → `400` (`Instance:100039`); task bu instance'a ait değil → `404` (`Instance:100038`).
+- `tasks` ve `actions` sistem anahtarlarıdır; aynı adlı custom function gölgelenir.
+- Yetkilendirme: v0.0.95 itibarıyla in-process `queryRoles` kontrolü yoktur; gateway `authorize?queryRoles=true` ile karar verir (aşağıya bakın).
+
+### GET `…/instances/{instance}/functions/authorize`
+
+Runtime'ın **tek yetkilendirme karar noktası** <sup>New</sup> v0.0.95: Internal Gateway isteği iletmeden önce bu fonksiyona sorar. Fonksiyon bir soruya cevap verir, kendisi hiçbir şeyi korumaz.
+
+| Parameter | In | Description |
+|---|---|---|
+| `transitionKey` | query | Bu transition tetiklenebilir mi? (mevcut state'te sunuluyor mu **ve** `transition.roles` / `availableIn[state].roles`) |
+| `functionKey` | query | Bu **custom** function çağrılabilir mi? (`Function.roles`; rol tanımsızsa izinli) |
+| `queryRoles=true` | query | Instance okunabilir mi? Aktif subflow zincirinin **tamamı** boyunca konjonksiyon; her hop'ta parent'ın `subflow.state_role_overrides` damgası → state'in `queryRoles` → workflow kökü |
+| `ack=true` | query | <sup>New</sup> v0.0.95 — `POST …/longpoll/ack` çağrılabilir mi? Girilen state'in `interaction.longPoll` kolu (`roles` **veya** condition `rule`) aynı `ILongPollInteractionGate` ile değerlendirilir |
+| `role` | query | Sorgulanacak tek bir rol. v0.0.96'dan itibaren `ack=true` sorgusunda her yolda çağıran rollerine eklenir; v0.0.97'den itibaren `CallerRoleProvider:Provider=morph-idm` altında `role` header'ı yoksa header gibi davranır (gerçek header her zaman kazanır) |
+| `version` | query | Workflow tanım versiyonunu sabitler; yoksa instance'ın kendi versiyonu |
+
+Dört seçiciden **tam olarak biri** verilmelidir; sıfır veya iki seçici `Authorization:110002` ile reddedilir.
+
+**Responses:** `200` → `{"allowed": true}`, `403` → `{"allowed": false}` — karar **her iki durumda da gövdededir**. Yanıtlanamayan soru (instance yok, hatalı istek) hata zarfıyla `4xx`/`5xx` döner.
+
+:::warning In-process `queryRoles` denetimleri kaldırıldı — v0.0.95
+`state`, `data`, `view`, `schema`, `master`, `tasks`, `actions`, `incidents`, `incidents/active` fonksiyonları ve `POST …/longpoll/ack` artık kendi içlerinde `queryRoles` / interaction kapısını **değerlendirmez**. Karar yalnızca `authorize` üzerinden verilir; Internal Gateway'in bu fonksiyonu çağırmadığı bir deployment'ta bu yüzeylerde `queryRoles` **uygulanmaz**. Görünürlük çözümü (transition filtreleme, `x-roles`) değişmemiştir. Ayrıntı: [Yetkilendirme](/docs/concepts/authorization).
+:::
+
 ### Function Keşif Endpoint'leri <sup>New</sup>
 
 Bir function'ın kontratını (verb'ler, çağırma URL'si, aktif input/output view ve şema) çağırmadan keşfetmek için altı `GET` rotası:
@@ -110,7 +182,7 @@ Yeni instance başlatır.
 **Query parameters:**
 - `version` — workflow versiyonu (opsiyonel)
 - `sync` — `true`/`false` (default `false`); bkz. [Async / Sync](/docs/how-to/async-sync)
-- `extensions` — extension key listesi (response'a dahil edilir)
+- `extensions` — <sup>New</sup> v0.0.93 itibarıyla **yok sayılır** (reddedilmez): senkron start/transition yanıtı extension değerlendirmez ve `extensions` anahtarı her zaman `{}` döner. Extension verisi için `GET …/instances/{instance}?extensions=` veya liste endpoint'ini kullanın
 
 **Request body:** `CreateInstanceDto`
 
@@ -186,7 +258,7 @@ Kurallar:
 
 Bir instance üzerinde transition tetikler.
 
-**Query parameters:** `sync`, `extensions`
+**Query parameters:** `sync` (`extensions` <sup>New</sup> v0.0.93 itibarıyla yok sayılır; yanıttaki `extensions` her zaman `{}`)
 
 **Request body:** `TransitionDataInput`
 
@@ -207,6 +279,20 @@ Gövde serbest (free-form) JSON da olabilir — bkz. yukarıdaki *Serbest payloa
 > **Not:** Workflow tanımında [`output` mapping](/docs/components/workflow#output-mapping) varsa ve istek `sync=true` ise, yanıt standart `TransitionOutput` zarfı yerine doğrudan output script'in ürettiği gövde olur.
 
 > **Not (Content-Type):** Function ve instance **output script'leri** artık yanıtın `content-type` header'ını da belirleyebilir (önceden bu header ayıklanıyordu). Script bir değer set etmezse varsayılan `application/json` kullanılır. Entegrasyon senaryolarında (örn. XML/text dönen legacy sözleşmeler) kullanışlıdır.
+
+### POST `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack`
+
+`interaction.longPoll` ile duraklatılmış pipeline'ı **devam ettirir**; client, long-poll'u bırakıp girilen state ekranını render ettikten sonra çağırır. **Idempotent**: zincirde ack bekleyen instance yoksa (zaten devam etti veya fallback timeout tetiklendi) `200` döner. Ack bekleyen instance aktif subflow zincirinin en derin çocuğuysa çağrı oraya iletilir.
+
+**Query parameters:** `version`, `role`
+
+**Responses:**
+- `200 OK` → ack kabul edildi (pipeline devam etti veya zaten devam etmişti)
+- `404 Not Found` → instance/workflow yok
+
+:::note Yetkilendirme — v0.0.95
+Endpoint `interaction.longPoll.roles` / `rule` kolunu **kendi içinde değerlendirmez**; karar gateway'in çağırdığı `GET …/functions/authorize?ack=true` ile verilir (yukarıya bakın). Bu sayede gateway'in kendi başına değerlendiremeyeceği C# `rule` kolu da kapsanır.
+:::
 
 ### POST `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/retry`
 
@@ -266,7 +352,7 @@ Instance'ın error-boundary incident geçmişini **en yeniden eskiye** sayfalar.
 
 **Responses:**
 - `200 OK` → `{ hasActiveIncident, items: IncidentDetail[], page, pageSize, hasNext }`
-- `403 Forbidden` → çağıran, state fonksiyonuyla aynı `queryRoles` kapısını geçemedi
+- `403 Forbidden` → v0.0.95 itibarıyla in-process `queryRoles` denetimi **yoktur**; `403`, gateway'in `authorize?queryRoles=true` cevabına göre döner
 
 ### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/incidents/active` <sup>New</sup>
 
@@ -275,7 +361,7 @@ Instance'ın en yeni **çözülmemiş** incident'ını döner (`incident.active.
 **Responses:**
 - `200 OK` → `IncidentDetail`
 - `404 Not Found` (`Instance:100037`) → açık incident yok — **normal bir sonuçtur**, hata değildir (bir retry arada çözmüş olabilir)
-- `403 Forbidden` → çağıran, state fonksiyonuyla aynı `queryRoles` kapısını geçemedi
+- `403 Forbidden` → v0.0.95 itibarıyla in-process `queryRoles` denetimi **yoktur**; `403`, gateway'in `authorize?queryRoles=true` cevabına göre döner
 
 > **Not (`internal/*` endpoint'leri):** `internal/subflow-forward`, `internal/busy-release` ve `internal/related-data` gibi `internal/` önekli rotalar **public API değildir** — runtime içi (Dapr sidecar-to-sidecar) çağrılar için var olan, ağ izolasyonuna dayanan dahili endpoint'lerdir ve bu referansın kapsamı dışındadır.
 
@@ -319,6 +405,8 @@ Instance'ın en yeni **çözülmemiş** incident'ını döner (`incident.active.
   currentState?: string;
   effectiveState?: string;
   status?: InstanceStatus;
+  effectiveStatus?: InstanceStatus;     // v0.0.94 — aktif SubFlow varken en derin aktif çocuğun durumu, aksi halde status; state fonksiyonunun status'u ile aynı değer
+  type?: "R" | "S" | "P";               // v0.0.94 — nasıl başlatıldığı: Root | SubFlow child | SubProcess child; değişmez. Filtrede adı `instanceType`
   effectiveStateType?: StateType;       // initial|intermediate|finish|subFlow|wizard
   effectiveStateSubType?: StateSubType; // none|success|error|terminated|suspended|busy|human|cancelled|timeout
   completedAt?: string;     // ISO datetime
@@ -407,6 +495,8 @@ Instance'ın en yeni **çözülmemiş** incident'ını döner (`incident.active.
   instance?: string;
 }
 ```
+
+Instance sorgu doğrulama hataları (`Validation:900011` … `900014`) `error.validationErrors[]` içinde her red nedenini `members` (istek yolu, örn. `filter.attributes.amount.eq`) + `message` ile taşır. <sup>New</sup> v0.0.94 `filter.valueTooLong`: 1000 karakterden uzun bir skaler filtre operandı `400` / `Validation:900011` ile reddedilir (`in` / `nin` / `between` operandları tek tek ölçülür). Bkz. [Instance Filtering → Hata Yönetimi](/docs/how-to/instance-filtering).
 
 ---
 

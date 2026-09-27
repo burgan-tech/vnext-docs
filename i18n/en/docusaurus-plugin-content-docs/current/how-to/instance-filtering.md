@@ -57,6 +57,8 @@ Direct database columns:
 | `key` | string | Instance key | eq, ne, like, startswith, endswith, in, nin |
 | `flow` | string | Workflow name | eq, ne, like, startswith, endswith, in, nin |
 | `status` | string | Instance status | eq, ne, in, nin |
+| `effectiveStatus` <sup>New</sup> v0.0.94 | string | Client-observed status — the deepest active SubFlow's status while one runs, otherwise the same as `status`. Accepts names or codes. Filters the **stored column**, not the served `metadata.effectiveStatus`; for "is this flow done?" filter on `status` | eq, ne, in, nin |
+| `instanceType` <sup>New</sup> v0.0.94 | string | How the instance was **started**: `Root` / `R`, `SubFlow` / `S`, `SubProcess` / `P`. Stamped once at creation, never updated. Deliberately **not** exposed as the bare name `type` — `type` keeps meaning your own `attributes.type` field | eq, ne, in, nin |
 | `currentState` (or `state`) | string | Current state | eq, ne, like, startswith, endswith, in, nin |
 | `effectiveState` | string | Effective state name | eq, ne, like, startswith, endswith, in, nin |
 | `effectiveStateType` | int | Effective state type code | eq, ne, gt, ge, lt, le, in, nin |
@@ -83,6 +85,8 @@ Instance table columns (`key`, `status`, `createdAt` …) are directly filterabl
 | `x-displayFormat` (string) | UI-facing format hint (e.g. `yyyy-MM-dd'T'HH:mm:ssXXX`) — does not affect filtering/sorting |
 
 For keyword definitions, see [Schema → Filter & Sort Vocabulary](/docs/components/schema#filter--sort-vocabulary).
+
+<sup>New</sup> v0.0.94 — A scalar master-schema field can opt into **physical index preparation** with `x-indexed: true`; once the SQL produced by `wf indexes generate` is applied by a DBA, `attributes.*` filters and sorts on that field run over a stored generated column + index instead of a JSON expression. `x-indexed` does **not** change filterability — that is still governed by `x-filterOperators` / `x-sortable`. See [Attribute Indexes](/docs/how-to/attribute-indexes).
 
 ### Type-Operator Relationship
 
@@ -178,6 +182,8 @@ Instance list and data endpoints support sorting via the `sort` or `orderBy` que
 | `modifiedAt` | Modification timestamp |
 | `completedAt` | Completion timestamp |
 | `status` | Instance status |
+| `effectiveStatus` <sup>New</sup> v0.0.94 | Client-observed status (stored column) |
+| `instanceType` <sup>New</sup> v0.0.94 | Start origin (`R` / `S` / `P`) |
 | `key` | Instance key |
 | `currentState` / `state` | Current state (`state` is alias) |
 | `attributes.fieldName` | JSON path into instance data; nested paths supported (e.g. `attributes.nested.path`). Only fields carrying **`x-sortable: true`** in the master schema are sortable |
@@ -462,6 +468,8 @@ Always use `page` and `pageSize` parameters:
 GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=20
 ```
 
+<sup>New</sup> v0.0.94 — List queries are now **paginated in the database** (identity paging first, then hydration of the requested page) instead of in memory. The routing is reversible through the `InstanceQueries` configuration section (`IdentityPaging=true`, `LatestJoin=true`, `DisabledSchemas=[]`); disabling it does not remove physical indexes.
+
 ---
 
 ## Error Handling
@@ -469,6 +477,10 @@ GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=2
 :::note Updated for v0.0.84
 Instance-query parsing is now **fail-closed**: anything the runtime cannot execute exactly as authored (filter, sort, groupBy, aggregation) is rejected up front with HTTP 400, instead of being silently dropped and running unfiltered. The `error.code` shapes below (`invalid_filter`, `unsupported_operator`, `invalid_column`) are superseded by the `Validation:9000xx` codes documented on the [Turkish page](/docs/how-to/instance-filtering) (section "Hata Yönetimi"), with sub-codes such as `filter.unknownOperator` and `sort.invalidJson`. Full English translation of that section is pending.
 :::
+
+### Filter value too long — `filter.valueTooLong` <sup>New</sup> v0.0.94
+
+A scalar filter value longer than **1000 characters** (decoded .NET `string.Length`, UTF-16 units) is rejected with HTTP 400 (`Validation:900011`) before the query runs. The limit applies to instance columns and `attributes.*`, including nested/logical conditions and aggregation envelopes; `in` / `nin` / `between` operands are measured **individually**. Values are never truncated and no configuration relaxes the limit; the separate 5000-character total-filter limit still applies. `GetInstancesTask` performs the same check before local and remote dispatch — an oversized operand returns `Result.Fail` and enters the error-boundary chain.
 
 ### Schema Filter Validation Error
 

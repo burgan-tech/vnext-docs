@@ -234,7 +234,7 @@ The State function response carries an `interaction` object **whenever the state
 When the client finishes consuming the long-poll response, it calls the **acknowledge** endpoint to inform the platform:
 
 ```
-PATCH /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack
+POST /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack
 ```
 
 If the client fails or cannot send the request, the platform automatically closes the long-poll after `fallbackTimeoutSeconds` elapses — preventing stuck connections on client crash or network failure.

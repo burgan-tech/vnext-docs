@@ -57,6 +57,8 @@ Doğrudan veritabanı kolonları:
 | `key` | string | Instance anahtarı | eq, ne, like, startswith, endswith, in, nin |
 | `flow` | string | Workflow adı | eq, ne, like, startswith, endswith, in, nin |
 | `status` | string | Instance durumu | eq, ne, in, nin |
+| `effectiveStatus` <sup>New</sup> v0.0.94 | string | Instance'ın dışarıya görünen durumu — aktif bir SubFlow varken en derin aktif çocuğun durumu, aksi halde `status` ile aynı. İsim veya kod kabul eder (`Active` / `A`). **Saklanan kolonu filtreler**, servis edilen `metadata.effectiveStatus` değerini değil; "akış bitti mi?" sorusu için `status` kullanın | eq, ne, in, nin |
+| `instanceType` <sup>New</sup> v0.0.94 | string | Instance'ın **nasıl başlatıldığı**: `Root` / `R`, `SubFlow` / `S`, `SubProcess` / `P`. Oluşturulurken bir kez damgalanır, değişmez. Çıplak `type` adı **kullanılmaz** — `type` her zaman sizin `attributes.type` alanınız anlamına gelir | eq, ne, in, nin |
 | `currentState` (veya `state`) | string | Mevcut state | eq, ne, like, startswith, endswith, in, nin |
 | `effectiveState` | string | Etkin state adı | eq, ne, like, startswith, endswith, in, nin |
 | `effectiveStateType` | int | Etkin state tipi kodu | eq, ne, gt, ge, lt, le, in, nin |
@@ -83,6 +85,8 @@ Instance tablo kolonları (`key`, `status`, `createdAt` …) doğrudan filtrelen
 | `x-displayFormat` (string) | UI'a yönelik format ipucu (örn. `yyyy-MM-dd'T'HH:mm:ssXXX`) — filtreleme/sıralamayı etkilemez |
 
 Keyword tanımları için bkz. [Schema → Filtreleme & Sıralama Vocabulary'si](/docs/components/schema#filtreleme--sıralama-vocabularysi) ve [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+
+<sup>New</sup> v0.0.94 — Master şemadaki bir skaler alan `x-indexed: true` ile **fiziksel index hazırlığına** dahil edilebilir; `wf indexes generate` ile üretilen SQL DBA tarafından uygulandığında `attributes.*` filtre ve sıralamaları JSON ifadesi yerine stored generated column + index üzerinden çalışır. `x-indexed` filtrelenebilirliği **değiştirmez** — yetki yine `x-filterOperators` / `x-sortable` ile belirlenir. Bkz. [Attribute Index'leri](/docs/how-to/attribute-indexes).
 
 ### Tip-Operatör İlişkisi
 
@@ -149,6 +153,8 @@ Keyword tanımları için bkz. [Schema → Filtreleme & Sıralama Vocabulary'si]
 
 > **:** `status` ve `state` (currentState) üzerinde filtreleme artık instance sorgularında doğru çalışmaktadır.
 
+`effectiveStatus` <sup>New</sup> v0.0.94 aynı isim/kod tablosunu kullanır. `instanceType` <sup>New</sup> v0.0.94 için değerler `Root` / `R`, `SubFlow` / `S`, `SubProcess` / `P`'dir; her iki kolon da yalnızca `eq`, `ne`, `in`, `nin` kabul eder.
+
 ---
 
 ## OrderBy / Sort
@@ -178,6 +184,8 @@ Instance listesi ve data endpoint'leri `sort` veya `orderBy` query parametresi i
 | `modifiedAt` | Değiştirilme zamanı |
 | `completedAt` | Tamamlanma zamanı |
 | `status` | Instance durumu |
+| `effectiveStatus` <sup>New</sup> v0.0.94 | Dışarıya görünen durum (saklanan kolon) |
+| `instanceType` <sup>New</sup> v0.0.94 | Başlatılma türü (`R` / `S` / `P`) |
 | `key` | Instance anahtarı |
 | `currentState` / `state` | Mevcut state (`state` alias) |
 | `attributes.fieldName` | Instance verisine JSON yolu; iç içe yollar desteklenir (örn. `attributes.nested.path`). Yalnızca master şemada **`x-sortable: true`** taşıyan alanlar sıralanabilir |
@@ -383,7 +391,7 @@ Terminalden önceki her şey (`Where`, `OrGroup`, `Not`, `OrderBy`) iki kullanı
 
 İki tür alan vardır; geçilen isimle ayrışırlar:
 
-- **Instance kolonları** — çıplak isimler, whitelist'lidir: `id`, `key`, `flow`, `status`, `currentState` (veya `state`), `effectiveState`, `effectiveStateType`, `effectiveStateSubType`, `stage`, `createdAt`, `modifiedAt`, `completedAt`. Yazım hatası sessizce boş sonuç dönmek yerine **hata fırlatır**.
+- **Instance kolonları** — çıplak isimler, whitelist'lidir: `id`, `key`, `flow`, `status`, `effectiveStatus` <sup>New</sup> v0.0.94, `instanceType` <sup>New</sup> v0.0.94, `currentState` (veya `state`), `effectiveState`, `effectiveStateType`, `effectiveStateSubType`, `stage`, `createdAt`, `modifiedAt`, `completedAt`. `status`, `effectiveStatus` ve `instanceType` isim veya kod kabul eder (`Active` / `A`, `SubFlow` / `S`); `.First()` / `.Last()` seçici terminalinde isim çözümü yoktur — orada kodu geçin. Yazım hatası sessizce boş sonuç dönmek yerine **hata fırlatır**.
 - **Instance-data attribute'ları** — `attributes.` önekiyle, iç içe alanlar için noktalı: `attributes.amount`, `attributes.address.city`, `attributes.employment.department.name`. Her derinlik çalışır.
 
 ### Operatör referansı
@@ -605,6 +613,8 @@ Her zaman `page` ve `pageSize` parametrelerini kullanın:
 GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=20
 ```
 
+<sup>New</sup> v0.0.94 — Liste sorguları artık **veritabanı tarafında sayfalanır**: runtime önce yalnızca kimlikleri (identity paging) seçer, ardından istenen sayfayı hydrate eder; önceden sonuç kümesi bellekte sayfalanıyordu. Yönlendirme `InstanceQueries` konfigürasyonu ile geri alınabilir (`IdentityPaging=true`, `LatestJoin=true`, `DisabledSchemas=[]`); devre dışı bırakmak fiziksel index'leri kaldırmaz.
+
 ---
 
 ## Hata Yönetimi
@@ -621,6 +631,7 @@ GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=2
 | `filter.noOperator` | Alan verilmiş ama operatör yok (`{"amount":{}}`) |
 | `filter.emptyLogicalOperator` | Boş mantıksal operatör (`{"and":[]}`) |
 | `filter.legacyNotAggregatable` | Legacy `field=operator:value` formatı groupBy/aggregation ile birlikte kullanılmış |
+| `filter.valueTooLong` <sup>New</sup> v0.0.94 | Skaler filtre değeri **1000 karakterden** (decode sonrası .NET `string.Length`, UTF-16 birimi) uzun. Instance kolonları ve `attributes.*` için, iç içe/mantıksal koşullar ve aggregation zarfları dahil geçerlidir; `in` / `nin` / `between` operandları **tek tek** ölçülür (liste toplamı 1000'i aşabilir). Değer asla kesilmez; ayrı 5000 karakterlik toplam filtre limiti de geçerlidir. Konfigürasyonla gevşetilemez |
 
 Desteklenen wire operatörleri: `between`, `endswith`, `eq`, `ge`, `gt`, `in`, `includes`, `isNull`, `le`, `like`, `lt`, `match`, `ne`, `nin`, `startswith`. `{}` ve `{"attributes":{}}` **geçerlidir** — boş filtre "kısıtlama yok" anlamına gelir.
 
@@ -634,6 +645,22 @@ Desteklenen wire operatörleri: `between`, `endswith`, `eq`, `ge`, `gt`, `in`, `
 | `sort.unsafePath` | `attributes.` sonrası her segment `^[a-zA-Z0-9_]+$` ile eşleşmeli |
 
 `GetInstancesTask`'ta `"sort": "-CreatedAt"` gibi bir kısayol artık `Result.Fail` döner — error boundary tetiklenir ve `Abort` kuralı altında **instance `Faulted` olabilir**. Migrasyon: `"sort": "{\"field\":\"createdAt\",\"direction\":\"desc\"}"`.
+
+Aynı şey <sup>New</sup> v0.0.94 `filter.valueTooLong` için de geçerlidir: `GetInstancesTask` operand uzunluğunu hem lokal hem uzak dispatch öncesinde doğrular; mapping veya fluent `InstanceQuery` ile üretilmiş 1000 karakterden uzun bir değer `Result.Fail` döner ve error boundary zincirine girer. Örnek `400` gövdesi:
+
+```json
+{
+  "error": {
+    "code": "Validation:900011",
+    "message": "Value too long: 1001 characters. Maximum allowed: 1000",
+    "validationErrors": [
+      { "members": ["filter.attributes.reference.eq"], "message": "Value too long: 1001 characters. Maximum allowed: 1000" }
+    ]
+  }
+}
+```
+
+`members`, hatalı operandın filtre içindeki yolunu (`filter.<alan>.<operatör>`) gösterir; alt kod (`filter.valueTooLong`) loglarda ve `GetInstancesTask` sonucunda taşınır, HTTP gövdesinde yalnızca mesaj yer alır.
 
 ### GroupBy / Aggregation hataları
 

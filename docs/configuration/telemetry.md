@@ -41,6 +41,8 @@ vNext, [Aether](https://github.com/burgan-tech) telemetry altyapısı üzerinden
 
 :::warning
 `AdditionalSources` listesinde eksik bir kaynak, o kaynağın ürettiği span'lerin **sessizce** kaybolmasına yol açar. Yeni bir `ActivitySource` eklerken bu listeye de eklemeyi unutmayın.
+
+<sup>New</sup> v0.0.93 — Açılıştaki `ActivitySourceRegistrationCheck`, birleşik konfigürasyonda eksik kalan kaynakları **uyarı** olarak loglar (fırlatmaz). Özellikle chart env bloğunda `Telemetry__Tracing__AdditionalSources__0` gibi index'li bir override, diziyi genişletmek yerine ilk kaynağı **değiştirir** — bu uyarı onu görünür kılar.
 :::
 
 ## Metrics
@@ -112,7 +114,9 @@ Aether, yapılandırmayı ortam değişkeninden **daha güçlü** sayar: `appset
 
 Console exporter'lar (`EnableConsoleExporter`) v0.0.86 itibarıyla tüm host'larda **varsayılan kapalıdır**.
 
-Aether ≥ **1.0.39** gerektirir.
+Aether ≥ **1.0.39** gerektirir; runtime v0.0.93 Aether **1.0.41**, v0.0.95+ Aether **1.0.42** ile gelir.
+
+**Auth span tag'leri** <sup>New</sup> v0.0.96/v0.0.97 — `Auth.ResolveRoles` span'i `vnext.auth.outcome` (`resolved` | `empty` | `failed` | `header`) yanına `vnext.auth.failure_kind` (`http_status` | `timeout` | `transport` | `parse`) ve `vnext.auth.empty_reason` (`no_content` | `empty_body` | `empty_array`) tag'lerini taşır; `header`, `role` header'ının morph-idm yerine kullanıldığını gösterir (v0.0.97). **EventId yeniden numaralandırması** (v0.0.94 / v0.0.95) için bkz. [Gözlemlenebilirlik → Yapılandırma](../how-to/observability#yapılandırma).
 
 ## Dapr Sidecar Tracing
 

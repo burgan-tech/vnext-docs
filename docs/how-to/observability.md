@@ -139,7 +139,7 @@ Transaction (async yolda), transition anahtarıyla adlandırılır: **`Transitio
 | `PostCommit.*` | Commit sonrası iş (`PostCommit.Coordinate`, `PostCommit.Settle`, `PostCommit.Fault`, …) |
 | `SubFlow.Start/{domain}/{flow}` | Subflow başlatma operasyonu (input mapping dahil) |
 | `Subflow.Descend/{targetFlow}` | Bir built-in function'ın açık subflow korelasyonuna bir seviye inişi; `vnext.subflow.depth`, `vnext.descent.transport` (`local`\|`remote`) |
-| `Auth.ResolveRoles` | Caller-role resolution (`vnext.auth.provider`, `vnext.auth.outcome`) |
+| `Auth.ResolveRoles` | Caller-role resolution (`vnext.auth.provider`, `vnext.auth.outcome` = `resolved` \| `empty` \| `failed` \| `header` <sup>New</sup> v0.0.97, `vnext.auth.roles.count`). <sup>New</sup> v0.0.96: `failed` ise `vnext.auth.failure_kind` (`http_status` \| `timeout` \| `transport` \| `parse`), `empty` ise `vnext.auth.empty_reason` (`no_content` \| `empty_body` \| `empty_array`) — morph-idm artık hata durumunda boş rol kümesine **fail-open** düşer ve bu tag'ler nedenini söyler. `header`: `CallerRoleProvider:Provider=morph-idm` altında boş olmayan `role` header'ı (veya `authorize?role=`) morph-idm yerine kullanıldı |
 | `Discovery.Resolve/{domain}` | Cross-domain discovery çözümü (`vnext.discovery.domain`, `vnext.discovery.endpoint_kind`) |
 | `FanOut.Item` | Fan-out batch'inin her öğesi için bir span (`vnext.fanout.item.index`, `.key`, `.alias`, `.queue_wait_ms`) |
 
@@ -152,6 +152,8 @@ Detaylı span referansı ve her span'in `ActivitySource`'u için kaynak: `vnext/
 ### AdditionalSources kaydı
 
 Yeni bir `ActivitySource` tanımlayan her değişiklik, **aynı commit'te** o kaynağı dört host'un (`Orchestration`, `Execution`, `Workers.Inbox`, `Workers.Outbox`) `appsettings.json`'undaki `Telemetry:Tracing:AdditionalSources` dizisine eklemelidir. Kayıtlı olmayan bir kaynak, span'leri in-process üretmeye devam eder ama `TracerProvider` onları export etmez — hatasız, sessiz bir boşluk oluşur.
+
+<sup>New</sup> v0.0.93 — Her host açılışta **`ActivitySourceRegistrationCheck`** çalıştırır: runtime'ın bildirdiği her kaynağın, process'in çözdüğü **birleşik** konfigürasyonda kayıtlı olduğunu doğrular ve eksikleri **uyarı** olarak loglar (asla fırlatmaz — telemetri boşluğu trafiği durdurmamalı). Repo'daki `appsettings.json` testinin göremediği durumu yakalar: .NET dizileri index'e göre birleştirdiği için chart'ın env bloğundaki tek bir `Telemetry__Tracing__AdditionalSources__0` girdisi ilk kaynağı **sessizce değiştirir**. Aynı sürümde span ağacı pipeline dışı her rotaya (function, instance GET/list, incidents …) yayılmıştır ve collector filtresi `^/dapr.proto` ile sidecar'ın kendi gRPC gürültüsü düşürülür.
 
 ## Trace lane'leri ve activation episode
 
@@ -185,6 +187,20 @@ Acil bir aksiyon gerekmiyor — eski metrik hâlâ emit ediliyor, ancak yeni pan
 ## Yapılandırma
 
 Telemetri konfigürasyon anahtarları (OTLP endpoint, `DetailLevel`, `AdditionalSources`, propagator) için bkz. [Telemetri Yapılandırması](../configuration/telemetry).
+
+:::warning WorkflowLogs EventId'leri yeniden numaralandı — v0.0.94 / v0.0.95
+`WorkflowLogs`'ta aynı `EventId`'yi paylaşan mesajlar ayrıştırıldı; eski numaraya bağlı Kibana sorguları / alarmlar **güncellenmelidir**:
+
+| Sürüm | Taşınan | Eski → Yeni |
+|---|---|---|
+| v0.0.94 ([#1017](https://github.com/burgan-tech/vnext/pull/1017)) | 18 çakışma: `DynamicExpressoCondition*` / `TransitionJobArmedAfterLock` | 10076 / 10077 / 10098 → 10158–10160 |
+| | Multi-Channel Notification bölgesi (8 mesaj) | 10090–10097 → 10161–10168 |
+| | Instance Query Filtering | 20440–20442 → 20460–20462 |
+| | `InstanceCanceledEventIgnoredDomainMismatch`, `TimeoutMapping{Fallback,Resolved}`, `SubFlowStartFailed`, `ChildSubflowCancelEventIgnoredDomainMismatch` | 40021 → 40105, 40100/40101 → 40106/40107, 40080 → 40135, 40030 → 40136 |
+| v0.0.95 ([#1024](https://github.com/burgan-tech/vnext/pull/1024)) | Local task invocation mesajları (`TaskInvokedLocally`, `LocalTaskInvocationFailed`, `…Cancelled`, `…SslValidationDisabled`, `LocalCacheAsideBypassedCacheError`, `LocalTaskInvocationTimedOut`) | 10160–10165 → 10169–10174 |
+
+`JobFailed` (40075) iki overload'lı tek olaydır ve bilerek korunmuştur. Boşluklar doldurulmaz (emekli bir id'ye kayıtlı sorgu olabilir). Aether **1.0.41** (v0.0.93) / **1.0.42** (v0.0.95) ile birlikte gelir.
+:::
 
 ## Bilinen sınırlar
 
