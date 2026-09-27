@@ -17,7 +17,7 @@ flowchart TD
   Start(["Instance Start"]) --> StateFn["State Function<br/><i>client long-polling</i>"]
 
   StateFn --> AckCheck{"Ack\ngerekli mi?"}
-  AckCheck -->|Evet| Ack["PATCH longpoll/ack"]
+  AckCheck -->|Evet| Ack["POST longpoll/ack"]
   AckCheck -->|Hayir| StatusCheck
   Ack --> StatusCheck
   StatusCheck{"status.code?"} -->|"A (Active)"| ViewCheck{"View var mi?"}
@@ -63,7 +63,7 @@ Bu modelde ilgili transition, tekrar transition view sorgusu yapılmaması için
 ## Adım Adım
 
 1. **Instance başlatılır**: `POST /api/v1/{domain}/workflows/{wf}/instances/start` (genelde `sync=false`)
-2. **Long-polling**: Client `GET /functions/state` çağırarak `status.code = "A"` (Active) olana kadar bekler. İsteği tamamladığında `PATCH /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack` ile acknowledge gönderir. Client hata alır veya gönderemezse `fallbackTimeoutSeconds` sonra platform isteği otomatik kapatır
+2. **Long-polling**: Client `GET /functions/state` çağırarak `status.code = "A"` (Active) olana kadar bekler. İsteği tamamladığında `POST /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack` ile acknowledge gönderir. Client hata alır veya gönderemezse `fallbackTimeoutSeconds` sonra platform isteği otomatik kapatır
 3. **State response**: Active state'e ulaşıldığında response, mevcut state'i ve view ihtiyacı bilgisini içerir. Wizard state için bu view ihtiyacı, kullanılabilir tek manuel transition'ın view'ına işaret edebilir
 4. **View talebi**: View var ise client `GET /functions/view` ile view tanımını çeker. Wizard state'te transition view tanımlıysa bu view döner; yoksa state view döner
 5. **Data talebi**: View'in data ihtiyacı varsa client `GET /functions/data` ile veri çeker

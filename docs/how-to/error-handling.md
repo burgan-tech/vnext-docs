@@ -99,6 +99,14 @@ Her seviyede, kurallar **priority** değerine göre değerlendirilir (düşük s
 - **errorCodes**: `Kategori:Kod` veya sadece `Kod` formatında hata kodları (örn. `Task:400007`, `500`)
 - Boş dizi veya `["*"]` tüm hataları eşleştirir
 
+:::warning `errorTypes` artık uzak (Remote) çağrı yolunda da eşleşir — v0.0.94
+v0.0.94 öncesinde Execution servisine devredilen (Remote) bir task'ın hatası için `errorTypes` kuralları **hiç eşleşmiyordu**: `ExceptionType` metadata anahtarı Dapr round-trip'inde camelCase'e dönüşüyor ve ordinal arama boşa düşüyordu (aynı task Local'de `Rollback`, Remote'ta `boundaryAction: null` üretiyordu). v0.0.94 ile metadata/header anahtarları case-insensitive okunur; **daha önce sessizce eşleşmeyen `errorTypes` kuralları artık Remote yolda da tetiklenir**. `errorTypes` içeren kurallarınızı gözden geçirin — beklemediğiniz `Retry` / `Rollback` / `Abort` aksiyonları görebilirsiniz. Ayrıntı: [Task Invocation Yapılandırması](/docs/configuration/task-invocation).
+:::
+
+:::note `GetInstancesTask` filtre doğrulaması — v0.0.94
+`GetInstancesTask`, filtresini hem lokal hem uzak dispatch **öncesinde** doğrular; 1000 karakterden uzun bir skaler filtre operandı (`filter.valueTooLong`, `Validation:900011`) `Result.Fail` döner ve error boundary zincirine girer — `Abort` altında instance **Faulted** olabilir. Mapping veya fluent `InstanceQuery` ile üretilen değerler de bu sınıra tabidir. Bkz. [Instance Filtering → Hata Yönetimi](/docs/how-to/instance-filtering#hata-yönetimi).
+:::
+
 **Retry ve kural eşlemesi:** Retry artık **kural tabanlı eşleme** (error-aware retry) ile çözülür. Hata, retry uygulanmadan önce uygun kurala eşlenir; altyapı kaynaklı hatalar boundary'e yanlış dahil edilmez ve retry davranışı eşleşen kurala göre tutarlıdır.
 
 ### Öncelik Sistemi

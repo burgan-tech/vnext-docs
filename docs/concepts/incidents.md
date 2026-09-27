@@ -46,14 +46,18 @@ Blok **içerik değil, link** taşır: incident'ın kendisi (mesaj, hata kodu, v
 
 `hasActiveIncident` [state fingerprint ETag](/docs/components/functions/built-in#state-fonksiyonu)'ın bir üyesidir (`InstanceStateFingerprint.HasActiveIncident`): bir incident'ın state/status değişmeden açılması veya kapanması bile parklanmış bir long-poll client'ın `304`'ünü kırar. Response shape versiyonu **v9**.
 
-Her iki incident yüzeyi de state fonksiyonunun `queryRoles` kapısından geçer; hiçbirinde **stack trace** dönmez (operatörler bunları loglardan/APM'den okur).
+Hiçbir incident yüzeyinde **stack trace** dönmez (operatörler bunları loglardan/APM'den okur).
+
+:::note Yetkilendirme — v0.0.95
+v0.0.95 itibarıyla `GET …/incidents` ve `GET …/incidents/active`, `queryRoles` kapısını **kendi içlerinde değerlendirmez**; karar, Internal Gateway'in isteği iletmeden önce sorduğu `GET …/functions/authorize?queryRoles=true` ile verilir (state, data, view, schema, master, tasks ve actions fonksiyonlarıyla aynı tek karar noktası). Gateway'in `authorize`'ı çağırmadığı bir deployment'ta bu iki endpoint `queryRoles` uygulamaz. Bkz. [REST API → authorize](/docs/api-reference/rest-api).
+:::
 
 ## `GET …/instances/{instance}/incidents/active`
 
 `incident.active.href`'in hedefi. En yeni **çözülmemiş** incident'ı döner.
 
 - **`404` (`Instance:100037`) normal bir sonuçtur, hata değildir.** Bayrak `true` iken link reklamı yapılır, ancak bir retry incident'ı arada çözmüş olabilir — client bu 404'ü "state'i yeniden oku" olarak ele almalı, hata olarak değil.
-- Rol kapısını geçemeyen çağıran **`403`** alır — böylece "incident yok" ile "bilme yetkin yok" ayrımı korunur.
+- `403`, gateway'in `authorize?queryRoles=true` kararına göre döner (v0.0.95) — böylece "incident yok" ile "bilme yetkin yok" ayrımı korunur.
 
 ## `GET …/instances/{instance}/incidents`
 
@@ -69,7 +73,7 @@ Her iki incident yüzeyi de state fonksiyonunun `queryRoles` kapısından geçer
 }
 ```
 
-`page` varsayılanı `1`, `pageSize` varsayılanı `20` ve **`≤100`** ile sınırlanır. Aynı `queryRoles` kapısından geçer; stack trace dönmez.
+`page` varsayılanı `1`, `pageSize` varsayılanı `20` ve **`≤100`** ile sınırlanır. Stack trace dönmez.
 
 ### Incident alanları
 
@@ -112,6 +116,7 @@ Bir `rollback`/`notify` sonucunda, instance **Busy** iken kısa bir `hasActiveIn
 - Yeniden yürütülen iş **tekrar fault** olursa yanıt `200` ile `"status": "F"` döner ve bu durum **kalıcıdır**: instance Faulted kalır ve **ikinci bir retry kabul edilir**. (v0.0.92 öncesinde ambient unit-of-work commit'i, iç `RequiresNew` scope'un yazdığı Faulted durumun üzerine yazıyordu; instance sağlıklı görünüyor ama bitmemiş ve bir daha retry edilemez hale geliyordu.)
 - Unfault (başarılı retry) **tüm açık incident'ları kapatır**, tek en yenisini değil, ve `hasActiveIncident` bayrağını yeniden hesaplar. Geçmiş satırlar kalır, yalnız çözülmüş olarak işaretlenir; böylece `incident.active` bloktan kaybolurken `history` yanıt vermeye devam eder.
 - `ignore` / `log` aksiyonları hiç incident yazmaz.
+- <sup>New</sup> v0.0.95 — **Başarısız subflow başlatma** artık parent'ı `Busy`'de bırakmaz: state değişiminden sonra çocuk başlatılamazsa (`StartSubflowJob` hatası) parent **Faulted** olur ve bir incident kaydedilir; `POST …/retry` subflow başlatmayı **yeniden dener**. Aynı sürümde, ön-rezerve edilmiş bir transition job'ının lock-conflict dışı bir hatayla düşmesi de instance'ı `JOB_EXECUTION_FAILED` nedeniyle Faulted yapar (önceden Busy'de asılı kalıyordu).
 
 ### Bilinen sınır: retryCount
 

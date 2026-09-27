@@ -53,11 +53,41 @@ Rolleri `ICurrentUser.Roles`'tan okur, yoksa `role` header'ına düşer. Bu, pro
 
 ## `morph-idm` Davranışı
 
+:::note Fail-closed'dan fail-open'a
+Bu sayfanın v0.0.88 sürümündeki "provider hatası 403" davranışı v0.0.96 ile değişti; aşağıdaki liste güncel davranışı anlatır.
+:::
+
 - Request scope başına **tek** GET çağrısı yapılır (`GetRolesPath`); yanıt scope içinde memoize edilir (birden fazla yüzey — ör. subflow okumaları — eşzamanlı olarak rol isteyebilir, bunlar tek çağrıyı paylaşır).
 - İstek `sub`, `act_sub` ve `position` taşır; **`role` header'ı asla gönderilmez** — bu header gönderilirse endpoint "authorize" moduna geçip tek bir rol için evet/hayır yanıtı verir, oysa runtime'ın mevcut grant motorunun (`RoleGrantEvaluator`) değerlendirebilmesi için **tüm operasyon setine** ihtiyacı vardır.
 - Dönen operasyon kümesi, yerel grant motoruyla aynı şekilde değerlendirilir: `transition.roles`, `availableIn[].roles`, `queryRoles`, `function.roles` ve schema `x-roles` **semantiği değişmez** — yalnızca girdi kaynağı değişir.
-- **Fail-closed**: provider hata döndürürse (timeout, 5xx, ayrıştırılamayan yanıt) yetkilendirme **403** ile reddedilir; hata da scope içinde memoize edilir — başarısız bir scope reddedilmiş kalır ve morph-idm'i scope başına en fazla bir kez çağırır.
+- <sup>New</sup> v0.0.96 **Fail-open (boş küme)**: provider hata döndürürse (hata durum kodu, timeout, bağlantı/DNS/TLS, tanınmayan gövde) istek **artık 403 ile reddedilmez** (`Authorization:110004` üretilmez); rol kümesi `[]` olur ve istek onunla değerlendirilir. Sonuç scope içinde memoize edilir. Boş küme zaten önemli olanı reddeder — allow-list eşleşmez ve [kural 5](../concepts/authorization#grant-değerlendirme-allow-listesi-vs-yalnızca-deny-blacklist) her rol-bağlı deny'ı reddettirir; bir kesinti çağıranın gördüğünü **daraltır** (daha az transition, budanmış `x-roles` alanları, `authorize`'dan ret) ama okumaları kırmaz ve erişimi asla genişletemez. (v0.0.88–v0.0.95 arasında bu durum fail-closed 403 idi.)
 - `204 No Content` veya boş gövde, "bu çağıranın operasyon seti boş" anlamına gelir (hata değil) — `[]` döner.
+- <sup>New</sup> v0.0.96 `act_sub` da `client_id` de taşımayan çağıranlar (anonim/cihaz token'ı) için **hiç çağrı yapılmaz**; rol kümesi `[]`'dir.
+- <sup>New</sup> v0.0.97 **`role` header'ı önceliklidir.** Boş olmayan bir `role` header'ı taşıyan istek, header'daki rollerle değerlendirilir ve morph-idm **çağrılmaz** — servis cevabını **replace** eder, merge etmez. Yalnızca header'sız (ya da boş header'lı) istek servise gider. Tasarım gereği daha izinlidir: header'ı üreten gateway'in otoritesine güvenilir.
+
+### Sonuç tablosu (header'sız istek)
+
+| Durum | Rol kümesi | Log | `vnext.auth.outcome` | Ayırt eden tag |
+|---|---|---|---|---|
+| Ne `act_sub` ne `client_id` — çağrı yapılmaz | `[]` | Debug 20464 | `skipped` | — |
+| `204`, boş gövde, `roles: []` | `[]` | Warning 20441 | `empty` | `vnext.auth.empty_reason` = `no_content` / `empty_body` / `empty_array` |
+| Başarısız durum kodu | `[]` | Error 20442 | `failed` | `vnext.auth.failure_kind` = `http_status` + `vnext.auth.provider.status_code` |
+| HttpClient timeout | `[]` | Error 20442 | `failed` | `failure_kind` = `timeout` |
+| Bağlantı / DNS / TLS | `[]` | Error 20442 | `failed` | `failure_kind` = `transport` |
+| Başarılı durum, tanınmayan gövde | `[]` | Error 20463 | `failed` | `failure_kind` = `parse` |
+| Boş olmayan `role` header'ı — çağrı yapılmaz | header'daki roller | Debug 20465 | `header` | — |
+| Servis cevabı | operasyon kümesi | — | `resolved` | — |
+
+### `authorize`'ın `role` parametresi (`RoleParameterMode`)
+
+Provider, `authorize` fonksiyonunun `?role=` parametresinin nasıl bileşeceğini `ICallerRoleResolver.RoleParameterMode` ile bildirir (eski boolean'ın yerini aldı):
+
+| Provider | Mod | Davranış |
+|---|---|---|
+| `default` | `Fallback` | Parametre yalnızca provider hiç rol çözemediyse kullanılır; `role` header'ı her zaman kazanır. `ack=true` hedefinde <sup>New</sup> v0.0.96 parametre her yolda **additive** eklenir |
+| `morph-idm` | `AsRoleHeader` <sup>New</sup> v0.0.97 | İstekte `role` header'ı yoksa `?role=X` o header gibi davranır: rol kümesi `[X]`, morph-idm çağrılmaz. Gerçek header parametreyi ezer. Tüm hedefler (`ack` dahil) için aynı. (Önceden parametre bu provider altında yok sayılıyordu; header karar verici olunca aynı iddia header'la 200, query string'le 403 alıyordu — bu mod o ayrışmayı kaldırır) |
+
+Ayrıntı: [Built-in Functions → Instance Authorize](../components/functions/built-in#instance-authorize).
 
 :::warning Custom function çağrılarında `function.roles` artık gate değil
 v0.0.88 itibarıyla custom function çağrılarını yetkilendirmek middle-tier'ın sorumluluğudur; vNext'in işi görünürlük (discovery yanıtlarında `roles`'un görünmesi) ve `authorize` fonksiyonudur. `function.roles`, artık **yalnızca `authorize` fonksiyonu tarafından** değerlendirilir — doğrudan function çağrısında bir gate olarak kullanılmaz. **Scope** kontrolü (Domain/Flow/Instance) değişmeden kalır; bu, yetkilendirme değil call-shape doğrulamasıdır. Ayrıntı için bkz. [Authorization → Çağıran rollerinin çözümlenmesi](../concepts/authorization#çağıran-rollerinin-çözümlenmesi-caller-role-provider).

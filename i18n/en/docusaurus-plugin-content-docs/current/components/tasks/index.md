@@ -15,7 +15,7 @@ A workflow named `tasks` is created in each domain deployment. All tasks used wi
 
 ## Task Types
 
-The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.0.53`'s `task-definition.schema.json` defines the first **21** of them; types `22` (External HTTP) and `23` (Python) are not yet added to the published schema package (see the note below). Each is listed below with its number, name, and detail page.
+The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.0.54`'s `task-definition.schema.json` defines the first **21** of them; types `22` (External HTTP — **deprecated** since v0.0.94) and `23` (Python) are not in the published schema enum (see the note below). Each is listed below with its number, name, and detail page.
 
 | # | Task Type | Description | Detail |
 |---|---|---|---|
@@ -40,13 +40,17 @@ The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.
 | 19 | **GetInstanceTask** | Fetch a full single-instance projection (metadata + data) | [GetInstance](./get-instance) |
 | 20 | **DaprConversationTask** | Invoke an LLM/AI provider via Dapr Conversation | [DaprConversation](./dapr-conversation) |
 | 21 | **FanOutTask** | Run an inner task in parallel, once per item of a runtime-resolved collection | [Fan-Out](./fan-out) |
-| 22 | **ExternalHttpTask** | Runs the HTTP call directly inside the Orchestrator instead of hopping to Execution | [External HTTP](./external-http) |
+| 22 | **ExternalHttpTask** — *deprecated* v0.0.94 | Runs the HTTP call directly inside the Orchestrator. Since v0.0.94 the type `6` HTTP task already runs orchestrator-local by default (`Workflow:TaskInvocation`); use `6` for new definitions | [External HTTP](./external-http) |
 | 23 | **PythonTask** | Built-in `main(input)` Python task, executed in the Execution service (experimental) | [Python](./python) |
 
 > **Note:** Only these task types exist. Task types not on this list are **not supported** by the system.
 
-:::warning[Types `22` and `23` are not in the schema package yet]
-The `task-definition.schema.json` shipped in `@burgan-tech/vnext-schema@0.0.53` does not yet include `22` (External HTTP) or `23` (Python) in the `attributes.type` enum. As a result, `npm run validate` in a domain package rejects a task definition using either type, while `publish` and runtime execution work fine. Details: [External HTTP Task](./external-http), [Python Task](./python).
+:::warning[Types `22` and `23` are not in the schema package]
+The `task-definition.schema.json` shipped in `@burgan-tech/vnext-schema@0.0.54` still enumerates `1`–`21`; `22` (External HTTP) and `23` (Python) are not in the `attributes.type` enum. As a result, `npm run validate` in a domain package rejects a task definition using either type, while `publish` and runtime execution work fine. Type `22` is deprecated since v0.0.94, so it is not planned for the schema. Details: [External HTTP Task](./external-http), [Python Task](./python).
+:::
+
+:::info[Orchestrator-local task types <sup>New</sup> v0.0.94]
+Since v0.0.94 five task types — `http` (6), `daprservice` (3), `soap` (16), `statestore` (17), `cacheaside` (18) — run **inside the Orchestrator process** by default instead of hopping to Execution (`Workflow:TaskInvocation:Modes`, `Local` / `Remote` per type; task-level `invocation` override > per-type mode > `DefaultMode`). `FanOutTask` (21) is always orchestrator-local; `ExternalHttpTask` (22) is therefore redundant and **deprecated**; `PythonTask` (23) runs in Execution over the `python` route. The orchestrator sidecar now needs a Dapr `state` component. Details: [Task Invocation](../../configuration/task-invocation).
 :::
 
 ## Task Usage

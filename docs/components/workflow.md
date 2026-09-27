@@ -279,12 +279,12 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 | `versionStrategy` | string | **Evet** | Versiyon stratejisi: `None`, `Patch`, `Minor`, `Major` |
 | `labels` | array | **Evet** | Çoklu dil etiketleri (`minItems: 1`) |
 | `view` | object \| null | Hayır | State view tanımı: `view` (reference), `loadData` (boolean), `extensions` (string[]) |
-| `subFlow` | object \| null | Hayır | SubFlow state için alt akış tanımı: `type` (`S`/`P`), `process` (reference), `mapping` |
+| `subFlow` | object \| null | Hayır | SubFlow state için alt akış tanımı: `type` (yalnızca `S`), `process` (reference), `mapping`, `overrides` — bkz. [SubFlow State](#subflow-state) |
 | `transitions` | array | Hayır | Bu state'den çıkan transition'lar. Wizard state (`stateType: 5`) için yalnızca **bir manuel transition** tanımlanabilir |
 | `onEntries` | array | Hayır | State'e girildiğinde çalıştırılacak task'lar |
 | `onExits` | array | Hayır | State'den çıkılırken çalıştırılacak task'lar |
 | `errorBoundary` | object \| null | Hayır | State seviyesi hata yönetimi |
-| `queryRoles` | array | Hayır | State seviyesi sorgu rolleri. Root `queryRoles`'u override eder. Instance bu state'teyken **state/data/view/schema** read fonksiyonlarınca uygulanır; izin yoksa `403` (bkz. [Query Roles](#query-roles)) |
+| `queryRoles` | array | Hayır | State seviyesi sorgu rolleri. Root `queryRoles`'u override eder. Instance bu state'teyken okuma izni bu tanımla belirlenir; <sup>New</sup> v0.0.95 itibarıyla karar gateway'in çağırdığı `authorize?queryRoles=true` ile verilir, read fonksiyonları in-process `403` üretmez (bkz. [Query Roles](#query-roles)) |
 | `alias` | array | Hayır | State için rol bazlı alternatif çoklu-dil etiketleri. Tanımlıysa State Function `state` değerini role göre maskeler |
 | `notifications` | array | Hayır | State'e bağlı bildirim tanımları. Transition pipeline tamamlandıktan sonra enqueue edilir ve durable çalışır — bkz. [State Notifications](#state-notifications) |
 | `interaction` | object \| null | Hayır | State etkileşim yapılandırması (ör. `longPoll`). Long-poll'un ne zaman sonlandırılacağını deklaratif tanımlar — bkz. [State Interaction (Long Poll)](#state-interaction-long-poll) |
@@ -318,6 +318,21 @@ State Function aktif state'in tipini Wizard olarak değerlendirdiğinde önce au
 | `4` | Suspended | Geçici askıya alınmış |
 | `5` | Busy | Meşgul |
 | `6` | Human | İnsan müdahalesi gerektiren |
+
+### SubFlow State
+
+`stateType: 4` bir state, `subFlow` bloğuyla başka bir workflow'u **child instance** olarak başlatır ve child bir terminal state'e ulaşana kadar parent bu state'te bekler (parent instance bu sırada `Busy`'dir; client `metadata.effectiveStatus` / State Function `status` ile child'ın gerçek durumunu görür).
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `type` | string | **Evet** | Yalnızca `"S"` (SubFlow). <sup>New</sup> v0.0.95 state seviyesinde `"P"` (SubProcess) **publish'te reddedilir** (400) — fire-and-forget alt süreç için [SubProcess task](/docs/components/tasks/) kullanın |
+| `process` | object | **Evet** | Child workflow referansı (`key`, `domain`, `flow`, `version`) |
+| `mapping` | object \| null | Hayır | Child'ın start payload'ını üreten mapping betiği. Child'a iletilecek çağıran header'ları (ör. rol) da burada üretilir |
+| `overrides` | object \| null | Hayır | Child'ı parent bağlamına göre ayarlayan override'lar: `timeout`, `transitions.<t>.roles`, `states.<s>.queryRoles`, `states.<s>.interaction.longPoll.{fallbackTimeoutSeconds, roles}` <sup>New</sup> v0.0.95, `states.<s>.views.<viewKey>` / `transitions.<t>.views.<viewKey>` <sup>New</sup> v0.0.95. Tam referans: [SubFlow Overrides](../how-to/subflow-overrides) |
+
+- **Başarısız subflow start'ı** <sup>New</sup> v0.0.95: child başlatılamazsa parent artık `Busy`'de asılı kalmaz; parent **fault** eder ve bir incident açılır, `retry` subflow start'ını yeniden dener — bkz. [Instance Incidents](/docs/concepts/incidents).
+- Override'lar child'a start anında damgalanır (start-time snapshot); zaten çalışan child'lar başladıkları override'larla devam eder. Kapsam **tek hop**tur: P → C → G zincirinde P'nin override'ları yalnızca C'nin state'lerine uygulanır.
+- Eski `overrides.views` / `viewOverrides` **deprecated**'dır; scoped view override'larıyla aynı `subFlow` içinde karıştırmak doğrulama hatasıdır.
 
 ### State Alias (Rol Tabanlı State Maskeleme)
 
@@ -417,13 +432,18 @@ Dapr Binding yapılandırması [Notification Task](./tasks/notification) ile ayn
 
 State Function, client tarafında **long-polling** ile süreç durumunu döner. `interaction.longPoll` ile bu açık tutulan isteğin **ne zaman sonlandırılacağı** state tanımında **deklaratif** olarak belirtilir. Runtime, isteği bir transition gerçekleşene veya fallback timeout dolana kadar açık tutar. Böylece bir süreç tasarımında farklı client'lar süreci kendi **durak noktaları** ile belirleyebilir.
 
+:::tip Uçtan uca örnek
+Onay adımı + "Bekleyen Onaylarım" senaryosunda `terminate: false` / `terminate: true` + `rule` kullanımının tamamı için bkz. [Human Task ve "Bekleyen Onaylarım"](/docs/how-to/human-task-approval).
+:::
+
 `interaction` opsiyoneldir ve şimdilik tek bir alt blok taşır: `longPoll`.
 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
-| `terminate` | boolean | **Evet** | State'ten çıkıldığında açık olan long-poll isteğinin sonlandırılıp sonlandırılmayacağı |
-| `fallbackTimeoutSeconds` | integer | Hayır | İstek fallback'e düşmeden önce açık tutulacağı maksimum saniye (`minimum: 1`). Client `ack` gönderemezse bu süre sonunda platform isteği otomatik kapatır |
-| `roles` | array | **Evet** | Long-poll etkileşimini kullanabilecek roller. DENY her zaman ALLOW'u geçersiz kılar |
+| `terminate` | boolean | **Evet** | `true`: state'e girişte pipeline **duraklatılır** ve client'a "long-poll'u sonlandır" sinyali verilir; `false`: pipeline duraklamaz, client sinyali yalnızca yeniden bağlanma ipucu olarak kullanır — bkz. [`terminate` semantiği](#terminate-semantiği) |
+| `fallbackTimeoutSeconds` | integer | Hayır | İstek fallback'e düşmeden önce açık tutulacağı maksimum saniye (`minimum: 1`, varsayılan `60`). Client `ack` gönderemezse bu süre sonunda platform pipeline'ı otomatik devam ettirir |
+| `roles` | array | **Koşullu** | Long-poll etkileşimini kullanabilecek roller. DENY her zaman ALLOW'u geçersiz kılar. `roles` ve `rule`'dan **tam olarak biri** tanımlanabilir; ikisi de yoksa herkes izinlidir |
+| `rule` <sup>New</sup> v0.0.94 | object | **Koşullu** | `roles` yerine **koşul betiği** ile yetkilendirme — view ve notification kurallarıyla aynı [IConditionMapping](/docs/components/interfaces#iconditionmapping) sözleşmesi. `roles` ile birlikte tanımlanamaz (publish'te reddedilir). Betik `false` dönerse, hata fırlatırsa veya derlenemezse **fail-closed** çalışır: state sinyali yayınlanmaz ve ack `403` alır |
 
 **Örnek:**
 
@@ -443,37 +463,90 @@ State Function, client tarafında **long-polling** ile süreç durumunu döner. 
 }
 ```
 
+**`rule` ile örnek** <sup>New</sup> v0.0.94 — yalnızca `x-channel: mobile` header'ı taşıyan çağıranlar etkileşimi kullanabilir:
+
+```json
+{
+  "key": "waiting-otp",
+  "stateType": 2,
+  "interaction": {
+    "longPoll": {
+      "terminate": true,
+      "rule": { "location": "./src/InteractionGate.csx", "code": "<base64>" }
+    }
+  }
+}
+```
+
+```csharp
+public class InteractionGate : IConditionMapping
+{
+    public Task<bool> Handler(ScriptContext context)
+    {
+        try
+        {
+            if (context.Headers == null) return Task.FromResult(false);
+            string channel = (string)context.Headers["x-channel"];
+            return Task.FromResult(channel == "mobile");
+        }
+        catch (Exception) { return Task.FromResult(false); }
+    }
+}
+```
+
+`rule` betiğinin bağlamı workflow, instance, istek header'ları ve query parametrelerini taşır; instance verisine `context.Instance.Data` ile erişilir. **`context.Body` doldurulmaz** — bir view kuralını buraya taşırken `context.Body.*` okumalarını `context.Instance.Data.*` ile değiştirin, aksi halde betik fırlatır ve (fail-closed) reddeder. Rule-gated bir state gövdesi paylaşımlı body cache'e **yazılmaz**; ack endpoint'i kuralı her istekte taze değerlendirir.
+
+#### `terminate` semantiği
+
+| `terminate` | Pipeline | Instance durumu | State yanıtı |
+|---|---|---|---|
+| `true` | State'e giriş sonrası **OnEntry tamamlanınca duraklar** (pipeline adımı order 75): ack token'ı armlanır, `fallbackTimeoutSeconds` için tek seferlik fallback job'ı kurulur, epilog (schedule/auto/finish) çalışmaz | Ack veya fallback gelene kadar **Busy** kalır (SubFlow duraklamasıyla aynı dinlenme şekli) | `interaction` bloğu `terminateLongPoll: true` + `ack.href` ile döner |
+| `false` | **Duraklamaz** — pipeline normal akar, ack token'ı armlanmaz, fallback job'ı kurulmaz | Değişmez | <sup>New</sup> v0.0.95 `interaction` bloğu **yayınlanmaz** (aşağıya bakın) |
+
+Ack (veya fallback) geldiğinde pipeline kaldığı yerden devam eder: token temizlenir, Busy çözülür ve epilog (Schedule → Auto → Finish → Finalize) çalışır. Ack ve fallback aynı anda gelirse `:lpack` kilidi ikisini serileştirir; token zaten temizlenmişse ikinci istek güvenli no-op'tur. Error-boundary ve auto-chain profillerinde bu adım **hiç çalışmaz** — bu transition'lar asla duraklamaz.
+
 #### State Yanıtındaki `interaction` Objesi
 
-State Function yanıtındaki `interaction` objesi, state'te `interaction.longPoll` tanımlıysa (rol kontrolüne tabi olarak) **`terminate` değerinden bağımsız her zaman** döner:
+State Function yanıtındaki `interaction` objesi, <sup>New</sup> v0.0.95 itibarıyla **yalnızca instance gerçekten ack beklerken** (`IsAwaitingLongPollAck`) döner — yani `terminate: true` bir state'e girilip pipeline duraklamışsa ve ack/fallback henüz gelmemişse. State tanımında `interaction.longPoll` bulunması tek başına bloğu üretmez; `terminate: false` bir state hiç `interaction` bloğu yayınlamaz. (Önceki davranış bloğu tanımdan türetiyor ve client'ı bekleyen bir şey olmadığı hâlde her poll'da ack göndermeye yönlendiriyordu; `ResponseShapeVersion` aynı değişiklikte yükseltildi ve tüm state ETag'leri bir kez geçersiz kılındı.)
 
 ```json
 "interaction": {
-  "terminateLongPoll": false,
-  "fallbackTimeoutSeconds": 600
+  "terminateLongPoll": true,
+  "fallbackTimeoutSeconds": 60,
+  "ack": { "href": "/api/v1/core/workflows/account-opening/instances/{id}/longpoll/ack" }
 }
 ```
 
 | Alan | Açıklama |
 |------|----------|
 | `terminateLongPoll` | State'in `interaction.longPoll.terminate` değerini yansıtır |
-| `fallbackTimeoutSeconds` | Fallback penceresi (varsayılan `60`). `interaction.longPoll` tanımlıysa her zaman döner |
-| `ack` | Acknowledge endpoint href'i. **Yalnızca** `terminateLongPoll: true` iken bulunur |
+| `fallbackTimeoutSeconds` | Etkin fallback penceresi (varsayılan `60`; parent subflow override'ı varsa o değer) |
+| `ack` | Acknowledge endpoint href'i (`{ "href": "…" }` şekli) |
+
+Blok yalnızca etkileşimin yetkilendirme kolunu (`roles` ya da `rule`) geçen çağıranlara yayınlanır. Aktif bir subflow'daki `terminate` state'i için blok parent'a **yukarı taşınır** ve her seviye `ack.href`'i kendi endpoint'ine yeniden yazar — client her zaman en üst instance'ın ack'ini çağırır.
 
 Client davranışı:
 
-- **`terminateLongPoll: true`** → client aktif long-poll isteğini sonlandırır, girilen state'in ekranını render eder ve `ack` ile platformu bilgilendirir. Süre içinde ack gelmezse zamanlanmış fallback pipeline'ı otomatik devam ettirir.
-- **`terminateLongPoll: false`** → client, **instance durumundan bağımsız olarak** durmuş bir long-poll isteği varsa yeniden başlatır ve `fallbackTimeoutSeconds` penceresi boyunca denemeye devam eder.
+- **`interaction` bloğu var** → client aktif long-poll isteğini sonlandırır, girilen state'in ekranını render eder ve `ack` ile platformu bilgilendirir. Süre içinde ack gelmezse zamanlanmış fallback pipeline'ı otomatik devam ettirir.
+- **`interaction` bloğu yok** → bekleyen bir ack yoktur; client normal long-poll döngüsüne devam eder.
 
 #### Long Poll Acknowledge
 
 Client, açık tuttuğu long-poll isteğini tamamladığında **acknowledge** endpoint'ini çağırarak platformu bilgilendirir:
 
 ```
-PATCH /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack
+POST /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack
 ```
 
-Client hata alır veya talep gönderemezse `fallbackTimeoutSeconds` süresi dolduğunda platform isteği otomatik olarak kapatır. Bu sayede client çökmesi veya ağ hatası durumunda long-poll askıda kalmaz.
+Client hata alır veya talep gönderemezse `fallbackTimeoutSeconds` süresi dolduğunda platform pipeline'ı otomatik olarak devam ettirir. Bu sayede client çökmesi veya ağ hatası durumunda long-poll askıda kalmaz. Ack beklemeyen bir instance'a gelen ack idempotent olarak `200` döner (no-op). Aktif subflow zincirinde ack, parent'tan duraklamış (gerekirse cross-domain) child'a hop hop iletilir.
+
+:::warning Ack yetkisi artık in-process denetlenmiyor <sup>New</sup> v0.0.95
+Ack endpoint'i `roles`/`rule` kolunu artık **kendisi değerlendirmez**. Karar noktası tek: Internal Gateway isteği iletmeden önce [`authorize?ack=true`](/docs/components/functions/built-in#instance-authorize) fonksiyonunu çağırır; bu hedef, endpoint'in eskiden kullandığı aynı etkileşim gate'inden (`rule` → `roles` → izin) geçer — `rule` bir C# betiği olduğu için gateway'in kendisinin değerlendiremeyeceği tek kol budur. Önünde bu gateway olmayan bir runtime ack'i **reddetmez**. Bkz. [Yetkilendirme → Nerede Değerlendirilir?](/docs/concepts/authorization#nerede-değerlendirilir).
+:::
+
+#### Subflow'da parent override'ı
+
+<sup>New</sup> v0.0.95 Bir state'i SubFlow olarak tüketen parent, child state'inin `fallbackTimeoutSeconds` (≥ 1) ve `roles` değerlerini `subFlow.overrides.states.<childState>.interaction.longPoll` altında alan bazında değiştirebilir; yazılmayan alan child değerini korur, `roles` listeyi bütün olarak değiştirir. `terminate` ve `rule` **override edilemez**; override, long-poll tanımlamayan bir state'e long-poll **eklemez** (log 20305) ve child `rule` kullanıyorsa `roles` override'ı yok sayılır (log 20306). Ayrıntı: [SubFlow Overrides](../how-to/subflow-overrides).
 
 > İlgili doküman: [Async / Sync Yöntemi](/docs/how-to/async-sync)
 
@@ -584,6 +657,11 @@ Kanonik adım sırası (pipeline `LifecycleOrder` değerleri), her trigger tipin
 ### Annotations
 
 `annotations` alanı, platform tarafından yorumlanmayan serbest key-value metadata'dır. UI SDK'ları ve istemci uygulamaları transition'ları filtrelemek, gruplamak veya koşullu render etmek için kullanır. Çakışmaları önlemek için namespace'li key'ler kullanılması önerilir.
+
+`annotations`, state transition'ları, `sharedTransitions`, `cancel`, `exit` ve `updateData` üzerinde tanımlanabilir; **`startTransition` üzerinde yoktur**. <sup>New</sup> v0.0.95 itibarıyla State Function yanıtında ayrıca:
+
+- `kind: "scheduled"` girişleri, zamanlayıcıyı kuran transition'ın `annotations` değerini taşır (job'ın kaynak state'i üzerinden çözülür);
+- workflow seviyesi [`timeout`](#timeout-yapısı) bloğu kendi `annotations` alanını taşır ve bu değer state yanıtındaki `timeout` bloğunda yüzeye çıkar.
 
 #### Tanımlı Key'ler
 
@@ -798,6 +876,23 @@ Doğrulama kuralları: `state` mevcut bir state key'i olmalıdır, aynı state i
 | `versionStrategy` | string | **Evet** | Versiyon stratejisi |
 | `timer` | object | **Evet** | `reset` (string) + `duration` (ISO 8601, örn. `PT30M`) |
 | `mapping` | object \| null | Hayır | Dinamik timeout hesaplama betiği. Başarısız olursa statik `timer.duration` kullanılır |
+| `annotations` <sup>New</sup> v0.0.95 | object \| null | Hayır | Client UI bağlamı için key-value metadata; değerler string, namespace'li key önerilir (örn. `ui/countdown`). Platform yorumlamaz (passthrough). State Function yanıtındaki `timeout` bloğunda aynen yüzeye çıkar — bkz. [Built-in Functions → State Fonksiyonu](/docs/components/functions/built-in#state-fonksiyonu) |
+
+```json
+"timeout": {
+  "key": "abandoned",
+  "target": "cancelled",
+  "versionStrategy": "None",
+  "timer": { "reset": "N", "duration": "PT30M" },
+  "annotations": { "ui/countdown": "visible" }
+}
+```
+
+State Function yanıtında bu tanım, deadline bekliyorken şu şekilde görünür: `"timeout": { "key": "abandoned", "target": "cancelled", "executeAtUtc": "…Z", "annotations": { "ui/countdown": "visible" } }`.
+
+:::info Subflow override'ı bloğu bütün olarak değiştirir
+Parent'ın `subFlow.overrides.timeout` tanımı child'ın `timeout` bloğunu **annotations dahil bütün olarak** değiştirir; alanlar merge edilmez. <sup>New</sup> v0.0.95 öncesinde bu override hiç uygulanmıyordu — override ile başlatılan child instance'lar artık gerçekten timeout'a düşer. Ayrıntı: [SubFlow Overrides](../how-to/subflow-overrides).
+:::
 
 ---
 
@@ -958,7 +1053,9 @@ Bkz. [Async / Sync Yöntemi](/docs/how-to/async-sync) ve mapping yapısı için 
 | `role` | string | **Evet** | Rol adı |
 | `grant` | string | **Evet** | `allow` veya `deny`. DENY her zaman ALLOW'u geçersiz kılar |
 
-**Etki alanı:** `queryRoles`, built-in read fonksiyonları — **state**, **data**, **view**, **schema** — tarafından instance'ın **mevcut (current) state**'i üzerinde değerlendirilir. State seviyesi tanımı flow (root) seviyesini override eder; çağıranın sonucu `allow` değilse fonksiyon **`403`** döner. Ayrıntı için bkz. [Built-in Functions → Read fonksiyonlarında queryRoles authorize](/docs/components/functions/built-in#read-fonksiyonlarında-queryroles-authorize) ve [Yetkilendirme](/docs/concepts/authorization).
+**Etki alanı:** `queryRoles`, instance'ın **mevcut (current) state**'i üzerinde değerlendirilir ve built-in read yüzeylerinin (**state**, **data**, **view**, **schema**, **master**, **tasks**, **actions**, **incidents**) tamamı için tek bir "bu instance okunabilir mi?" cevabı verir. State seviyesi tanımı flow (root) seviyesini override eder.
+
+<sup>New</sup> v0.0.95 **In-process gate kaldırıldı.** Read fonksiyonları `queryRoles`'u artık kendi içlerinde **denetlemez** ve `403` üretmez. Karar tek bir yerde verilir: Internal Gateway, isteği iletmeden önce [`authorize?queryRoles=true`](/docs/components/functions/built-in#instance-authorize) fonksiyonunu çağırır ve cevabına göre isteği kabul veya reddeder. Bu fonksiyon `queryRoles`'u sorgulanan instance'tan aktif subflow zincirinin en derin yaprağına kadar **her hop için** değerlendirir ve sonuç bir **conjunction**'dır (her seviye izin vermelidir); her hop'ta parent'ın `subFlow.overrides.states.<s>.queryRoles` damgası önce, sonra state'in kendi tanımı, sonra root tanımı okunur. Önünde bu gateway olmayan bir runtime bu okumaları **reddetmez** — `queryRoles` tek başına bu process'in savunduğu bir sınır değildir. Rol *çözümü* (transition filtreleme, `x-roles`, human-task listesi) değişmemiştir. Ayrıntı için bkz. [Built-in Functions → Read fonksiyonlarında queryRoles authorize](/docs/components/functions/built-in#read-fonksiyonlarında-queryroles-authorize) ve [Yetkilendirme → Nerede Değerlendirilir?](/docs/concepts/authorization#nerede-değerlendirilir).
 
 ## İlgili
 

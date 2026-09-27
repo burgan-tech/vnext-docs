@@ -114,6 +114,8 @@ The **intent** of a `roles` / `queryRoles` set is interpreted in two ways depend
 
 In both modes **DENY always overrides ALLOW.** A deny-only set lets you express "allow everyone except X" without enumerating every permitted role.
 
+The canonical rule is evaluated over the whole grant set and the caller's **whole role set**, as two groups: `authorized = DenyGroupOk AND AllowGroupOk` — the deny group is an AND (evaluated first), the allow group is an OR, a set with no allow is a blacklist, an empty set allows. <sup>New</sup> v0.0.96 **Rule 5: a caller with no roles cannot clear a role-bound deny.** A static role (`blocked`) or a `$role.$.context…` reference is a statement about the caller's *roles*; with none to compare, "nothing matched" is not evidence the caller is not the denied one, so the deny refuses. Identity-bound denies (the four system roles, `$user.` / `$userBehalfOf.`) keep their normal evaluation. Example: `[deny: blocked]` with no roles → **refused**; `[deny: $InstanceStarter]` with no roles, caller not the starter → allowed. This applies to every surface and every provider and reverses the v0.0.79 behaviour for deny-only sets (more restrictive).
+
 :::warning Backward impact
 An existing deny-only set is now treated as a **blacklist** (open to everyone except the listed roles). If your intent was "deny everyone," convert it to an allow-list by adding at least one `allow` grant.
 :::
@@ -126,7 +128,8 @@ An existing deny-only set is now treated as a **blacklist** (open to everyone ex
 |---------|-------|--------|
 | Transition | `roles` | Who can trigger the transition |
 | Transition `availableIn` entry | `roles` <sup>New</sup> | Who is offered the transition in that state (AND with transition `roles`) |
-| Flow / State | `queryRoles` | Who can query instances and states (state level overrides root). Enforced by the built-in **state/data/view/schema** read functions on the current state; **403** if not allowed |
+| Flow / State | `queryRoles` | Who can query instances and states (state level overrides root; a conjunction down the active subflow chain). <sup>New</sup> v0.0.95 decided at the **gateway** via `authorize?queryRoles=true` — the read functions (`state`, `data`, `view`, `schema`, `master`, `tasks`, `actions`, incidents) no longer refuse in process |
+| State `interaction.longPoll` | `roles` / `rule` <sup>New</sup> v0.0.94 | Who receives the long-poll termination signal and may acknowledge. <sup>New</sup> v0.0.95 decided at the gateway via `authorize?ack=true`; `POST …/longpoll/ack` no longer gates in process |
 | Function | `roles` | Who sees it in discovery (`/info`, `catalog`). <sup>New</sup> As of v0.0.88 this is no longer a gate on a direct custom function call — only the `authorize` function evaluates it |
 | State `alias` | `roles` | The role-masked view of a state |
 | Master schema property | `x-roles` | Column-level data visibility |
@@ -139,7 +142,7 @@ As of v0.0.79 every grant surface — transition `roles`, function `roles`, flow
 
 ## Caller-Role Provider <sup>New</sup> v0.0.88
 
-The caller role set that feeds the grant evaluation above is resolved through a pluggable provider — `default` (unchanged) or `morph-idm` (one memoized, fail-closed call per request scope to an external IDM). See [Configuration → Caller Role Provider](/docs/configuration/caller-role-provider) for details. `transition.roles`, `availableIn[].roles`, `queryRoles` and schema `x-roles` semantics are unaffected; only the role-set source changes. The one exception is a direct custom function call, where `function.roles` is no longer enforced — see the table above.
+The caller role set that feeds the grant evaluation above is resolved through a pluggable provider — `default` (unchanged) or `morph-idm` (one memoized call per request scope to an external IDM). See [Configuration → Caller Role Provider](/docs/configuration/caller-role-provider) for details. <sup>New</sup> v0.0.96 `morph-idm` fails **open to an empty role set**: an error status, timeout, transport failure, unparseable body or `204` resolves to `[]` instead of a 403 (`Authorization:110004`), and callers with neither `act_sub` nor `client_id` are not sent to morph-idm at all — rule 5 and the allow-lists keep an outage from widening access. <sup>New</sup> v0.0.97 under `morph-idm` a non-blank `role` header **replaces** the service's answer (morph-idm is not called); `authorize?role=X` behaves like that header when the request carries none, and a real header wins. `transition.roles`, `availableIn[].roles`, `queryRoles` and schema `x-roles` semantics are unaffected; only the role-set source changes. The one exception is a direct custom function call, where `function.roles` is no longer enforced — see the table above.
 
 ---
 

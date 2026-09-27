@@ -114,7 +114,7 @@ Function'lar üç çağırma şekli sağlar:
 ```
 
 :::info
-`onExecutionTasks` kullanıldığında `output` alanı **zorunludur**. Output mapping, tüm task sonuçlarını birleştiren `IOutputHandler` implementasyonuna işaret eder.
+`onExecutionTasks` kullanıldığında `output` alanı **zorunludur**. Output mapping, tüm task sonuçlarını birleştiren `IOutputHandler` implementasyonuna işaret eder. Her task'ın ham yanıtı `ScriptContext.TaskResponse[<normalizedKey>]`, mapping'in OutputHandler verisi `OutputResponse[<normalizedKey>]` altında sonraki task'lara ve `output` betiğine sunulur; slot'lar task başına izoledir. <sup>New</sup> v0.0.95 Normalize edilince aynı ada düşen iki task key'i (ör. `user-info` / `user_info`) publish'te reddedilir.
 :::
 
 ---
@@ -141,10 +141,10 @@ Function'lar üç çağırma şekli sağlar:
 |------|-----|---------|----------|
 | `scope` | string | **Evet** | Function kapsamı — aşağıdaki enum tablosuna bakın |
 | `task` | object | **Koşullu** | Tek task tanımı. `task` veya `onExecutionTasks`'tan biri zorunlu |
-| `onExecutionTasks` | array | **Koşullu** | Sıralı çoklu task listesi. `task` veya `onExecutionTasks`'tan biri zorunlu |
+| `onExecutionTasks` | array | **Koşullu** | Sıralı çoklu task listesi. `task` veya `onExecutionTasks`'tan biri zorunlu. <sup>New</sup> v0.0.95 Task key'leri **normalize edilmiş değişken adına** göre benzersiz olmalıdır (`user-info` ve `user_info` ikisi de `userInfo` olur) — çakışan key'ler **publish'te reddedilir**; önceden aynı `TaskResponse` slot'unu paylaşıp birbirini eziyordu |
 | `output` | object | **Koşullu** | Output mapping. `onExecutionTasks` tanımlıysa **zorunlu** |
 | `labels` | array | Hayır | Çoklu dil etiketleri (`label` + `language`) |
-| `roles` | array | Hayır | Yetkilendirme rolleri (`role` + `grant`). DENY her zaman ALLOW'u geçersiz kılar. Keşif (`/info`, `catalog`) yanıtlarında görünürlüğü belirler. <sup>New</sup> v0.0.88 itibarıyla doğrudan custom function çağrısında bir gate **değildir** — yalnızca `authorize` fonksiyonu değerlendirir; bkz. [Authorization → Çağıran rollerinin çözümlenmesi](/docs/concepts/authorization#çağıran-rollerinin-çözümlenmesi-caller-role-provider) |
+| `roles` | array | Hayır | Yetkilendirme rolleri (`role` + `grant`). DENY her zaman ALLOW'u geçersiz kılar. Keşif (`/info`, `catalog`) yanıtlarında görünürlüğü belirler. <sup>New</sup> v0.0.88 itibarıyla doğrudan custom function çağrısında bir gate **değildir** — **yalnızca `authorize?functionKey=` fonksiyonu** değerlendirir (grant, gateway'in bu fonksiyona danışmasıyla enforce edilir; `roles` tanımsızsa `authorize` izin verir). <sup>New</sup> v0.0.96 rolsüz çağıran rol-bağlı bir DENY'ı geçemez. Bkz. [Authorization → Çağıran rollerinin çözümlenmesi](/docs/concepts/authorization#çağıran-rollerinin-çözümlenmesi-caller-role-provider) |
 | `rawResponse` | boolean | Hayır | `true`: mapped rawData doğrudan response olarak döndürülür. `false` (varsayılan): platform kendi pattern modeli üzerinden çıktı verir. Legacy API'lerden vnext'e geçiş için |
 | `verbs` <sup>New</sup> | string[] | Hayır | Function'ın kabul ettiği HTTP verb'leri — aşağıdaki enum tablosuna bakın. Tanımsız/boş ise tüm verb'ler kabul edilir (geriye dönük uyumlu) |
 | `inputSchema` <sup>New</sup> | object / array | Hayır | Request body'yi tanımlayan `sys-schemas` kontratı. Tanımlıysa body, kural değerlendirmesini kazanan şemaya karşı **valide edilir** (hata → `400`). Tek referans veya rule-based dizi — bkz. [Custom Functions → Fonksiyon Kontratı](/docs/components/functions/custom) |
