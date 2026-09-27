@@ -105,6 +105,7 @@ const sidebars: SidebarsConfig = {
         'how-to/event-driven-workflows',
         'how-to/resource-lock',
         'how-to/subflow-overrides',
+        'how-to/human-task-approval',
         'how-to/view-selection',
         'how-to/async-sync',
         'how-to/observability',

@@ -432,6 +432,10 @@ Dapr Binding yapılandırması [Notification Task](./tasks/notification) ile ayn
 
 State Function, client tarafında **long-polling** ile süreç durumunu döner. `interaction.longPoll` ile bu açık tutulan isteğin **ne zaman sonlandırılacağı** state tanımında **deklaratif** olarak belirtilir. Runtime, isteği bir transition gerçekleşene veya fallback timeout dolana kadar açık tutar. Böylece bir süreç tasarımında farklı client'lar süreci kendi **durak noktaları** ile belirleyebilir.
 
+:::tip Uçtan uca örnek
+Onay adımı + "Bekleyen Onaylarım" senaryosunda `terminate: false` / `terminate: true` + `rule` kullanımının tamamı için bkz. [Human Task ve "Bekleyen Onaylarım"](/docs/how-to/human-task-approval).
+:::
+
 `interaction` opsiyoneldir ve şimdilik tek bir alt blok taşır: `longPoll`.
 
 | Alan | Tip | Zorunlu | Açıklama |

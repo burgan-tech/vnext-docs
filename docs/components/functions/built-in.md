@@ -981,6 +981,10 @@ Yanıt sahip `taskId`/`taskKey`'i yansıtır ve `{ id, status, startedAt, finish
 
 `GET /api/v1/{domain}/functions/human-task` tek bir soruya cevap verir: **bu çağıranın üzerine düşen human task'lar hangileri?** Instance seviyesi değil **domain seviyesi** bir fonksiyondur; tüketicisi (ör. morph-idm-api) discovery `domain-list` fonksiyonunu okur, kayıtlı her domain için bu rotayı bir kez çağırır ve cevapları client için birleştirir. Yanıt gövdesi düz bir JSON dizisidir; her satır **root** instance'ın `id`/`key`'ini ve **leaf** state'in `humanTask.title` / `description` metnini taşır.
 
+:::tip Akış tasarımı ve client tarafı
+Bir onay adımını bu listeye düşürmek (`subType: 6`, `queryRoles`, `humanTask` veri bloğu, kanal bazlı view ve `interaction.longPoll` yapısı, client çağrı sırası) için bkz. [Human Task ve "Bekleyen Onaylarım"](/docs/how-to/human-task-approval).
+:::
+
 <sup>New</sup> v0.0.94 Fonksiyon yeniden tasarlandı:
 
 - **Tek tarama.** Domain'deki tüm flow şemaları üzerinde tek bir `UNION ALL` ifadesi (`Type IN (R,P)`, `Status IN (A,B)`, `EffectiveStatus = A`, `EffectiveStateSubType = 6`) aday root'ları bulur; her flow için subflow zinciri **leaf**'e kadar paralel inilir (cross-domain hop'lar dahili `POST {domain}/workflows/{wf}/internal/human-task-leaf/batch` rotası üzerinden).
