@@ -51,7 +51,7 @@ The master schema also plays an active role in the Data Function: during [instan
 | `role` | Yes | Domain-qualified role name (e.g. `morph-idm.initiator`) **or** a dynamic JSONPath expression |
 | `grant` | Yes | `allow` or `deny`. **DENY always overrides ALLOW** |
 
-The same system roles and JSONPath grant prefixes (`$user.` / `$userBehalfOf.` / `$role.`) apply; see [Authorization](/docs/concepts/authorization). `x-encryption` is in the same field-governance scope (`persisted` / `transport`).
+The same system roles and JSONPath grant prefixes (`$user.` / `$userBehalfOf.` / `$role.`) apply; see [Authorization](/docs/concepts/authorization). `x-encryption` is in the same field-governance scope: `hash` digests the value on write under a per-instance salt (the database stores the digest), and `encrypt` stores the value AES-256-GCM-encrypted in instance data and decrypts it on the data function for the `allow` exemption roles only; instance GET/list serve data as stored (`persisted` / `transport` were removed).
 
 ### Filter & Sort Vocabulary
 

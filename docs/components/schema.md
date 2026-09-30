@@ -109,7 +109,7 @@ Alan bazlı görünürlük, master şema property'lerinde **`x-roles`** keyword'
 
 `role` değeri statik bir ad ya da JSONPath ifadesi olabilir; sistem rolleri (`$InstanceStarter` vb.) ve JSONPath grant prefiksleri (`$user.` / `$userBehalfOf.` / `$role.`) burada da geçerlidir. Bu kalıpların çözümleme semantiği için bkz. [Yetkilendirme](/docs/concepts/authorization).
 
-`x-encryption` de aynı alan-yönetişim kapsamındadır; bir field'ın şifreleme tipini (`persisted` / `transport`) belirtir. Tüm property seviyesi `x-*` uzantılarının ayrıntısı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+`x-encryption` de aynı alan-yönetişim kapsamındadır: `hash` değeri yazarken instance'a özgü tuzla özetler (veritabanında özet saklanır), `encrypt` değeri instance data'da AES-256-GCM ile şifreli saklar ve data function'da yalnızca `allow` muafiyet rolleri için çözer; instance GET/liste veriyi saklandığı gibi döner (`persisted` / `transport` kaldırıldı). Tüm property seviyesi `x-*` uzantılarının ayrıntısı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 
 ### Filtreleme & Sıralama Vocabulary'si
 

@@ -304,20 +304,36 @@ Rol değerlendirme semantiği (sistem rolleri, `$user` / `$userBehalfOf` / `$rol
 
 ---
 
-### `x-encryption` — Şifreleme (Bilgi Amaçlı)
+### `x-encryption` — Hash ve Şifreleme
 
-`x-roles` ile aynı alan-yönetişim kapsamındadır. Tasarımcı bu alanı değiştirmez; ancak ekranda göreceğiniz bazı alanlarda şifreleme tipi belirtilmiş olabilir.
+`x-roles` ile aynı alan-yönetişim kapsamındadır ve workflow'un master (data) şemasında etkilidir. Yalnızca `type: "string"` olan ve iç içe `properties` üzerinden erişilen alanlarda kullanılabilir; aynı alanda `x-masking`, `x-filterOperators`, `x-sortable` veya `x-indexed` ile birlikte kullanılamaz.
 
 ```json
-"tckn": {
-  "x-encryption": { "type": "persisted" }
+"email": {
+  "type": "string",
+  "x-encryption": {
+    "type": "encrypt",
+    "roles": [ { "role": "morph-idm.auditor", "grant": "allow" } ],
+    "purpose": "PII"
+  }
 }
 ```
 
-| Değer | Anlam |
-|-------|-------|
-| `"persisted"` | Veritabanında şifreli saklanır |
-| `"transport"` | Sadece iletim sırasında şifrelenir |
+| `type` | Ne yapar |
+|--------|----------|
+| `"none"` | Şifreleme yok |
+| `"hash"` | Değer **yazılırken** özetlenir: veritabanında `HASHED:SHA256:<hex>` (veya `HASHED:SHA512:`) saklanır, ham değer tutulmaz. Özet instance'a özgü tuzla alınır; aynı değer iki farklı instance'ta farklı özet üretir. Okuma yolu saklanan özeti gösterir. `roles` ve `pattern` / `format` / `minLength` / `maxLength` / `enum` / `const` kabul etmez |
+| `"encrypt"` | Değer instance data'da **AES-256-GCM** ile şifreli saklanır: `ENCRYPTED:AES256:i1:…`. Motor (script, mapping, koşul, task) düz metin görür. Data function ve senkron yanıtta `roles` listesindeki çağıran düz metni, diğer herkes saklanan şifreli değeri görür |
+
+Anahtar ve tuz **her instance için** runtime tarafından ilk korumalı yazmada üretilir ve flow şemasındaki `InstanceSecrets` tablosunda tutulur; config'te, Vault'ta ya da şemada yer almaz ve hiçbir API'den dönmez. Instance silinince anahtarı da silinir ve şifreli değerleri geri döndürülemez.
+
+`roles` bir **muafiyet listesidir** ve yalnızca `allow` kabul eder (`x-masking.roles` için de aynısı): eşleşen çağıran değeri açık görür, eşleşmeyen (yanlış yazılmış, rolsüz, listede olmayan) herkes dönüştürülmüş değeri görür. `deny` publish'te reddedilir. `purpose`, `redactInLogs` ve `retentionDays` yönetişim bilgisidir; runtime tarafından uygulanmaz.
+
+:::warning Kapsam
+`x-roles`, `x-masking` ve `x-encryption` **data function** ve senkron start/transition yanıtında uygulanır. **Instance GET ve liste** endpoint'leri veriyi saklandığı gibi döner: `x-roles` budaması ve maskeleme yapılmaz, `encrypt` alanları şifreli, `hash` alanları özet olarak görünür (sonraki fazda ele alınacak). `encrypt` yalnızca **instance data**'yı şifreler; transition gövdesi, task kayıtları, event ve cache kopyaları henüz düz metindir. Alan `encrypt`/`hash` yapılmadan önce yazılmış geçmiş satırlar da düz kalır. Şifreli alan filtrelenemez, sıralanamaz ve gruplanamaz.
+:::
+
+`"persisted"` ve `"transport"` kaldırıldı (hiçbir runtime tarafından uygulanmıyordu); bu değerleri taşıyan şema publish'te reddedilir — yerine `"encrypt"` kullanın.
 
 ---
 
