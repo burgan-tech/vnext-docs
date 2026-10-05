@@ -11,7 +11,7 @@ The Fan-Out Task resolves a collection from instance data **at runtime**, runs a
 It exists for the parallelism a workflow author cannot express at design time: the item count comes from **data**, not from the workflow definition — an array of documents to sign, a list of recipients to notify, a batch of accounts to reconcile.
 
 :::tip[You do not need Fan-Out for static parallelism]
-Tasks sharing the same `order` value, whose number is **fixed and known** in the definition, already run in parallel (see [Tasks Overview → Execution Order](/docs/components/tasks/)). Reach for Fan-Out only when the item count comes from **data**.
+Tasks sharing the same `order` value, whose number is **fixed and known** in the definition, already run in parallel (see [Tasks Overview → Execution Order](/docs/components/tasks/)). If you run the same task more than once at the same `order`, give each entry a distinct `variableKey` (since v0.0.99); otherwise their responses file under the same slot and the definition is rejected at publish. Reach for Fan-Out only when the item count comes from **data**.
 :::
 
 :::info[Schema support since v0.0.53]

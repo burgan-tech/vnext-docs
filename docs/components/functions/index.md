@@ -16,7 +16,7 @@ Function'lar üç çağırma şekli sağlar:
 
 1. **Domain-level**: `/api/v1/{domain}/functions/{function}` — workflow bağımsız. `GET`, `POST`, `PATCH`, `DELETE` destekler.
 2. **Instance-level**: `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}` — instance context'inde çalışır. `GET`, `POST`, `PATCH`, `DELETE` destekler.
-3. **Built-in**: State, Data, View — sistem tarafından sağlanan üç sabit function (bkz. [Built-in Functions](/docs/components/functions/built-in)).
+3. **Built-in**: State, Data, View, Schema, Master, Catalog, Tasks, Instance Correlation vb. — sistem tarafından sağlanan sabit function'lar (bkz. [Built-in Functions](/docs/components/functions/built-in)).
 
 ## Tanım JSON Örneği
 
@@ -114,7 +114,7 @@ Function'lar üç çağırma şekli sağlar:
 ```
 
 :::info
-`onExecutionTasks` kullanıldığında `output` alanı **zorunludur**. Output mapping, tüm task sonuçlarını birleştiren `IOutputHandler` implementasyonuna işaret eder. Her task'ın ham yanıtı `ScriptContext.TaskResponse[<normalizedKey>]`, mapping'in OutputHandler verisi `OutputResponse[<normalizedKey>]` altında sonraki task'lara ve `output` betiğine sunulur; slot'lar task başına izoledir. <sup>New</sup> v0.0.95 Normalize edilince aynı ada düşen iki task key'i (ör. `user-info` / `user_info`) publish'te reddedilir.
+`onExecutionTasks` kullanıldığında `output` alanı **zorunludur**. Output mapping, tüm task sonuçlarını birleştiren `IOutputHandler` implementasyonuna işaret eder. Her task'ın ham yanıtı `ScriptContext.TaskResponse[<slot>]`, mapping'in OutputHandler verisi `OutputResponse[<slot>]` altında sonraki task'lara ve `output` betiğine sunulur; slot'lar task başına izoledir. <sup>New</sup> v0.0.99 Etkin slot = `variableKey ?? camelCase(task.key)` — aynı task'ı iki kez çalıştırmak için girişlere farklı `variableKey` verin (bkz. [Custom Functions → variableKey](/docs/components/functions/custom#aynı-taskı-iki-kez-çalıştırma-variablekey)). Function'larda aynı etkin slot'a düşen iki giriş, `order`'dan bağımsız olarak **tüm `onExecutionTasks`** genelinde publish'te reddedilir (v0.0.95'ten beri `user-info` / `user_info` gibi normalize çakışmaları da dahil).
 :::
 
 ---
@@ -141,9 +141,9 @@ Function'lar üç çağırma şekli sağlar:
 |------|-----|---------|----------|
 | `scope` | string | **Evet** | Function kapsamı — aşağıdaki enum tablosuna bakın |
 | `task` | object | **Koşullu** | Tek task tanımı. `task` veya `onExecutionTasks`'tan biri zorunlu |
-| `onExecutionTasks` | array | **Koşullu** | Sıralı çoklu task listesi. `task` veya `onExecutionTasks`'tan biri zorunlu. <sup>New</sup> v0.0.95 Task key'leri **normalize edilmiş değişken adına** göre benzersiz olmalıdır (`user-info` ve `user_info` ikisi de `userInfo` olur) — çakışan key'ler **publish'te reddedilir**; önceden aynı `TaskResponse` slot'unu paylaşıp birbirini eziyordu |
+| `onExecutionTasks` | array | **Koşullu** | Sıralı çoklu task listesi. `task` veya `onExecutionTasks`'tan biri zorunlu. <sup>New</sup> v0.0.95 Task key'leri **normalize edilmiş değişken adına** göre benzersiz olmalıdır (`user-info` ve `user_info` ikisi de `userInfo` olur) — çakışan key'ler **publish'te reddedilir**; önceden aynı `TaskResponse` slot'unu paylaşıp birbirini eziyordu. <sup>New</sup> v0.0.99 Benzersizlik **etkin slot** (`variableKey ?? camelCase(task.key)`) üzerinden denetlenir; aynı task farklı `variableKey`'lerle iki kez çalıştırılabilir |
 | `output` | object | **Koşullu** | Output mapping. `onExecutionTasks` tanımlıysa **zorunlu** |
-| `labels` | array | Hayır | Çoklu dil etiketleri (`label` + `language`) |
+| `labels` | array | Hayır | Çoklu dil etiketleri (`label` + `language`). <sup>New</sup> v0.0.99 Okuma yüzeylerinde döner: built-in `catalog` yanıtında `functions[].labels` (önceden yükleme sırasında düşürülüyordu) |
 | `roles` | array | Hayır | Yetkilendirme rolleri (`role` + `grant`). DENY her zaman ALLOW'u geçersiz kılar. Keşif (`/info`, `catalog`) yanıtlarında görünürlüğü belirler. <sup>New</sup> v0.0.88 itibarıyla doğrudan custom function çağrısında bir gate **değildir** — **yalnızca `authorize?functionKey=` fonksiyonu** değerlendirir (grant, gateway'in bu fonksiyona danışmasıyla enforce edilir; `roles` tanımsızsa `authorize` izin verir). <sup>New</sup> v0.0.96 rolsüz çağıran rol-bağlı bir DENY'ı geçemez. Bkz. [Authorization → Çağıran rollerinin çözümlenmesi](/docs/concepts/authorization#çağıran-rollerinin-çözümlenmesi-caller-role-provider) |
 | `rawResponse` | boolean | Hayır | `true`: mapped rawData doğrudan response olarak döndürülür. `false` (varsayılan): platform kendi pattern modeli üzerinden çıktı verir. Legacy API'lerden vnext'e geçiş için |
 | `verbs` <sup>New</sup> | string[] | Hayır | Function'ın kabul ettiği HTTP verb'leri — aşağıdaki enum tablosuna bakın. Tanımsız/boş ise tüm verb'ler kabul edilir (geriye dönük uyumlu) |
@@ -152,6 +152,7 @@ Function'lar üç çağırma şekli sağlar:
 | `inputView` <sup>New</sup> | object / array | Hayır | Client'ın function input'unu toplamak için render edeceği `sys-views` kontratı. Tek referans veya rule-based dizi |
 | `outputView` <sup>New</sup> | object / array | Hayır | Client'ın function output'unu sunmak için render edeceği `sys-views` kontratı. Tek referans veya rule-based dizi |
 | `cache` | object | Hayır | Read-through cache yapılandırması — bkz. [Custom Functions → Fonksiyon Cache](/docs/components/functions/custom) |
+| `executionLog` <sup>New</sup> v0.0.99 | string | Hayır | Fonksiyon yürütme journal'ı için opt-in — aşağıdaki enum tablosuna bakın. Kayıtlar `GET /{domain}/functions/{function}/metrics` ile okunur — bkz. [Built-in Functions → Fonksiyon Metrikleri](/docs/components/functions/built-in#fonksiyon-metrikleri) |
 
 ### `scope` Enum Değerleri
 
@@ -160,6 +161,13 @@ Function'lar üç çağırma şekli sağlar:
 | `D` | **Domain** — workflow bağımsız, domain seviyesinde çalışır |
 | `F` | **Flow** — flow seviyesinde çalışır |
 | `I` | **Instance** — belirli bir instance context'inde çalışır |
+
+### `executionLog` Enum Değerleri
+
+| Değer | Açıklama |
+|-------|----------|
+| `E` | **Enabled** — fonksiyonun her çağrısı yürütme journal'ına yazılır ve metrik endpoint'lerinden servis edilir (asenkron, best-effort; yürütme süresini etkilemez) |
+| `D` | **Disabled** — hiçbir şey kaydedilmez. Alanın olmaması da `D` ile aynıdır (varsayılan) |
 
 ### `verbs` Enum Değerleri <sup>New</sup>
 
@@ -180,6 +188,7 @@ Deklare edilmemiş bir verb ile yapılan çağrı **405 Method Not Allowed** dö
 | `order` | integer | **Evet** | Çalışma sırası (`minimum: 1`) |
 | `task` | object | **Evet** | Task referansı — explicit veya `ref` (aşağıda) |
 | `mapping` | object | **Evet** | Mapping kodu tanımı (aşağıda) |
+| `variableKey` <sup>New</sup> v0.0.99 | string | Hayır | Yanıt slot adı (`TaskResponse` / `OutputResponse`). Format `^[A-Za-z_][A-Za-z0-9_]*$`, en fazla 100 karakter, verbatim kullanılır. Etkin slot = `variableKey ?? camelCase(task.key)` |
 
 **Task Referansı** — iki formdan biri kullanılır:
 

@@ -49,8 +49,8 @@ The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.
 The `task-definition.schema.json` shipped in `@burgan-tech/vnext-schema@0.0.54` still enumerates `1`–`21`; `22` (External HTTP) and `23` (Python) are not in the `attributes.type` enum. As a result, `npm run validate` in a domain package rejects a task definition using either type, while `publish` and runtime execution work fine. Type `22` is deprecated since v0.0.94, so it is not planned for the schema. Details: [External HTTP Task](./external-http), [Python Task](./python).
 :::
 
-:::info[Orchestrator-local task types <sup>New</sup> v0.0.94]
-Since v0.0.94 five task types — `http` (6), `daprservice` (3), `soap` (16), `statestore` (17), `cacheaside` (18) — run **inside the Orchestrator process** by default instead of hopping to Execution (`Workflow:TaskInvocation:Modes`, `Local` / `Remote` per type; task-level `invocation` override > per-type mode > `DefaultMode`). `FanOutTask` (21) is always orchestrator-local; `ExternalHttpTask` (22) is therefore redundant and **deprecated**; `PythonTask` (23) runs in Execution over the `python` route. The orchestrator sidecar now needs a Dapr `state` component. Details: [Task Invocation](../../configuration/task-invocation).
+:::info[Orchestrator-local task types — v0.0.94]
+Since v0.0.94 the `http` (6), `daprservice` (3), `soap` (16) and `statestore` (17) task types run **inside the Orchestrator process** by default instead of hopping to Execution (`Workflow:TaskInvocation:Modes`, `Local` / `Remote` per type; task-level `invocation` override > per-type mode > `DefaultMode`). `FanOutTask` (21) is always orchestrator-local; `ExternalHttpTask` (22) is therefore redundant and **deprecated**; `PythonTask` (23) runs in Execution over the `python` route. Since v0.0.99 `CacheAsideTask` (18) runs in the Orchestrator without a separate `cacheaside` mode: its cache I/O follows the `statestore` mode and its `sourceTask` follows its own type's mode (`Modes:cacheaside` was removed). The orchestrator sidecar now needs a Dapr `state` component. Details: [Task Invocation](../../configuration/task-invocation).
 :::
 
 ## Task Usage
@@ -81,6 +81,53 @@ Tasks are used by being referenced by other modules. In each task usage, `order`
 - `order` values are grouped among themselves
 - Those with the same order are executed **in parallel**
 - Those with different orders are executed **sequentially**
+
+#### Response slot and `variableKey`
+
+Since v0.0.99 every task entry (workflow `onEntries` / `onExits` / transition `onExecutionTasks`, function `onExecutionTasks`) may carry an optional **`variableKey`** that names the **slot** the task's response is filed under in the script context.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `variableKey` | string | No | Response slot name. Format `^[A-Za-z_][A-Za-z0-9_]*$`, max 100 characters. Used **verbatim** |
+
+- **Effective slot** = `variableKey ?? camelCase(task.key)` — e.g. `send-notification` → `sendNotification`.
+- Read it as `context.TaskResponse["primaryChild"]` in workflow scripts and `context.OutputResponse["primaryChild"]` in function scripts.
+
+**Publish rules:**
+
+- A malformed value is rejected: `... variableKey 'x' is not a valid response slot name: use letters, digits and '_', starting with a letter or '_' (max 100 characters).`
+- In **workflows**, collisions are checked **per order**: two entries running in parallel at the same `order` that file under the same effective slot are rejected (`…run in parallel at order N and both file their response under 'slot'; … Give one of them a distinct 'variableKey' or a different order.`).
+- In **functions**, collisions are checked across **all** `onExecutionTasks`, regardless of order.
+- A definition running the same task twice at one order without `variableKey` is now rejected at publish (it used to crash at runtime with `Parallel tasks produced conflicting output for key '...'`).
+
+**Slot-aware merge:**
+
+- A later order rewriting an earlier order's slot **overwrites** it (also as a parallel group — this used to throw).
+- Only two branches **in the same round** writing the same slot with **different** payloads is a conflict: it throws and nothing is applied.
+- In-place mutation of an inherited value inside a parallel task is not seen by the merge.
+- The ExternalHttp task now honors the slot as well.
+- Extension task entries file their response under the extension's own key; a `variableKey` there is ignored.
+
+**Example — running the same SubProcess start task twice at the same order:**
+
+```json
+"onExecutionTasks": [
+  {
+    "order": 1,
+    "task": { "key": "start-child", "domain": "core", "version": "1.0.0", "flow": "sys-tasks" },
+    "variableKey": "primaryChild",
+    "mapping": { "location": "./src/mappings/start-primary-child.csx", "code": "<base64>" }
+  },
+  {
+    "order": 1,
+    "task": { "key": "start-child", "domain": "core", "version": "1.0.0", "flow": "sys-tasks" },
+    "variableKey": "secondaryChild",
+    "mapping": { "location": "./src/mappings/start-secondary-child.csx", "code": "<base64>" }
+  }
+]
+```
+
+A mapping at a later order reads both responses separately: `context.TaskResponse["primaryChild"]` and `context.TaskResponse["secondaryChild"]`.
 
 ### Data Management
 - If tasks have output data as a result of their execution, they increase the master data as a patch version

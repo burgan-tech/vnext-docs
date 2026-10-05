@@ -97,6 +97,8 @@ Each function can execute a task and the task result data can be returned in the
 | `onExecutionTasks` | `array` | Ordered tasks to execute; see **Multi-task execution** below |
 | `output` | `object` | Optional output mapping script: `location` / `code`; implements **`IOutputHandler`** |
 | `cache` | `object` | Optional read-through response cache — see **Function Cache** below |
+| `labels` | `array` | Multi-language labels (`[{ label, language }]`). (v0.0.99) No longer dropped at load time; returned by the built-in `catalog` as `functions[].labels` |
+| `executionLog` (v0.0.99) | `string` | Opt-in execution journal: `E` (enabled) records every invocation, served by the [function metrics endpoints](/docs/components/functions/built-in#function-metrics); `D` or absent records nothing. Asynchronous, best-effort |
 
 ### Scope Values
 
@@ -131,12 +133,13 @@ Each function can execute a task and the task result data can be returned in the
 | `order` | `number` | Task execution order |
 | `task` | `object` | Task reference |
 | `mapping` | `object` | Input/Output transformation mapping |
+| `variableKey` (v0.0.99) | `string` | Optional response-slot name in `context.OutputResponse` / `context.TaskResponse`. Format `^[A-Za-z_][A-Za-z0-9_]*$`, max 100 chars, used verbatim. Effective slot = `variableKey ?? camelCase(task.key)` (`send-notification` → `sendNotification`) |
 
 ### Multi-task execution and output mapping
 
 A function may run **multiple tasks in order** using **`attributes.onExecutionTasks`** instead of a single **`task`**. Each entry has **`order`**, a **`task`** reference, and optional **`mapping`**. Later tasks can consume outputs from earlier ones in the same function execution.
 
-Optional **`attributes.output`** references a script that implements **`IOutputHandler`**. In **`OutputHandler`**, read per-task results from **`context.OutputResponse`** (keys follow the executed task keys, typically **camelCase**).
+Optional **`attributes.output`** references a script that implements **`IOutputHandler`**. In **`OutputHandler`**, read per-task results from **`context.OutputResponse`**, keyed by each entry's **effective slot**: `variableKey` when set, otherwise the camelCased task key.
 
 :::tip Response header & status code forwarding
 In multi-task functions, the **`Headers`** and **`StatusCode`** of the `ScriptResponse` returned by the output handler are **forwarded** onto the final function HTTP response. The output handler can therefore set the response status (e.g. `201`, `202`) and propagate headers such as `Location` or `ETag` — not just the body.
@@ -198,6 +201,19 @@ public class FunctionOutputMapping : IOutputHandler
     }
 }
 ```
+
+#### Running the same task twice (`variableKey`)
+
+(v0.0.99) Give each entry a distinct `variableKey` so the results land in separate slots:
+
+```json
+"onExecutionTasks": [
+  { "order": 1, "task": { "key": "start-child", "domain": "core", "version": "1.0.0", "flow": "sys-tasks" }, "variableKey": "primaryChild", "mapping": { "location": "./src/StartPrimaryChildMapping.csx", "code": "" } },
+  { "order": 1, "task": { "key": "start-child", "domain": "core", "version": "1.0.0", "flow": "sys-tasks" }, "variableKey": "secondaryChild", "mapping": { "location": "./src/StartSecondaryChildMapping.csx", "code": "" } }
+]
+```
+
+`context.OutputResponse["primaryChild"]` and `context.OutputResponse["secondaryChild"]` then hold the two results. For functions, slot collisions are checked at publish across **all** `onExecutionTasks`, regardless of `order` (the same task twice without `variableKey` is rejected — it used to fail at runtime with "Parallel tasks produced conflicting output for key '...'"). A malformed `variableKey` is rejected at publish as well.
 
 ---
 
@@ -267,144 +283,15 @@ As of v0.0.79 a function can declare a full client contract — all fields are o
 
 ## System Functions
 
-The vNext platform provides ready-to-use system functions for every workflow instance:
+The platform provides built-in system functions for every instance — `state`, `data`, `view`, `schema`, `master`, `catalog`, `tasks`, `actions`, `instance-correlation`, `authorize`, `permissions`, and the domain-level `human-task`. They have no `sys-functions` component and shadow a custom function with the same key. For the full endpoint, response and field reference, see [Built-in Functions](/docs/components/functions/built-in).
 
 ### State Function
 
-Returns the current state information of an instance.
+Returns the instance's current state, role-filtered transitions (with `labels` and `target` since v0.0.99), `interaction`, `timeout` and correlation information for long-polling: `GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/state`. When the active state defines an `alias`, `state` may return a role-masked label — see [State Alias](/docs/components/workflow). Full shape: [Built-in Functions → State Function](/docs/components/functions/built-in#state-function).
 
-**Endpoint:**
-```http
-GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/state
-```
+### View and Schema Functions
 
-**Response:**
-```json
-{
-  "data": {
-    "href": "/core/workflows/account-opening/instances/d4b161a8-7705-4bfb-9ba4-d76461bb35eb/functions/data?extensions=extension-user-session"
-  },
-  "view": {
-    "loadData": true,
-    "href": "/core/workflows/account-opening/instances/d4b161a8-7705-4bfb-9ba4-d76461bb35eb/functions/view"
-  },
-  "state": "account-type-selection",
-  "status": "A",
-  "activeCorrelations": [],
-  "transitions": [
-    {
-      "name": "select-demand-deposit",
-      "href": "/core/workflows/account-opening/instances/d4b161a8-7705-4bfb-9ba4-d76461bb35eb/transitions/select-demand-deposit"
-    },
-    {
-      "name": "execute-sub",
-      "href": "/core/workflows/account-opening/instances/d4b161a8-7705-4bfb-9ba4-d76461bb35eb/transitions/execute-sub"
-    }
-  ],
-  "eTag": "01KCHWT3QQFM6J9QQD9G4T0VRP"
-}
-```
-
-**Response Fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `data.href` | `string` | Data function endpoint |
-| `view.loadData` | `boolean` | Whether view requires data loading |
-| `view.href` | `string` | View function endpoint |
-| `state` | `string` | Current state name |
-| `status` | `string` | Instance status (A=Active, C=Completed) |
-| `activeCorrelations` | `array` | Active sub-correlations |
-| `transitions` | `array` | Available transitions |
-| `eTag` | `string` | ETag value for cache control |
-
-### View Function
-
-Returns the view data for the current state or transition of an instance.
-
-**Endpoint:**
-```http
-GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/view?transitionKey={transition}&platform={platform}
-```
-
-**Query Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `transitionKey` | `string` | View for specific transition (optional) |
-| `platform` | `string` | Target platform: `web`, `ios`, `android` |
-
-**Response:**
-```json
-{
-  "key": "account-type-selection-view",
-  "content": "{\"type\":\"form\",\"title\":{\"en-US\":\"Choose Your Account Type\",\"tr-TR\":\"Hesap Türünüzü Seçin\"},\"fields\":[...]}",
-  "type": "Json",
-  "display": "full-page",
-  "label": ""
-}
-```
-
-**Response Fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `key` | `string` | View identifier |
-| `content` | `string` | View content (in JSON format) |
-| `type` | `string` | Content type (Json, Html, etc.) |
-| `display` | `string` | Display mode (full-page, popup, bottom-sheet, etc.) |
-| `label` | `string` | Localized label |
-
-### Schema Function
-
-Returns the schema data for the current state or transition of an instance.
-
-**Endpoint:**
-```http
-GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/schema?transitionKey={transition}
-```
-
-**Response:**
-```json
-{
-  "key": "account-type-selection",
-  "type": "workflow",
-  "schema": {
-    "$id": "https://schemas.vnext.com/banking/account-type-selection.json",
-    "type": "object",
-    "title": "Account Type Selection Schema",
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "required": ["accountType"],
-    "properties": {
-      "accountType": {
-        "type": "string",
-        "oneOf": [
-          {
-            "const": "demand-deposit",
-            "description": "Vadesiz Hesap - Demand Deposit Account"
-          },
-          {
-            "const": "time-deposit",
-            "description": "Vadeli Hesap - Time Deposit Account"
-          },
-          {
-            "const": "investment-account",
-            "description": "Fonlu Hesap - Investment Account"
-          },
-          {
-            "const": "savings-account",
-            "description": "Tasarruf Hesabı - Savings Account"
-          }
-        ],
-        "title": "Account Type",
-        "description": "Type of account to be opened"
-      }
-    },
-    "description": "Schema for account type selection input",
-    "additionalProperties": false
-  }
-}
-```
+`…/functions/view?transitionKey=&platform=` returns the state or transition view; `…/functions/schema?transitionKey=` returns the transition's JSON Schema. Since v0.0.99 both carry the component's `labels`. See [Built-in Functions](/docs/components/functions/built-in#view-function).
 
 ---
 

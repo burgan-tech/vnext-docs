@@ -118,7 +118,7 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/actions
 | `instance` | path | Instance id veya business key |
 | `taskId` | query | **Yalnız `actions` için, zorunlu** — `tasks` yanıtındaki bir öğenin `id`'si (journal satırı) |
 
-- `tasks`: instance'ın tüm task journal'ı, **sayfalanmadan**, yürütme sırasında (StartedAt artan). Her öğe: `id`, `taskKey`, `transitionKey`, `fromState`, `toState`, `triggerType`, `status` (`waiting` / `busy` / `completed` / `faulted`), `businessStatus` (`unknown` / `success` / `failed`), `startedAt`, `finishedAt`, `durationMs`, `error`. **Yalnız metadata** — `Request` / `Response` payload'ları hiçbir API'de dönmez (mapping'lerin ürettiği auth header'ları içerebilir).
+- `tasks`: instance'ın tüm task journal'ı, **sayfalanmadan**, yürütme sırasında (StartedAt artan). Her öğe: `id`, `taskKey`, `transitionKey`, `fromState`, `toState`, `triggerType`, `hook` ve `order` (<sup>New</sup> v0.0.99; migration öncesi satırlarda `null`), `status` (`waiting` / `busy` / `completed` / `faulted`), `businessStatus` (`unknown` / `success` / `failed`), `startedAt`, `finishedAt`, `durationMs`, `error`. **Yalnız metadata** — `Request` / `Response` payload'ları hiçbir API'de dönmez (mapping'lerin ürettiği auth header'ları içerebilir).
 - `actions`: verilen journal satırının alt adımları (`{ id, status, startedAt, finishedAt, durationMs, detail }`), yürütme sırasında. `taskId` yok/GUID değil → `400` (`Instance:100039`); task bu instance'a ait değil → `404` (`Instance:100038`).
 - `tasks` ve `actions` sistem anahtarlarıdır; aynı adlı custom function gölgelenir.
 - Yetkilendirme: v0.0.95 itibarıyla in-process `queryRoles` kontrolü yoktur; gateway `authorize?queryRoles=true` ile karar verir (aşağıya bakın).
@@ -131,17 +131,17 @@ Runtime'ın **tek yetkilendirme karar noktası** <sup>New</sup> v0.0.95: Interna
 |---|---|---|
 | `transitionKey` | query | Bu transition tetiklenebilir mi? (mevcut state'te sunuluyor mu **ve** `transition.roles` / `availableIn[state].roles`) |
 | `functionKey` | query | Bu **custom** function çağrılabilir mi? (`Function.roles`; rol tanımsızsa izinli) |
-| `queryRoles=true` | query | Instance okunabilir mi? Aktif subflow zincirinin **tamamı** boyunca konjonksiyon; her hop'ta parent'ın `subflow.state_role_overrides` damgası → state'in `queryRoles` → workflow kökü |
+| `queryRoles=true` | query | Instance okunabilir mi? <sup>New</sup> v0.0.99 Aktif subflow zincirinde karar **yalnızca en derin aktif leaf'te** verilir (üst seviyeler AND'lenmez): parent'ın damgaladığı override ?? leaf state `queryRoles` ?? leaf workflow `queryRoles`. Root `queryRoles` bildirip leaf bildirmiyorsa erişim gevşer — parent override veya leaf `queryRoles` ekleyin |
 | `ack=true` | query | <sup>New</sup> v0.0.95 — `POST …/longpoll/ack` çağrılabilir mi? Girilen state'in `interaction.longPoll` kolu (`roles` **veya** condition `rule`) aynı `ILongPollInteractionGate` ile değerlendirilir |
 | `role` | query | Sorgulanacak tek bir rol. v0.0.96'dan itibaren `ack=true` sorgusunda her yolda çağıran rollerine eklenir; v0.0.97'den itibaren `CallerRoleProvider:Provider=morph-idm` altında `role` header'ı yoksa header gibi davranır (gerçek header her zaman kazanır) |
 | `version` | query | Workflow tanım versiyonunu sabitler; yoksa instance'ın kendi versiyonu |
 
-Dört seçiciden **tam olarak biri** verilmelidir; sıfır veya iki seçici `Authorization:110002` ile reddedilir.
+Dört seçiciden **tam olarak biri** verilmelidir; sıfır veya iki seçici `Authorization:110002` ile reddedilir. Parent'ta kalan transition'lar (`cancel`, `exit`, `updateData`, parent state'inde sunulan shared transition) ve `ack=true` davranışı v0.0.99'da değişmedi. Ayrıntı: [Built-in Functions → Instance Authorize](/docs/components/functions/built-in#instance-authorize).
 
 **Responses:** `200` → `{"allowed": true}`, `403` → `{"allowed": false}` — karar **her iki durumda da gövdededir**. Yanıtlanamayan soru (instance yok, hatalı istek) hata zarfıyla `4xx`/`5xx` döner.
 
 :::warning In-process `queryRoles` denetimleri kaldırıldı — v0.0.95
-`state`, `data`, `view`, `schema`, `master`, `tasks`, `actions`, `incidents`, `incidents/active` fonksiyonları ve `POST …/longpoll/ack` artık kendi içlerinde `queryRoles` / interaction kapısını **değerlendirmez**. Karar yalnızca `authorize` üzerinden verilir; Internal Gateway'in bu fonksiyonu çağırmadığı bir deployment'ta bu yüzeylerde `queryRoles` **uygulanmaz**. Görünürlük çözümü (transition filtreleme, `x-roles`) değişmemiştir. Ayrıntı: [Yetkilendirme](/docs/concepts/authorization).
+`state`, `data`, `view`, `schema`, `master`, `tasks`, `actions`, `instance-correlation`, `incidents`, `incidents/active` fonksiyonları ve `POST …/longpoll/ack` artık kendi içlerinde `queryRoles` / interaction kapısını **değerlendirmez**. Karar yalnızca `authorize` üzerinden verilir; Internal Gateway'in bu fonksiyonu çağırmadığı bir deployment'ta bu yüzeylerde `queryRoles` **uygulanmaz**. Görünürlük çözümü (transition filtreleme, `x-roles`) değişmemiştir. Ayrıntı: [Yetkilendirme](/docs/concepts/authorization).
 :::
 
 ### Function Keşif Endpoint'leri <sup>New</sup>
@@ -169,7 +169,38 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{functi
 
 ### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/catalog` <sup>New</sup>
 
-Workflow'un tanımlı function'larının **rol filtreli** listesini döner (`{ "functions": [ { "name", "version", "scope", "href" } ] }`, bildirim sırasında). State function yanıtındaki `functions.href` bu rotayı işaret eder. Ayrıntı: [Built-in Functions → Catalog](/docs/components/functions/built-in).
+Workflow'un tanımlı function'larının **rol filtreli** listesini döner (`{ "functions": [ { "name", "version", "scope", "labels", "href" } ] }`, bildirim sırasında; `labels` <sup>New</sup> v0.0.99 function'ın `attributes.labels` listesidir, tanımlı değilse yok). State function yanıtındaki `functions.href` bu rotayı işaret eder. Ayrıntı: [Built-in Functions → Catalog](/docs/components/functions/built-in).
+
+### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/instance-correlation`
+
+<sup>New</sup> v0.0.99 Instance'ın başlattığı SubFlow/SubProcess'lerin **aşağı yönlü, recursive ağacını** döner (`{ "root": node }`; tamamlanmış correlation'lar dahil, null alanlar yazılmaz). Her node: `id`, `key`, `flow`, `domain`, `flowVersion`, `currentState`, `ownState`, `status`, `subFlowType` (`S`/`P`, kökte yok), `isCompleted`, `completedAt`, `terminalOutcome`, `parentState`, `correlationId`, `createdAt`, `stateChangedAt`, `href`, `children[]`, `resolved`, `unresolvedReason` (`depth-exceeded` / `hop-failed` / `instance-missing` / `hop-unsupported`).
+
+| Parameter | In | Description |
+|---|---|---|
+| `instance` | path | Instance id veya business key |
+
+- Cross-domain dallar dahili `POST /{domain}/workflows/{workflow}/internal/correlations/batch` rotasıyla (en fazla 500 id) tek çağrıda çözülür; yapılandırma `Workflow:InstanceCorrelation` (`MaxDescentDepth` 20, `FanoutParallelism` 8, `MaxConcurrentHops` 32).
+- Yetkilendirme: in-process gate yok; gateway `authorize?queryRoles=true` ile karar verir.
+- Ayrıntı: [Built-in Functions → Instance Correlation](/docs/components/functions/built-in).
+
+:::warning `…/functions/hierarchy` kaldırıldı — v0.0.99
+Eski `GET …/instances/{instance}/functions/hierarchy` rotası kaldırıldı; **alias yoktur**, eski yol custom function çözümlemesine düşer ve `404` döner. `instance-correlation`'a geçin.
+:::
+
+### Metrik Endpoint'leri
+
+<sup>New</sup> v0.0.99 Salt-okunur yürütme metrikleri:
+
+```http
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/transitions/{transitionKey}/metrics
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/states/{stateKey}/metrics
+GET /api/v1/{domain}/functions/{function}/metrics
+GET /api/v1/{domain}/workflows/{workflow}/functions/{function}/metrics
+```
+
+- **Transition / state metrikleri:** `{ element: { kind, key }, count, attempts: [ { seq, startedAt, finishedAt, durationMs, triggerType, triggeredBy, tasks: [ { id, taskKey, hook, order, status, businessStatus, startedAt, durationMs, faultedTaskRef, error } ] } ] }` — transition firing'i veya state ziyareti başına bir attempt.
+- **Function metrikleri:** yalnızca `attributes.executionLog: "E"` olan function'lar için kayıt tutulur (`"D"` veya alan yoksa hiçbir şey kaydedilmez). Query: `page` (varsayılan 1), `pageSize` (varsayılan 20, max 100), `from`, `to`, `succeeded`. Yanıt: `{ links, items: [...], summary: { count, p50Ms, p95Ms, failureRate } }`.
+- Ayrıntı: [Gözlemlenebilirlik](/docs/how-to/observability) → "Metrik Endpoint'leri".
 
 ---
 
@@ -181,7 +212,7 @@ Yeni instance başlatır.
 
 **Query parameters:**
 - `version` — workflow versiyonu (opsiyonel)
-- `sync` — `true`/`false` (default `false`); bkz. [Async / Sync](/docs/how-to/async-sync)
+- `sync` — `true`/`false` (default `false`); bkz. [Async / Sync](/docs/how-to/async-sync). <sup>New</sup> v0.0.99 Flow (`attributes.executionType`) veya `startTransition.executionType` tanımlıysa (`"S"` / `"A"`) parametre **yok sayılır** — tanım kazanır
 - `extensions` — <sup>New</sup> v0.0.93 itibarıyla **yok sayılır** (reddedilmez): senkron start/transition yanıtı extension değerlendirmez ve `extensions` anahtarı her zaman `{}` döner. Extension verisi için `GET …/instances/{instance}?extensions=` veya liste endpoint'ini kullanın
 
 **Request body:** `CreateInstanceDto`
@@ -246,8 +277,8 @@ Kurallar:
 :::
 
 **Responses:**
-- `200 OK` → `StartInstanceOutput` (id, key, status, attributes, eTag, extensions) — `sync=true`
-- `202 Accepted` → `sync=false` (varsayılan): iş, durable arkaplan işlemesi için kuyruğa alındı
+- `200 OK` → `StartInstanceOutput` (id, key, status, attributes, eTag, extensions) — etkin mod senkron (`sync=true` veya tanımda `executionType: "S"`)
+- `202 Accepted` → etkin mod asenkron (`sync=false` varsayılan veya tanımda `executionType: "A"`): iş, durable arkaplan işlemesi için kuyruğa alındı
 - `400 Bad Request` → `ProblemDetails`
 - `404 Not Found` → workflow bulunamadı
 - `409 Conflict` → key collision
@@ -258,7 +289,7 @@ Kurallar:
 
 Bir instance üzerinde transition tetikler.
 
-**Query parameters:** `sync` (`extensions` <sup>New</sup> v0.0.93 itibarıyla yok sayılır; yanıttaki `extensions` her zaman `{}`)
+**Query parameters:** `sync` (`extensions` <sup>New</sup> v0.0.93 itibarıyla yok sayılır; yanıttaki `extensions` her zaman `{}`). <sup>New</sup> v0.0.99 Transition'ın `executionType`'ı, yoksa flow'un `attributes.executionType`'ı tanımlıysa `sync` **yok sayılır** (öncelik: transition → flow → `?sync`). Otomatik transition'lara ve runtime'ın subflow start/forward çağrılarına uygulanmaz — bkz. [Async / Sync → executionType](/docs/how-to/async-sync#tanımla-belirlenen-mod-executiontype)
 
 **Request body:** `TransitionDataInput`
 
@@ -272,8 +303,8 @@ Bir instance üzerinde transition tetikler.
 Gövde serbest (free-form) JSON da olabilir — bkz. yukarıdaki *Serbest payload* notu (`x-vnext-payload-mode` header'ı burada da geçerlidir). **Form-urlencoded** gövde de kabul edilir — bkz. yukarıdaki *Form-urlencoded gövde desteği* notu.
 
 **Responses:**
-- `200 OK` → `TransitionOutput` — `sync=true`
-- `202 Accepted` → `sync=false` (varsayılan): iş, durable arkaplan işlemesi için kuyruğa alındı
+- `200 OK` → `TransitionOutput` — etkin mod senkron (`sync=true` veya `executionType: "S"`)
+- `202 Accepted` → etkin mod asenkron (`sync=false` varsayılan veya `executionType: "A"`): iş, durable arkaplan işlemesi için kuyruğa alındı
 - `400 Bad Request`, `403 Forbidden` (yetki yok), `404 Not Found`, `409 Conflict`, `503 Service Unavailable`
 
 > **Not:** Workflow tanımında [`output` mapping](/docs/components/workflow#output-mapping) varsa ve istek `sync=true` ise, yanıt standart `TransitionOutput` zarfı yerine doğrudan output script'in ürettiği gövde olur.

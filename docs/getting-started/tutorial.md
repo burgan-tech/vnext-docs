@@ -454,7 +454,7 @@ Workflows klasöründe workflow'u oluşturun (**Forge: Workflow Create**) veya W
       },
       {
         "key": "completed",
-        "stateType": 5,
+        "stateType": 3,
         "versionStrategy": "Minor",
         "labels": [
           { "label": "Completed", "language": "en-US" },
@@ -467,7 +467,7 @@ Workflows klasöründe workflow'u oluşturun (**Forge: Workflow Create**) veya W
 ```
 
 :::warning
-`stateType` değerleri: `1` = Initial, `2` = Intermediate, `5` = Final. Her workflow'da tam olarak **bir** Initial state olmalıdır.
+`stateType` değerleri: `1` = Initial, `2` = Intermediate, `3` = Finish (bitiş), `4` = SubFlow, `5` = Wizard. v0.0.99'dan itibaren bir workflow **en fazla bir** Initial state tanımlayabilir; Initial state opsiyoneldir — tanımlanmazsa instance örtük `$start` state'inde doğar ve `startTransition.target` ile girer (bkz. [Workflow → Initial state olmadan başlangıç](/docs/components/workflow)).
 :::
 
 ---

@@ -85,8 +85,8 @@ Runtime toplamda **23 task türü** çalıştırır. `@burgan-tech/vnext-schema@
 `@burgan-tech/vnext-schema@0.0.54` paketindeki `task-definition.schema.json`, `attributes.type` enum'ında hâlâ `1`–`21` değerlerini içerir; `22` (External HTTP) ve `23` (Python) enum'da yoktur. Bu nedenle domain paketlerinde `npm run validate` bu tiplerden birini kullanan bir task tanımını reddeder; runtime tarafında `publish` ve çalıştırma sorunsuzdur. Type `22` v0.0.94 ile deprecated olduğundan şemaya eklenmesi planlanmamaktadır. Ayrıntı: [External HTTP Task](./external-http), [Python Task](./python).
 :::
 
-:::info[Orchestrator-local çalışan task türleri <sup>New</sup> v0.0.94]
-v0.0.94'ten itibaren beş task türü — `http` (6), `daprservice` (3), `soap` (16), `statestore` (17), `cacheaside` (18) — varsayılan olarak Execution'a gitmeden **doğrudan Orchestrator process'i içinde** çalışır (`Workflow:TaskInvocation:Modes`, tip başına `Local` / `Remote`; task tanımındaki `invocation` override'ı > tip modu > `DefaultMode`). `FanOutTask` (21) her zaman orchestrator-local'dir; `ExternalHttpTask` (22) bu yüzden gereksizleşmiş ve **deprecated** edilmiştir; `PythonTask` (23) Execution servisinde `python` route'u üzerinden çalışır. Orchestrator sidecar'ı artık bir Dapr `state` bileşenine ihtiyaç duyar. Ayrıntı: [Task Invocation Yapılandırması](../../configuration/task-invocation).
+:::info[Orchestrator-local çalışan task türleri — v0.0.94]
+v0.0.94'ten itibaren `http` (6), `daprservice` (3), `soap` (16) ve `statestore` (17) task türleri varsayılan olarak Execution'a gitmeden **doğrudan Orchestrator process'i içinde** çalışır (`Workflow:TaskInvocation:Modes`, tip başına `Local` / `Remote`; task tanımındaki `invocation` override'ı > tip modu > `DefaultMode`). `FanOutTask` (21) her zaman orchestrator-local'dir; `ExternalHttpTask` (22) bu yüzden gereksizleşmiş ve **deprecated** edilmiştir; `PythonTask` (23) Execution servisinde `python` route'u üzerinden çalışır. `CacheAsideTask` (18) v0.0.99'dan itibaren ayrı bir `cacheaside` modu olmadan Orchestrator'da çalışır; cache I/O'su `statestore` modunu, `sourceTask` ise kendi tipinin modunu izler (`Modes:cacheaside` kaldırıldı). Orchestrator sidecar'ı artık bir Dapr `state` bileşenine ihtiyaç duyar. Ayrıntı: [Task Invocation Yapılandırması](../../configuration/task-invocation).
 :::
 
 ## Görev Kullanımı
@@ -113,6 +113,53 @@ Görevler diğer modüller tarafından referans verilerek kullanılır. Her gör
 - `order` değerleri kendi aralarında gruplanır
 - Aynı sırada olanlar **paralel** çalıştırılır
 - Farklı sıradakiler **sıralı** çalıştırılır
+
+#### Response slot'u ve `variableKey`
+
+v0.0.99'dan itibaren her task girişi (workflow `onEntries` / `onExits` / transition `onExecutionTasks`, function `onExecutionTasks`) opsiyonel bir **`variableKey`** alanı taşıyabilir. Bu alan, task yanıtının script bağlamında hangi **slot** altında tutulacağını belirler.
+
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| `variableKey` | string | Hayır | Yanıt slot'unun adı. Format `^[A-Za-z_][A-Za-z0-9_]*$`, en fazla 100 karakter. **Verbatim** kullanılır |
+
+- **Etkin slot** = `variableKey ?? camelCase(task.key)` — ör. `send-notification` → `sendNotification`.
+- Workflow script'lerinde `context.TaskResponse["primaryChild"]`, function script'lerinde `context.OutputResponse["primaryChild"]` ile okunur.
+
+**Publish kuralları:**
+
+- Geçersiz biçim reddedilir: `... variableKey 'x' is not a valid response slot name: use letters, digits and '_', starting with a letter or '_' (max 100 characters).`
+- **Workflow**'larda çakışma **order bazında** kontrol edilir: aynı `order`'da paralel koşan iki giriş aynı etkin slot'a düşüyorsa publish reddedilir (`…run in parallel at order N and both file their response under 'slot'; … Give one of them a distinct 'variableKey' or a different order.`).
+- **Function**'larda çakışma, `order`'dan bağımsız olarak **tüm** `onExecutionTasks` üzerinde kontrol edilir.
+- Aynı task'ı `variableKey` vermeden aynı `order`'da iki kez kullanan tanımlar artık publish'te reddedilir (önceden çalışma anında `Parallel tasks produced conflicting output for key '...'` hatasıyla düşüyordu).
+
+**Birleştirme (slot-aware merge) semantiği:**
+
+- Sonraki bir `order`, önceki bir order'ın slot'unu yeniden yazarsa değer **üzerine yazılır** (paralel grup olarak yazsa bile — önceden hata fırlatıyordu).
+- Yalnızca **aynı turda** (aynı `order`) iki dalın aynı slot'a **farklı** payload yazması çakışmadır: hata fırlatılır ve hiçbir şey uygulanmaz.
+- Paralel bir task içinde, devralınan bir değerin yerinde (in-place) mutasyonu merge tarafından görülmez.
+- ExternalHttp task'ı da artık slot'a uyar.
+- Extension task girişleri yanıtlarını extension'ın kendi anahtarı altına yazar; orada `variableKey` yok sayılır.
+
+**Örnek — aynı SubProcess başlatma task'ını aynı `order`'da iki kez çalıştırmak:**
+
+```json
+"onExecutionTasks": [
+  {
+    "order": 1,
+    "task": { "key": "start-child", "domain": "core", "version": "1.0.0", "flow": "sys-tasks" },
+    "variableKey": "primaryChild",
+    "mapping": { "location": "./src/mappings/start-primary-child.csx", "code": "<base64>" }
+  },
+  {
+    "order": 1,
+    "task": { "key": "start-child", "domain": "core", "version": "1.0.0", "flow": "sys-tasks" },
+    "variableKey": "secondaryChild",
+    "mapping": { "location": "./src/mappings/start-secondary-child.csx", "code": "<base64>" }
+  }
+]
+```
+
+Sonraki order'daki bir mapping, iki yanıtı ayrı ayrı okur: `context.TaskResponse["primaryChild"]` ve `context.TaskResponse["secondaryChild"]`.
 
 ### Veri Yönetimi
 - Task'ların çalışma sonucunda output data'sı varsa master data'yı patch version olarak yükseltir

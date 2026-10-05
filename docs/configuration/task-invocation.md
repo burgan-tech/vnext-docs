@@ -7,7 +7,7 @@ description: Workflow:TaskInvocation — task'ların Orchestration içinde (Loca
 
 # Task Çalıştırma Yönlendirmesi (TaskInvocation)
 
-<sup>New</sup> v0.0.94 — Hazır binding'i olan task'lar (HTTP, Dapr service invocation, SOAP, State Store, Cache-Aside) iki yoldan biriyle çalışabilir:
+<sup>New</sup> v0.0.94 — Hazır binding'i olan task'lar (HTTP, Dapr service invocation, SOAP, State Store) iki yoldan biriyle çalışabilir. Cache-Aside task'ının cache I/O'su v0.0.99'dan itibaren `statestore` modunu izler (aşağıya bakın):
 
 - **Local**: Orchestration host'un içinde, task'ı tetikleyen pipeline adımıyla aynı process'te.
 - **Remote**: `TaskEnvelope` olarak Dapr service invocation üzerinden Execution servisine gönderilerek — v0.0.94 öncesinde her task'ın çalıştığı yol.
@@ -27,8 +27,7 @@ Orchestration host `appsettings.json`, mevcut `Workflow` kökü altında (`Insta
         "http": "Local",
         "daprservice": "Local",
         "soap": "Local",
-        "statestore": "Local",
-        "cacheaside": "Local"
+        "statestore": "Local"
       }
     }
   }
@@ -38,9 +37,9 @@ Orchestration host `appsettings.json`, mevcut `Workflow` kökü altında (`Insta
 | Anahtar | Tip | Varsayılan | Açıklama |
 |---------|-----|------------|----------|
 | `DefaultMode` | `Remote` \| `Local` | `Remote` | `Modes` içinde girişi olmayan her wire tipi için uygulanan mod. Yarın runtime'a eklenen yeni bir task tipi, `Modes`'a girilmediği sürece otomatik olarak Remote çalışır |
-| `Modes` | dictionary | yukarıdaki beş giriş | Wire task tipine göre (büyük/küçük harf duyarsız) mod. Anahtarlar `BBT.Workflow.Execution.TaskTypes` sabitleridir: `http`, `daprservice`, `soap`, `statestore`, `cacheaside` |
+| `Modes` | dictionary | yukarıdaki dört giriş | Wire task tipine göre (büyük/küçük harf duyarsız) mod. Anahtarlar `BBT.Workflow.Execution.TaskTypes` sabitleridir: `http`, `daprservice`, `soap`, `statestore`. v0.0.99'da `cacheaside` anahtarı kaldırıldı |
 | `MaxConnectionsPerServer` | integer, `≥ 1` | `50` (kod varsayılanı; dosyada yok) | Orchestration'ın kendi adlandırılmış HTTP client'ları için hedef başına bağlantı üst sınırı (`HttpClientHandler.MaxConnectionsPerServer`). Process-içi `http`/`soap` task'ları ve deprecated tip `22` External HTTP task'ı bu havuzu paylaşır. v0.0.94 öncesinde yalnızca tip 22 için sabit `10` idi. Execution host'un kendi client'ları ayrıdır ve hâlâ sabit `10`'dur |
-| `LocalInvocationTimeoutSeconds` | integer, `≥ 1` | `60` (kod varsayılanı; dosyada yok) | `TaskInvocationDispatcher`'ın her process-içi task çağrısının etrafına koyduğu süre sınırı — Remote yoldaki `ExecutionApi:InvocationTimeoutSeconds`'ın Local karşılığı. `daprservice`, `statestore` ve `cacheaside` binding'lerinin kendi `timeoutSeconds` alanı **olmadığı** için bu üç tipte tek iç sınır budur |
+| `LocalInvocationTimeoutSeconds` | integer, `≥ 1` | `60` (kod varsayılanı; dosyada yok) | `TaskInvocationDispatcher`'ın her process-içi task çağrısının etrafına koyduğu süre sınırı — Remote yoldaki `ExecutionApi:InvocationTimeoutSeconds`'ın Local karşılığı. `daprservice` ve `statestore` binding'lerinin kendi `timeoutSeconds` alanı **olmadığı** için bu tiplerde (ve `statestore` üzerinden giden Cache-Aside cache I/O'sunda) tek iç sınır budur |
 
 Ortam değişkeni biçimi: `Workflow__TaskInvocation__Modes__http=Remote`, `Workflow__TaskInvocation__MaxConnectionsPerServer=100`.
 
@@ -67,7 +66,10 @@ Yetenek kapısı sayesinde yanlış bir yapılandırma (local invoker'ı olmayan
 | `daprservice` | Dapr service invocation (tip `3`) | `LocalDaprServiceTaskInvoker` | Başka bir domain uygulamasını Execution'a uğramadan doğrudan Orchestration'dan çağırır |
 | `soap` | SOAP (tip `16`) | `LocalSoapTaskInvoker` | `http` ile aynı adlandırılmış HTTP client'ları ve bağlantı sınırını paylaşır |
 | `statestore` | State Store (tip `17`) | `LocalStateStoreTaskInvoker` | Paylaşımlı `IStateStoreClient` üzerinden çalışır; function response cache'ini de besler |
-| `cacheaside` | Cache-Aside (tip `18`) | `LocalCacheAsideTaskInvoker` | Cache miss'te kaynak task envelope'unu aynı router'dan geçirir — `cacheaside` içinden çalışan bir `http` kaynak task'ı da bu tabloya tabidir |
+
+:::warning v0.0.99 — `cacheaside` modu kaldırıldı
+`cacheaside` wire tipi, `LocalCacheAsideTaskInvoker` ve Execution tarafındaki `CacheAsideTaskInvoker` v0.0.99'da kaldırıldı. Cache-Aside task'ı (tip `18`) tamamen Orchestration'daki executor'da çalışır: **cache get/set `statestore` modunu izler** (State Store task'ı ve function response cache ile aynı gateway), `sourceTask` ise kendi tipinin yönlendirmesiyle çalışır (ör. bir `http` kaynak `Modes:http`'e tabidir). Ortam konfigürasyonunuzdan `Workflow:TaskInvocation:Modes:cacheaside` (veya `Workflow__TaskInvocation__Modes__cacheaside`) girişini **kaldırın**. Bkz. [Cache-Aside Task](/docs/components/tasks/cache-aside) ve [v0.0.99 Breaking Changes](/blog/breaking-changes/breaking-changes-v0-0-99).
+:::
 
 Diğer tüm wire tipleri (`daprbinding`, `daprhttpendpoint`, `daprpubsub`, `daprconversation`, `python`, trigger/sorgu tipleri…) için local invoker yoktur; yapılandırmadan bağımsız olarak her zaman Remote çözümlenir.
 
@@ -77,17 +79,17 @@ Tip `22` External HTTP task'ı, tip `6` HTTP'nin de varsayılan olarak Orchestra
 
 ## Deploy etmeden önce: Dapr `state` bileşeni ve `storeName` kapsamı
 
-`statestore` ve `cacheaside` artık varsayılan olarak **Orchestration sidecar'ında** çalıştığı için Orchestration host'un Dapr `state` bileşenine erişimi olmalıdır. Varsayılan store adı sorunsuzdur: Helm chart Orchestration'a `DAPR_STATE_STORE_NAME` verir ve `state` bileşenini orchestrator app id'sine kapsamlar. Sessizce kırılabilecek tek şey **özel `storeName`**'dir:
+`statestore` (ve onu izleyen Cache-Aside cache I/O'su) artık varsayılan olarak **Orchestration sidecar'ında** çalıştığı için Orchestration host'un Dapr `state` bileşenine erişimi olmalıdır. Varsayılan store adı sorunsuzdur: Helm chart Orchestration'a `DAPR_STATE_STORE_NAME` verir ve `state` bileşenini orchestrator app id'sine kapsamlar. Sessizce kırılabilecek tek şey **özel `storeName`**'dir:
 
 1. `DAPR_STATE_STORE_NAME` yerine açık `storeName` veren her `StateStoreTask` / `CacheAsideTask` tanımını ve her function `cache` bloğunu listeleyin.
 2. Her biri için ilgili Dapr bileşeninin `scopes:` listesinin yalnızca execution değil, **orchestrator** app id'sini de içerdiğini doğrulayın. Yalnızca execution'a kapsamlı bir bileşen Remote yönlendirmede çalışır, Local varsayılanında ise publish veya startup sinyali olmadan ilk çalıştırmada başarısız olur.
-3. Bileşen bu sürüm deploy edilmeden önce yeniden kapsamlanamıyorsa, kapsamlanana kadar `Modes` altında `"statestore": "Remote"` ve `"cacheaside": "Remote"` verin.
+3. Bileşen bu sürüm deploy edilmeden önce yeniden kapsamlanamıyorsa, kapsamlanana kadar `Modes` altında `"statestore": "Remote"` verin (v0.0.99'dan itibaren bu, Cache-Aside cache I/O'sunu da kapsar).
 
 ## Local yolun bedeli
 
 1. **Dapr sidecar circuit breaker'ı yok.** Remote yolda Orchestration → Execution atlaması yalnızca circuit-breaker politikasıyla korunur (retry yok). Local çalışan task ile hedefi arasında böyle bir kesici yoktur; yavaş/hatalı bir downstream, orchestrator'ın kendi thread ve bağlantı havuzunda doğrudan hissedilir.
-2. **`ExecutionApi:InvocationTimeoutSeconds` katmanı yok** — yerine `LocalInvocationTimeoutSeconds` (60 s) uygulanır. `http`/`soap` için kendi `timeoutSeconds`'larının arkasında bir yedek sınırdır; `daprservice`/`statestore`/`cacheaside` için ise ilk ve tek sınırdır. Bir task'ın `timeoutSeconds`'ının job bütçesine (`TransitionJobTimeoutSeconds`, 300 s) eşit ya da büyük olması publish'te reddedilmez — job bütçesi önce dolar, task'ın kendi timeout'u etkisiz kalır.
-3. **State yolu havuzu paylaşır.** `statestore`, `cacheaside` ve function response cache artık orchestrator sidecar'ının Dapr `state` bileşenini ve Redis bağlantı havuzunu platformun kendi cache tüketicileriyle (`ComponentCacheStore`, `StateFunctionCache`, idempotency store) paylaşır. `MaxConnectionsPerServer` yalnızca HTTP/SOAP egress'ini sınırlar; state yolunda eşdeğer bir sınır yoktur. Cache-yoğun domain'lerde orchestrator'ın Dapr Redis `poolSize` değerini Helm chart üzerinden artırın.
+2. **`ExecutionApi:InvocationTimeoutSeconds` katmanı yok** — yerine `LocalInvocationTimeoutSeconds` (60 s) uygulanır. `http`/`soap` için kendi `timeoutSeconds`'larının arkasında bir yedek sınırdır; `daprservice`/`statestore` (Cache-Aside cache I/O'su dahil) için ise ilk ve tek sınırdır. Bir task'ın `timeoutSeconds`'ının job bütçesine (`TransitionJobTimeoutSeconds`, 300 s) eşit ya da büyük olması publish'te reddedilmez — job bütçesi önce dolar, task'ın kendi timeout'u etkisiz kalır.
+3. **State yolu havuzu paylaşır.** `statestore`, Cache-Aside cache I/O'su ve function response cache artık orchestrator sidecar'ının Dapr `state` bileşenini ve Redis bağlantı havuzunu platformun kendi cache tüketicileriyle (`ComponentCacheStore`, `StateFunctionCache`, idempotency store) paylaşır. `MaxConnectionsPerServer` yalnızca HTTP/SOAP egress'ini sınırlar; state yolunda eşdeğer bir sınır yoktur. Cache-yoğun domain'lerde orchestrator'ın Dapr Redis `poolSize` değerini Helm chart üzerinden artırın.
 
 Timeout katmanlaması özetle:
 
