@@ -8,6 +8,10 @@ description: Diğer workflow'lardan instance listesi çekme task'ı
 
 GetInstances Task, sayfalama, sıralama ve filtreleme desteğiyle diğer workflow'lardan instance verilerini çekmeyi sağlar. Workflow'lar arası veri sorguları ve toplu görünümler oluşturmak için kullanılır.
 
+:::info[Alan koruması ve header iletimi — v0.0.99]
+Task veriyi **çağıranın sunduğu credential** ile okur ve hedef workflow'un master şemasındaki `x-roles` / `x-masking` / `x-encryption` korumalarını uygular — instance GET / liste endpoint'leriyle aynı okuma servisi. Önceden Get* task'leri sistem görünürlüğüyle (`SystemRead`) okuyordu; bu kaldırıldı. Sunulan başlık seti: input mapping'deki başlıklar + mapping'de verilmemiş ya da boş bırakılmış her credential başlığı (`sub`, `act_sub`, `position`, `client_id`, `role`; 1024 karakteri aşan / kontrol karakteri içeren değerler ve morph-idm'in çözdüğü roller iletilmez). Başka bir kimlikle (ör. servis rolü) okumak için credential'ı input mapping'de verin. `X-Request-Id` fill-if-absent iletilir. Ayrıntı: [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+:::
+
 ## Görev Tanımı
 
 > **Schema:** `task-definition.schema.json`

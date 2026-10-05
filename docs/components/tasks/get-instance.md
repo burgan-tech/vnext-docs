@@ -16,6 +16,10 @@ GetInstance Task (`type: "19"`), hedef workflow'daki **tek bir instance'ın tam 
 
 Aynı domain'deki sorgular **in-process** çalışır (HTTP/Dapr atlaması yoktur); farklı domain'e giden sorgular aynı REST endpoint'ini HTTP veya Dapr üzerinden çağırır. Her iki yol da script context'e birebir aynı yanıt şeklini sunar — mapping, instance'ın nerede olduğundan bağımsız tek şekilde yazılır.
 
+:::info[Alan koruması ve header iletimi — v0.0.99]
+Task veriyi **çağıranın sunduğu credential** ile okur ve hedef workflow'un master şemasındaki `x-roles` / `x-masking` / `x-encryption` korumalarını uygular — instance GET / liste endpoint'leriyle aynı okuma servisi. Önceden Get* task'leri sistem görünürlüğüyle (`SystemRead`) okuyordu; bu kaldırıldı. Sunulan başlık seti: input mapping'deki başlıklar + mapping'de verilmemiş ya da boş bırakılmış her credential başlığı (`sub`, `act_sub`, `position`, `client_id`, `role`; 1024 karakteri aşan / kontrol karakteri içeren değerler ve morph-idm'in çözdüğü roller iletilmez). Başka bir kimlikle (ör. servis rolü) okumak için credential'ı input mapping'de verin. `X-Request-Id` fill-if-absent iletilir. Ayrıntı: [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+:::
+
 ## Görev Tanımı
 
 > **Schema:** `task-definition.schema.json`

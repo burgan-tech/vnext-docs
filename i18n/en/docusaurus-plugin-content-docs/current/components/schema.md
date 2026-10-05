@@ -51,7 +51,13 @@ The master schema also plays an active role in the Data Function: during [instan
 | `role` | Yes | Domain-qualified role name (e.g. `morph-idm.initiator`) **or** a dynamic JSONPath expression |
 | `grant` | Yes | `allow` or `deny`. **DENY always overrides ALLOW** |
 
-The same system roles and JSONPath grant prefixes (`$user.` / `$userBehalfOf.` / `$role.`) apply; see [Authorization](/docs/concepts/authorization). `x-encryption` is in the same field-governance scope: `hash` digests the value on write under a per-instance salt (the database stores the digest), and `encrypt` stores the value AES-256-GCM-encrypted in instance data and decrypts it on the data function for the `allow` exemption roles only; instance GET/list serve data as stored (`persisted` / `transport` were removed).
+The same system roles and JSONPath grant prefixes (`$user.` / `$userBehalfOf.` / `$role.`) apply; see [Authorization](/docs/concepts/authorization). `x-encryption` is in the same field-governance scope: `hash` digests the value on write under a per-instance salt (the database stores the digest), and `encrypt` stores the value AES-256-GCM-encrypted in instance data and decrypts it for the `allow` exemption roles only on every read surface — instance GET, list, data function, sync response and the Get* tasks, which are evaluated as the header set the task presents: its mapping headers plus the caller's credential (`sub`, `act_sub`, `position`, `client_id`, `role`) where unset — `role` only as the caller sent it, never a role morph-idm resolved. Scripts see an encrypt field as its token and open it with `context.Instance.DecryptAsync(path)` (`persisted` / `transport` were removed).
+
+Since v0.0.99 an `x-roles` entry may also be an `allOf` / `anyOf` combinator instead of a single `role`; see [Authorization](/docs/concepts/authorization). Malformed `x-roles` entries are now rejected at publish.
+
+`x-masking` (v0.0.99) keeps the value plain in storage and transforms it on read: `operator: "mask"` (`keepFirst`, `keepLast`, `maskingChar`; output keeps the input length, value unchanged when `keepFirst + keepLast` ≥ length) or `operator: "replace"` (`params.value`). `roles` is an allow-only exemption list (no combinators); a matching caller sees the raw value. Reads apply `x-roles` → `x-masking` → `x-encryption`; `x-masking` / `x-encryption` are allowed only on nested-`properties` `type: "string"` fields, one transform per field, and never together with `x-filterOperators` / `x-sortable` / `x-indexed`.
+
+Schema `attributes.labels` are returned as `labels` by the schema and master functions since v0.0.99 (all languages; omitted when none are declared).
 
 ### Filter & Sort Vocabulary
 

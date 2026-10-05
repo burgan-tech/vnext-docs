@@ -302,6 +302,44 @@ Bir alanın **rol değerlendirmesi (role evaluation)** ile yetkilendirilmesini s
 
 Rol değerlendirme semantiği (sistem rolleri, `$user` / `$userBehalfOf` / `$role` prefiksleri) için bkz. [Yetkilendirme](/docs/concepts/authorization).
 
+v0.0.99 ile `x-roles` girdisi tek bir `role` yerine `allOf` / `anyOf` kombinatörü de taşıyabilir (`{ "allOf": [ { "role": "..." }, ... ], "grant": "allow" }`); semantik ve publish kuralları için bkz. [Yetkilendirme → Kombinatörler](/docs/concepts/authorization#kombinatörler-allof--anyof). Kombinatörler `x-masking` / `x-encryption` muafiyet listelerinde (`roles`) **kabul edilmez**. Hatalı `x-roles` girdileri (ör. `$.context.` ile başlamayan dinamik yol) artık publish'te reddedilir; önceden runtime bunları sessizce atlıyordu.
+
+---
+
+### `x-masking` — Maskeleme
+
+`x-roles` ile aynı alan-yönetişim kapsamındadır ve workflow'un master (data) şemasında etkilidir (v0.0.99). Değer veritabanında **düz** saklanır; maskeleme yalnızca **okuma** sırasında uygulanır. `roles` listesindeki (muafiyet) çağıran ham değeri, diğer herkes maskelenmiş değeri görür.
+
+```json
+"iban": {
+  "type": "string",
+  "x-masking": {
+    "operator": "mask",
+    "params": { "keepFirst": 4, "keepLast": 2, "maskingChar": "*" },
+    "roles": [ { "role": "morph-idm.ops", "grant": "allow" } ]
+  }
+},
+"note": {
+  "type": "string",
+  "x-masking": { "operator": "replace", "params": { "value": "***" } }
+}
+```
+
+| Alan | Açıklama |
+|------|----------|
+| `operator` | `mask` veya `replace` |
+| `params` (`mask`) | `keepFirst`, `keepLast` (negatif olmayan tamsayı, varsayılan `0`), `maskingChar` (tam olarak bir karakter, varsayılan `*`) |
+| `params` (`replace`) | `value` — zorunlu, boş olmayan string; değerin yerine bu metin döner |
+| `roles` | Yalnızca `allow` kabul eden **muafiyet listesi** (bkz. aşağıda `x-encryption` altındaki `roles` açıklaması) |
+
+`x-masking` içinde yalnızca bu üç anahtar (`operator`, `params`, `roles`) kabul edilir; bilinmeyen anahtar ya da diğer operatörün parametresi publish'te reddedilir.
+
+- `mask` çıktısı girdiyle **aynı uzunluktadır**: ilk `keepFirst` ve son `keepLast` karakter korunur, aradakiler `maskingChar` ile değiştirilir. Uzunluk görünür kaldığı için uzunluğu da hassas olan değerlerde `replace` kullanın.
+- `keepFirst + keepLast` değer uzunluğuna eşit ya da büyükse değer **değiştirilmeden** döner.
+- Örnek: `TR330006100519786457841326` → `TR33********************26`.
+
+`SchemaMasking:Enabled=false` yalnızca `x-masking`'i kapatır; `x-roles` ve `x-encryption` etkilenmez.
+
 ---
 
 ### `x-encryption` — Hash ve Şifreleme
@@ -319,21 +357,91 @@ Rol değerlendirme semantiği (sistem rolleri, `$user` / `$userBehalfOf` / `$rol
 }
 ```
 
+```json
+"password": {
+  "type": "string",
+  "x-encryption": { "type": "hash", "params": { "algorithm": "sha256" } }
+}
+```
+
+| Alan | Açıklama |
+|------|----------|
+| `type` | Zorunlu; küçük harfle `none`, `hash` veya `encrypt` |
+| `params.algorithm` | Yalnızca `hash` için: `sha256` (varsayılan) veya `sha512`. `encrypt` parametre almaz |
+| `roles` | Yalnızca `encrypt` için, opsiyonel `allow` muafiyet listesi; `hash` üzerinde reddedilir |
+| `purpose` | Veri sınıflandırması (boş olmayan string, ör. `PII`, `KYC`) |
+| `redactInLogs` | Değerin loglanmaması gerektiğini belirtir (boolean) |
+| `retentionDays` | Saklama süresi (pozitif tamsayı) |
+
+`purpose`, `redactInLogs` ve `retentionDays` publish'te biçim olarak doğrulanır ama runtime tarafından **uygulanmaz**.
+
 | `type` | Ne yapar |
 |--------|----------|
 | `"none"` | Şifreleme yok |
-| `"hash"` | Değer **yazılırken** özetlenir: veritabanında `HASHED:SHA256:<hex>` (veya `HASHED:SHA512:`) saklanır, ham değer tutulmaz. Özet instance'a özgü tuzla alınır; aynı değer iki farklı instance'ta farklı özet üretir. Okuma yolu saklanan özeti gösterir. `roles` ve `pattern` / `format` / `minLength` / `maxLength` / `enum` / `const` kabul etmez |
-| `"encrypt"` | Değer instance data'da **AES-256-GCM** ile şifreli saklanır: `ENCRYPTED:AES256:i1:…`. Motor (script, mapping, koşul, task) düz metin görür. Data function ve senkron yanıtta `roles` listesindeki çağıran düz metni, diğer herkes saklanan şifreli değeri görür |
+| `"hash"` | Değer **yazılırken** özetlenir: veritabanında `HASHED:SHA256:<hex>` (veya `HASHED:SHA512:`) saklanır, ham değer tutulmaz. Özet, instance'a özgü tuzla anahtarlanmış bir **HMAC**'tir (`params.algorithm`: `sha256` varsayılan, `sha512`); aynı değer iki farklı instance'ta farklı özet üretir. Okuma yolu saklanan özeti gösterir. `roles` ve `pattern` / `format` / `minLength` / `maxLength` / `enum` / `const` kabul etmez |
+| `"encrypt"` | Değer instance data'da **AES-256-GCM** ile şifreli saklanır: `ENCRYPTED:AES256:i1:…`. Script'ler (mapping, koşul, extension, output mapping) alanı `context.Instance.Data`'da — ve runtime'ın instance verisini koyduğu `context.Body`'de — **jeton** olarak görür; düz değere ihtiyaç duyan kod `await context.Instance.DecryptAsync("alan.yolu", cancellationToken)` çağırır. Okuma yüzeylerinde (instance GET, liste, data function, senkron yanıt, Get* task'leri) `roles` listesindeki çağıran düz metni, diğer herkes saklanan şifreli değeri görür |
 
 Anahtar ve tuz **her instance için** runtime tarafından ilk korumalı yazmada üretilir ve flow şemasındaki `InstanceSecrets` tablosunda tutulur; config'te, Vault'ta ya da şemada yer almaz ve hiçbir API'den dönmez. Instance silinince anahtarı da silinir ve şifreli değerleri geri döndürülemez.
 
-`roles` bir **muafiyet listesidir** ve yalnızca `allow` kabul eder (`x-masking.roles` için de aynısı): eşleşen çağıran değeri açık görür, eşleşmeyen (yanlış yazılmış, rolsüz, listede olmayan) herkes dönüştürülmüş değeri görür. `deny` publish'te reddedilir. `purpose`, `redactInLogs` ve `retentionDays` yönetişim bilgisidir; runtime tarafından uygulanmaz.
+`roles` bir **muafiyet listesidir** ve yalnızca `allow` kabul eder (`x-masking.roles` için de aynısı): eşleşen çağıran değeri açık görür, eşleşmeyen (yanlış yazılmış, rolsüz, listede olmayan) herkes dönüştürülmüş değeri görür. `deny` publish'te reddedilir; dinamik roller `$.context.` ile başlamalıdır ve `allOf` / `anyOf` kombinatörleri burada kabul edilmez.
 
 :::warning Kapsam
-`x-roles`, `x-masking` ve `x-encryption` **data function** ve senkron start/transition yanıtında uygulanır. **Instance GET ve liste** endpoint'leri veriyi saklandığı gibi döner: `x-roles` budaması ve maskeleme yapılmaz, `encrypt` alanları şifreli, `hash` alanları özet olarak görünür (sonraki fazda ele alınacak). `encrypt` yalnızca **instance data**'yı şifreler; transition gövdesi, task kayıtları, event ve cache kopyaları henüz düz metindir. Alan `encrypt`/`hash` yapılmadan önce yazılmış geçmiş satırlar da düz kalır. Şifreli alan filtrelenemez, sıralanamaz ve gruplanamaz.
+`x-roles`, `x-masking` ve `x-encryption` tek bir okuma servisinden geçen tüm yüzeylerde aynı şekilde uygulanır: **instance GET, instance liste, data function, senkron start/transition yanıtı** ve **GetInstance / GetInstances / GetInstanceData task'leri**. (v0.0.99 öncesinde instance GET ve liste veriyi filtresiz dönüyor, Get* task'leri sistem görünürlüğüyle — `SystemRead` — okuyordu; bu ayrıcalık kaldırıldı.) Task okumaları, task'in hedefe sunduğu başlık setiyle değerlendirilir: input mapping'deki başlıklar + request'te olup mapping'de verilmemiş ya da boş bırakılmış her credential başlığı (`sub`, `act_sub`, `position`, `client_id`, `role`). Mapping'de dolu bir değer varsa mapping kazanır; 1024 karakteri aşan ya da kontrol karakteri içeren değerler taşınmaz. Aynı kural tüm task türleri (HTTP, SOAP, DaprService, DaprHttpEndpoint, Start, SubProcess, DirectTrigger) için geçerlidir. `role` yalnız çağıranın gönderdiği haliyle taşınır; morph-idm'in çözdüğü roller taşınmaz, hedef bunları iletilen credential'dan kendisi çözer. Lokal ve cross-domain davranış aynıdır. Başlık vermeyen bir task çağıranı adına okur; başka bir kimlikle (örn. servis rolü) okumak için credential'ı input mapping'de verin. Şema okunamazsa düz metin değil saklanan biçim döner.
+
+Task'in döndürdüğü şifreli bir değeri başka bir alana kopyalamak yazma sırasında reddedilir.
+
+`DecryptAsync` instance'ın **kendi** verisinden **yol** alır, değer almaz: düz alan, bilinmeyen yol, açılamayan değer ya da yol yerine verilmiş bir jeton için `null` döner — dışarıdan gelen bir şifreli değer (istek gövdesi, task yanıtı, başka instance) çözülemez. İptal token'ı yalnız o çağrı için kullanılır; iptal edilirse `OperationCanceledException` fırlatılır. Instance verisi motorun her yerinde veritabanındaki ham haliyle durur: `context.Instance.LatestData.Data` de jeton taşır, dinamik rol grant'ları ve human-task metni de jetonu görür (rol ya da görev başlığı olarak kullanılan bir alan `encrypt` yapılmamalıdır). İstisna: SubFlow output mapping'inde child'ın verisi düz gelir — child kendi anahtarıyla açar. DynamicExpresso kuralları jeton görür ve çözemez — encrypt alan üzerindeki koşulu C# script kuralı olarak yazın.
+
+Kapsam dışı (korumasız): transition geçmişi, `context.Related`, custom function'lar, human-task listesi, event ve iç endpoint'ler. `encrypt` yalnızca **instance data**'yı şifreler; transition gövdesi, task kayıtları, event ve cache kopyaları henüz düz metindir. Alan `encrypt`/`hash` yapılmadan önce yazılmış geçmiş satırlar da düz kalır. Şifreli alan filtrelenemez, sıralanamaz ve gruplanamaz.
 :::
 
 `"persisted"` ve `"transport"` kaldırıldı (hiçbir runtime tarafından uygulanmıyordu); bu değerleri taşıyan şema publish'te reddedilir — yerine `"encrypt"` kullanın.
+
+#### Okuma sırası
+
+Okuma yüzeylerinde dönüşümler sırayla uygulanır: önce `x-roles` (yetkisiz alan budanır), sonra `x-masking`, sonra `x-encryption`.
+
+#### Publish kuralları
+
+`x-masking` ve `x-encryption` publish'te doğrulanır; aşağıdaki durumlarda şema reddedilir:
+
+| Kural | Açıklama |
+|-------|----------|
+| Yalnızca string | Property `type: "string"` (opsiyonel olarak `"null"` ile birlikte) olmalıdır |
+| Yalnızca iç içe `properties` | Keyword yalnız iç içe `properties` üzerinden erişilen alanda geçerlidir; `items`, `$defs`, kombinatör ya da koşul (`if/then`) altında reddedilir |
+| Alan başına tek dönüşüm | `x-masking`, aktif bir `x-encryption` (`hash` / `encrypt`) ile aynı alanda bulunamaz |
+| Sorgu keyword'leri ile birlikte kullanılamaz | `x-filterOperators`, `x-sortable`, `x-indexed` ile birleştirilemez |
+| `hash` kısıtları | `roles`, `pattern`, `format`, `minLength`, `maxLength`, `enum`, `const` kabul etmez; `params` yalnız `algorithm` (`sha256` / `sha512`) |
+| `roles` | Yalnızca `allow`; `deny` reddedilir. Dinamik yollar `$.context.` ile başlamalıdır. `allOf` / `anyOf` kabul edilmez |
+| Kaldırılan değerler | `persisted` / `transport` reddedilir (`"has been removed; use 'encrypt'"`) |
+| Yazma şifrelemesi kapalı host | `SchemaEncryption:EncryptWrites=false` olan host'ta `hash` / `encrypt` içeren şema publish edilemez |
+
+#### Hata kodları
+
+| Kod | HTTP | Ne zaman |
+|-----|------|----------|
+| `Instance:100041` | 400 | İstek, ayrılmış `ENCRYPTED:` / `HASHED:` önekli bir değer getiriyor |
+| `Instance:100043` | 503 | Instance korumalı değer taşırken şema çözümlenemiyor |
+| `Instance:100040` | 503 | Yazma, gizli anahtarı artık bulunmayan bir değeri ileri taşıyacak |
+| `Validation:900010` | 400 | Liste sorgusu bir `encrypt` yolu üzerinde filtreleme / sıralama / gruplama yapıyor |
+
+#### Konfigürasyon
+
+```json
+"SchemaMasking": { "Enabled": true },
+"SchemaEncryption": { "EncryptWrites": true, "SecretCacheEntries": 100000, "SecretCacheSlidingMinutes": 30 }
+```
+
+| Anahtar | Varsayılan | Açıklama |
+|---------|------------|----------|
+| `SchemaMasking:Enabled` | `true` | `false` yalnızca `x-masking`'i kapatır |
+| `SchemaEncryption:EncryptWrites` | `true` | Geri dönüş anahtarı: `false` iken yeni değerler düz saklanır (mevcut şifreli değerler açılmaya devam eder) ve `hash` / `encrypt` içeren şema publish edilemez |
+| `SchemaEncryption:SecretCacheEntries` | `100000` | Instance anahtarlarının süreç içi (in-process) önbellek kapasitesi; anahtarlar Redis'e yazılmaz |
+| `SchemaEncryption:SecretCacheSlidingMinutes` | `30` | Önbellekteki anahtarın kayan (sliding) son kullanma süresi |
+
+:::tip ETag
+Aynı versiyonla yeniden publish edilen bir şema ETag'i değiştirmez. `x-roles`, `x-masking` veya `x-encryption` keyword'lerini değiştirdiğinizde **şema versiyonunu artırın**; aksi halde istemciler ve data function önbelleği eski yanıtı kullanmaya devam edebilir.
+:::
 
 ---
 

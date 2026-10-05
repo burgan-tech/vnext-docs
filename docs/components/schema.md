@@ -109,7 +109,11 @@ Alan bazlı görünürlük, master şema property'lerinde **`x-roles`** keyword'
 
 `role` değeri statik bir ad ya da JSONPath ifadesi olabilir; sistem rolleri (`$InstanceStarter` vb.) ve JSONPath grant prefiksleri (`$user.` / `$userBehalfOf.` / `$role.`) burada da geçerlidir. Bu kalıpların çözümleme semantiği için bkz. [Yetkilendirme](/docs/concepts/authorization).
 
-`x-encryption` de aynı alan-yönetişim kapsamındadır: `hash` değeri yazarken instance'a özgü tuzla özetler (veritabanında özet saklanır), `encrypt` değeri instance data'da AES-256-GCM ile şifreli saklar ve data function'da yalnızca `allow` muafiyet rolleri için çözer; instance GET/liste veriyi saklandığı gibi döner (`persisted` / `transport` kaldırıldı). Tüm property seviyesi `x-*` uzantılarının ayrıntısı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+v0.0.99 ile bir `x-roles` girdisi tek `role` yerine `allOf` / `anyOf` kombinatörü de olabilir (`{ "allOf": [ { "role": "..." }, ... ], "grant": "allow" }`); bkz. [Yetkilendirme → Kombinatörler](/docs/concepts/authorization#kombinatörler-allof--anyof). Hatalı `x-roles` girdileri artık publish'te reddedilir.
+
+`x-masking` (v0.0.99) değeri düz saklar ve okuma sırasında dönüştürür: `operator: "mask"` (`keepFirst`, `keepLast`, `maskingChar`; çıktı girdiyle aynı uzunlukta) veya `operator: "replace"` (`params.value`). `roles` yalnızca `allow` kabul eden muafiyet listesidir (kombinatör kabul edilmez); eşleşen çağıran ham değeri görür. Okuma sırası `x-roles` → `x-masking` → `x-encryption`'dır; `x-masking` / `x-encryption` yalnızca iç içe `properties` altındaki `type: "string"` alanlarda, alan başına tek dönüşüm olarak ve `x-filterOperators` / `x-sortable` / `x-indexed` olmadan kullanılabilir.
+
+`x-encryption` de aynı alan-yönetişim kapsamındadır: `hash` değeri yazarken instance'a özgü tuzla özetler (veritabanında özet saklanır), `encrypt` değeri instance data'da AES-256-GCM ile şifreli saklar ve okuma yüzeylerinde (instance GET, liste, data function, senkron yanıt, Get* task'leri — task'ler sundukları başlık setiyle) yalnızca `allow` muafiyet rolleri için çözer (`persisted` / `transport` kaldırıldı). Script'ler encrypt alanı jeton olarak görür ve `context.Instance.DecryptAsync(path)` ile açar. Tüm property seviyesi `x-*` uzantılarının ayrıntısı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 
 ### Filtreleme & Sıralama Vocabulary'si
 
@@ -216,7 +220,7 @@ vNext vocabulary'sinin (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-enc
 |------|-----|---------|----------|
 | `type` | string | **Evet** | Schema tipi — serbest metin (schema 0.0.54'ten itibaren enum yok). Tam olarak `master` değeri şemayı **master şema** olarak işaretler ve `x-indexed`'i etkinleştirir; aşağıya bakın |
 | `schema` | object | **Evet** | JSON Schema tanımı (Draft 2020-12). Aşağıdaki iç yapı tablosuna bakın |
-| `labels` | array | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`) |
+| `labels` | array | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`). v0.0.99 ile schema ve master function yanıtlarında `labels` olarak döner (tüm diller; tanımlı değilse alan yazılmaz). Önceden yükleme sırasında atılıyordu; önbellekteki bileşenler republish ya da süre dolana kadar etiketsiz görünebilir |
 
 ### `attributes.type` Değerleri
 
@@ -255,7 +259,7 @@ Bileşen kökünde (`key`/`version`/`domain` seviyesinde) bir `type` alanı **yo
 | `const` | any | Hayır | Sabit değer |
 | `default` | any | Hayır | Varsayılan değer |
 
-Standart JSON Schema alanlarına ek olarak, property seviyesinde vNext **`x-*` vocabulary uzantıları** desteklenir — alan bazlı yetkilendirme (`x-roles`), şifreleme (`x-encryption`), filtreleme (`x-filterOperators`), sıralama (`x-sortable`), görüntü formatı (`x-displayFormat`), etiketleme (`x-labels`), LOV (`x-lov`), lookup (`x-lookup`), koşullu görünürlük (`x-conditional`), client context bağlama (`x-context-source`, `x-context-target`) vb. Tam liste ve örnekler için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) ve [Data Context Vocabulary](#data-context-vocabulary-data-vocab).
+Standart JSON Schema alanlarına ek olarak, property seviyesinde vNext **`x-*` vocabulary uzantıları** desteklenir — alan bazlı yetkilendirme (`x-roles`), maskeleme (`x-masking`), şifreleme (`x-encryption`), filtreleme (`x-filterOperators`), sıralama (`x-sortable`), görüntü formatı (`x-displayFormat`), etiketleme (`x-labels`), LOV (`x-lov`), lookup (`x-lookup`), koşullu görünürlük (`x-conditional`), client context bağlama (`x-context-source`, `x-context-target`) vb. Tam liste ve örnekler için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) ve [Data Context Vocabulary](#data-context-vocabulary-data-vocab).
 
 ---
 

@@ -39,7 +39,6 @@ Task tanımlarındaki (`http`, `soap`, `daprservice`, `daprhttpendpoint`, `trigg
 traceparent
 tracestate
 baggage
-x-request-id
 X-Correlation-Id
 X-Workflow-Instance-Id
 ```
@@ -47,6 +46,18 @@ X-Workflow-Instance-Id
 Canlı değerler otomatik enjekte edilir: `traceparent` / `tracestate` .NET HttpClient enstrümantasyonu tarafından, workflow-context çifti (`X-Correlation-Id`, `X-Workflow-Instance-Id`) ise güncel Activity baggage'ından. Bir task tanımına kopyalanmış eski bir `traceparent` veya sahte bir korelasyon değeri, workflow bağlamını koparır ya da taklit eder — reserved-header kuralı tam olarak bunu engeller.
 
 `sub` / `act_sub` kasıtlı olarak reserved **değildir**: binding bu alanları set edebilir ve o değer kazanır (**fill-if-absent**) — yoksa gateway token'ından (baggage) doldurulur.
+
+<sup>New</sup> v0.0.99 **`X-Request-Id` artık reserved değildir — mapping kazanır, vNext doldurur.** v0.0.80–v0.0.97 arasında reserved listesindeydi: mapping'deki değer sessizce atılıyor ve hiçbir şey gönderilmiyordu (ör. OHVPS/BKM `400 TR.OHVPS.Resource.InvalidFormat`). Şimdi kural fill-if-absent'tir: task'in `headers` bloğunda ya da input mapping'inde verilen boş olmayan değer olduğu gibi (tek sefer) gönderilir; verilmemiş ya da boşsa vNext'in kendi request id'si değiştirilmeden gönderilir; vNext'in request id'si yoksa (ör. request id yakalanmamış timer / event hop'u) hiçbir şey üretilmez. Kural Http, ExternalHttp, Soap, DaprService, DaprHttpEndpoint, DirectTrigger, GetInstance / GetInstances / GetInstanceData, StartTrigger ve SubProcess task'lerinde geçerlidir (StartTrigger ve SubProcess hâlâ başka workflow / kimlik header'ı damgalamaz).
+
+:::tip Çağrı başına benzersiz UUID
+vNext'in request id'si **client isteği başınadır**; client bir id göndermediyse Aether `HttpContext.TraceIdentifier`'a düşer (UUID değildir). Her çağrıda benzersiz UUID isteyen API'ler için değeri mapping'de üretin:
+
+```csharp
+httpTask.AddHeader("X-Request-Id", Guid.NewGuid().ToString());
+```
+:::
+
+**Credential header'ları** (v0.0.99): her dışa giden task türü `sub`, `act_sub`, `position`, `client_id`, `role` request header'larını, task mapping'i bunları vermediyse ya da boş bıraktıysa iletir; mapping'deki dolu değer kazanır. 1024 karakteri aşan ya da kontrol karakteri içeren değerler iletilmez; morph-idm'in çözdüğü roller hiçbir zaman iletilmez. Ayrıntı: [Schema Tanımı → `x-encryption`](/docs/how-to/view-consept/schema-tanimi).
 
 :::warning
 Cross-domain internal çağrılarda (`internal/subflow-forward`, `internal/busy-release`, `related-data` ve remote app-service çağrıları) da aynı kural geçerli: `traceparent`, `tracestate` ve `baggage` **koşulsuz** atlanır — çünkü `HttpClient`'ın `DiagnosticsHandler`'ı `traceparent`'ı fill-if-absent ekler; eski bir kopya, canlı `Activity`'nin önüne geçip çağrılan tarafı yanlış span'a bağlardı.
@@ -183,6 +194,94 @@ Yeni bir `ActivitySource` tanımlayan her değişiklik, **aynı commit'te** o ka
 
 Acil bir aksiyon gerekmiyor — eski metrik hâlâ emit ediliyor, ancak yeni panolar yukarıdaki metriklere göre kurulmalı.
 :::
+
+### Metrik Endpoint'leri
+
+<sup>New</sup> v0.0.99 — "Bu akışta zaman nereye gidiyor?" ve "Bu function yavaş mı, hata mı veriyor?" sorularını yanıtlayan salt-okunur endpoint'ler. Diğer okuma yüzeyleri gibi in-process `queryRoles` gate'i taşımazlar; yetki Internal Gateway → `authorize?queryRoles=true` ile verilir.
+
+**Transition ve state metrikleri** — tek bir instance için, mevcut `InstanceTransitions` / `InstanceTasks` kayıtlarını **attempt** modeline gruplar (`{instance}` = id veya key):
+
+| Endpoint | Gruplama | Bir attempt |
+|---|---|---|
+| `GET /{domain}/workflows/{workflow}/instances/{instance}/transitions/{transitionKey}/metrics` | transition key | Bir tetiklenme (firing) |
+| `GET /{domain}/workflows/{workflow}/instances/{instance}/states/{stateKey}/metrics` | state | Bir ziyaret (giriş → çıkış) |
+
+```json
+{
+  "element": { "kind": "transition", "key": "to-review" },
+  "count": 1,
+  "attempts": [
+    {
+      "seq": 1,
+      "startedAt": "…", "finishedAt": "…",
+      "durationMs": 1104.0,
+      "triggerType": "manual",
+      "triggeredBy": "alice",
+      "tasks": [
+        {
+          "id": "6f9c…", "taskKey": "risk-recalc", "hook": "onExecute", "order": 1,
+          "status": "completed", "businessStatus": "success",
+          "startedAt": "…", "durationMs": 511.0, "faultedTaskRef": null, "error": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+- Her attempt döner (retry ve yeniden tetiklenmeler dahil); filtreleme istemcinin seçimidir.
+- `transition` için `durationMs` transition'ın **yürütme** süresidir; `state` için ziyaretin **bekleme (dwell)** süresidir (state'ten henüz çıkılmadıysa `null`).
+- `hook` (`onExecute` / `onEntry` / `onExit`) ve `order` (eşit order ⇒ paralel grup) yeni `InstanceTasks` kolonlarından gelir (migration `AddInstanceTaskTriggerAndOrderColumns`); migration öncesi satırlarda `null`'dır. Aynı kolonlar `tasks` function öğelerinde de döner. Payload'lar (`Request` / `Response`) hiçbir zaman dönmez.
+
+**Function metrikleri** — domain function çağrılarının sayfalı yürütme serisi:
+
+| Endpoint | Kapsam |
+|---|---|
+| `GET /{domain}/functions/{function}/metrics` | Domain function |
+| `GET /{domain}/workflows/{workflow}/functions/{function}/metrics` | Flow kapsamlı kardeş route |
+
+| Query parametresi | Varsayılan | Açıklama |
+|---|---|---|
+| `page` | `1` | Sayfa numarası |
+| `pageSize` | `20` | Sayfa boyutu (en fazla `100`) |
+| `from` / `to` | — | Zaman penceresi |
+| `succeeded` | — | `true` / `false` ile sonuca göre filtre |
+
+```json
+{
+  "links": { "self": "…", "first": "…", "next": "…", "prev": null },
+  "items": [
+    {
+      "executionId": "…", "functionVersion": "1.0.0", "invokedAt": "…", "durationMs": 42.0,
+      "scope": "I", "workflow": "account-opening", "instanceId": "…",
+      "succeeded": true, "status": "completed", "statusCode": 200, "fromCache": false,
+      "traceId": "…", "invokedBy": "alice"
+    }
+  ],
+  "summary": { "count": 128, "p50Ms": 38.0, "p95Ms": 120.0, "failureRate": 0.02 }
+}
+```
+
+`summary` filtrelenmiş pencerenin tamamını özetler (sayım, p50 / p95 gecikme, hata oranı).
+
+**Function journal'ı opt-in'dir.** Yalnızca tanımında `attributes.executionLog: "E"` (enabled) olan function'lar kaydedilir; `"D"` ya da alanın yokluğu hiçbir şey kaydetmez. Built-in instance okuma function'ları (`state`, `data`, `view`, …) hiç journal'lanmaz — telemetrileri APM span'lerindedir.
+
+```json
+{ "key": "get-customer-summary", "attributes": { "executionLog": "E" } }
+```
+
+Kayıt asenkron ve best-effort'tur: function yolu satırı yazmaz, sınırlı bir süreç içi kuyruğa bırakır; arka plan yazıcı toplu (batch) insert yapar. Kuyruk doluysa kayıt düşürülür (`WorkflowLogs` **80008**). Tablo sabit **`sys_metrics`** şemasındadır (migration `MetricsDb/AddFunctionExecutionsJournal`); bu fazda saklama süresi / temizlik işi yoktur.
+
+```json
+"Workflow": {
+  "FunctionExecutionJournal": { "QueueCapacity": 50000, "BatchSize": 1000 }
+}
+```
+
+| Anahtar | Varsayılan | Açıklama |
+|---|---|---|
+| `Workflow:FunctionExecutionJournal:QueueCapacity` | `50000` | Kuyruk kapasitesi (ani yük emici); değişiklik süreç yeniden başlatılınca uygulanır |
+| `Workflow:FunctionExecutionJournal:BatchSize` | `1000` | `SaveChanges` başına satır sayısı (verim ayarı) |
 
 ## Yapılandırma
 

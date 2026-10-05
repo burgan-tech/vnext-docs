@@ -61,6 +61,15 @@ vNext, [Aether](https://github.com/burgan-tech) telemetry altyapısı üzerinden
 |---------|-----|----------|
 | `AdditionalMeters` | string[] | Kaydedilecek ek `Meter` adları — host'a göre değişir (ör. Execution host `BBT.Workflow.Execution.Python` metre'sini de ekler); ilgili host'un `appsettings.json` dosyasından doğrulayın |
 
+<sup>New</sup> v0.0.99 — Function yürütme journal'ı (`executionLog: "E"` olan function'lar için `.../functions/{function}/metrics` endpoint'lerini besler) `Telemetry` bölümünde değil `Workflow:FunctionExecutionJournal` altında ayarlanır:
+
+| Anahtar | Tip | Varsayılan | Açıklama |
+|---------|-----|------------|----------|
+| `Workflow:FunctionExecutionJournal:QueueCapacity` | int | `50000` | Süreç içi kuyruk kapasitesi; dolduğunda kayıt düşürülür (`WorkflowLogs` 80008). Değişiklik yeniden başlatmayla uygulanır |
+| `Workflow:FunctionExecutionJournal:BatchSize` | int | `1000` | Toplu insert başına satır sayısı |
+
+Ayrıntı: [Gözlemlenebilirlik → Metrik Endpoint'leri](../how-to/observability#metrik-endpointleri).
+
 ## Logging Enrichers
 
 ```json
@@ -90,7 +99,7 @@ vNext, [Aether](https://github.com/burgan-tech) telemetry altyapısı üzerinden
 | `Enrichers.Headers` | string[] | (yukarıdaki liste) | Her inbound HTTP isteğinden log kaydına aktarılacak header'lar |
 
 :::note
-`X-Request-Id`, bu listede **bilerek yer almaz** — enrichment amaçları için ayrı ele alınır.
+`X-Request-Id`, bu listede **bilerek yer almaz** — enrichment amaçları için ayrı ele alınır. Bu, yalnızca log enrichment'ı ilgilendirir; task'lerin dışa giden çağrılarında `X-Request-Id` v0.0.99 itibarıyla reserved değildir ve fill-if-absent iletilir (bkz. [Gözlemlenebilirlik](../how-to/observability)).
 :::
 
 Enricher yalnızca **mevcut** inbound HTTP isteğinde header varsa çalışır; `HttpContext` olmayan kod yollarında (background job'lar, Outbox worker) bu alanlar üretilmez. Instance-scoped log scope'ları bu durumlarda korelasyonu sağlamaya devam eder.

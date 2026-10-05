@@ -26,6 +26,12 @@ Aynı ailenin sorgu tarafındaki üyeleri ayrı sayfalarda belgelenmiştir:
 - [**GetInstances Task** (Type: `15`)](/docs/components/tasks/get-instances) - Filtre ile instance listesi
 - [**GetInstance Task** (Type: `19`)](/docs/components/tasks/get-instance) - Tek instance'ın tam projeksiyonu (metadata + data)
 
+:::info[Header iletimi ve alan koruması — v0.0.99]
+- **`X-Request-Id`** dört task türünde de **fill-if-absent** iletilir: mapping'deki boş olmayan değer kazanır, yoksa vNext'in kendi request id'si gönderilir. StartTask (`11`) ve SubProcessTask (`14`) **yalnızca** bu kuralı uygular; başka workflow / kimlik başlığı damgalamazlar.
+- **DirectTriggerTask** (`12`) ve **GetInstanceDataTask** (`13`) credential başlıklarını (`sub`, `act_sub`, `position`, `client_id`, `role`) mapping vermediyse ya da boş bıraktıysa çağıranın isteğinden iletir; mapping'deki dolu değer kazanır, 1024 karakteri aşan / kontrol karakteri içeren değerler ve morph-idm'in çözdüğü roller iletilmez.
+- **GetInstanceDataTask** veriyi çağıranın sunduğu credential ile okur ve master şemanın `x-roles` / `x-masking` / `x-encryption` korumalarını uygular (önceki sistem görünürlüğü — `SystemRead` — kaldırıldı). Başka bir kimlikle okumak için credential'ı input mapping'de verin. Bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+:::
+
 ---
 
 ## 1. StartTask (Type: `11`)

@@ -22,6 +22,12 @@ The query-side members of the same family are documented on their own pages:
 - [**GetInstances Task** (Type: "15")](/docs/components/tasks/get-instances) - Instance list with filtering
 - [**GetInstance Task** (Type: "19")](/docs/components/tasks/get-instance) - Full single-instance projection (metadata + data)
 
+:::info[Header forwarding and field protection — v0.0.99]
+- **`X-Request-Id`** is forwarded **fill-if-absent** by all four task types (a non-empty mapping value wins, otherwise vNext's own request id). StartTask (`11`) and SubProcessTask (`14`) apply **only** this rule.
+- **DirectTriggerTask** (`12`) and **GetInstanceDataTask** (`13`) forward the caller's `sub`, `act_sub`, `position`, `client_id`, `role` where the mapping leaves them unset (mapping wins; values over 1024 characters / with control characters and morph-idm-resolved roles are not forwarded).
+- **GetInstanceDataTask** reads with the caller's presented credential and applies `x-roles` / `x-masking` / `x-encryption` (`SystemRead` removed).
+:::
+
 ## Features
 
 - ✅ Start new workflow instances programmatically

@@ -106,6 +106,11 @@ Some properties in the HttpTask class are defined as read-only. Special methods 
 - **TimeoutSeconds**: Read-only (also set in definition file)
 - **ValidateSSL**: Read-only (also set in definition file)
 
+:::info[Header forwarding — v0.0.99]
+- **`X-Request-Id`** is no longer reserved (**fill-if-absent**): a non-empty value from the mapping / `headers` is sent as is; otherwise vNext's own request id is forwarded. For APIs that need a unique UUID per call, set it in the mapping (`Guid.NewGuid()`).
+- **Credential headers** `sub`, `act_sub`, `position`, `client_id`, `role` are forwarded from the caller's request when the mapping leaves them absent or empty; a mapping value wins. Values over 1024 characters or with control characters, and roles resolved by morph-idm, are never forwarded.
+:::
+
 ## Mapping Examples
 
 ### Input Mapping
