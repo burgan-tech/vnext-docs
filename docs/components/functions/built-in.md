@@ -265,7 +265,7 @@ v0.0.99 öncesinde `timeout.target` düz bir **string** (hedef state key'i) idi;
 | `activeCorrelations` | `array` | Aktif sub-flow'lar ve correlation'lar (yalnızca açık olanlar — değişmedi) |
 | `correlations` <sup>New</sup> | `array` | Tüm child correlation'lar — aktif **ve** tamamlanmış, `createdAt` artan sırada — bkz. [Correlation Geçmişi](#correlation-geçmişi-correlations) |
 | `transitions` | `array` | Mevcut durumdan kullanılabilir transition'lar (+ role grant'a göre filtrelenir). `cancel`, `updateData` ve `exit` de tanımlıysa listelenir <sup>New</sup>; ayrıca çalışması zamanlanmış transition'lar `kind: "scheduled"` girişleri olarak eklenir <sup>New</sup> v0.0.80 / v0.0.84 — bkz. [Zamanlanmış transition'lar](#zamanlanmış-transitionlar-kind-scheduled) |
-| `transitions[].kind` | `string` | Girişin türü: çağıranın tetikleyebileceği transition'larda `state`/`cancel`/`updateData`/`exit`; runtime'ın otomatik ateşlemek üzere kurduğu girişte **`scheduled`** |
+| `transitions[].kind` | `string` | Girişin türü: çağıranın tetikleyebileceği transition'larda `stateTransition` / `sharedTransition` / `cancel` / `updateData` / `exit` / `timeout`; runtime'ın otomatik ateşlemek üzere kurduğu girişte **`scheduled`** (değerler için aşağıdaki tabloya bakın) |
 | `transitions[].executeAtUtc` | `string` | **Yalnızca `kind: "scheduled"`** girişlerde bulunur — ISO 8601 UTC (`Z` sonekli) tetiklenme anı |
 | `transitions[].labels` <sup>New</sup> v0.0.99 | `array` | Transition tanımının `labels` listesi (tüm diller; tanımlı değilse yok). Scheduled girişlerde de bulunur |
 | `transitions[].target` <sup>New</sup> v0.0.99 | `object` | Transition'ın hedef state'i: `key`, `stateType`, `stateSubType`, `labels`, `subFlow`. `$self`, transition'ın listelendiği state'e çözülür (scheduled girişte job'ın kaynak state'i). `subFlow` yalnızca hedef bir `subFlow` state'iyse bulunur (başlattığı process'in key'i). Hedef state çözülemezse yalnızca `{ key }`; transition'ın kendisi çözülemezse `target` ve `labels` yoktur |
@@ -312,7 +312,19 @@ State fonksiyonunun döndürdüğü `transitions` dizisi **transition role grant
 <sup>New</sup> Workflow seviyesinde tanımlı **`cancel`**, **`updateData`** ve **`exit`** transition'ları da — trigger tipine ve `availableIn` kapsamına göre — `transitions` dizisinde listelenir ve aynı rol filtresinden geçer:
 
 - Listelenen anahtar, workflow tanımındaki **configured key**'dir; well-known alias'lar (`update-parent-data`, `exit`) istek tarafında kabul edilmeye devam eder.
-- Her girişin `kind` alanı transition türünü söyler: `cancel` / `updateData` / `exit` (state ve shared transition'larda ilgili tür).
+- Her girişin `kind` alanı transition türünü söyler:
+
+  | `kind` | Anlamı |
+  |---|---|
+  | `stateTransition` | Mevcut state'in `transitions` listesindeki bir transition |
+  | `sharedTransition` | Workflow'un `sharedTransitions` listesindeki bir transition |
+  | `cancel` | Workflow seviyesindeki `cancel` transition'ı |
+  | `updateData` | Workflow seviyesindeki `updateData` transition'ı |
+  | `exit` | Workflow seviyesindeki `exit` transition'ı |
+  | `timeout` | Workflow `timeout` transition'ı |
+  | `scheduled` | Runtime'ın kurduğu zamanlanmış giriş (`executeAtUtc` taşır; aşağıya bakın) |
+
+  Aktif bir subflow'dan merge edilen girişler child'ın `kind` değerini korur.
 - Aktif bir subflow'un listesi, parent'ın `updateData` ve `exit` transition'larını da merge eder — client tek döngüyle hepsini sürebilir.
 - `roles` bu üç transition için de artık **etkindir**: rol eşleşmeyen çağırana listelenmez. Roller execution'da enforce edilmez (tasarım gereği — `roles` client'a *ne sunulacağını* belirler); execution yalnızca state-machine ve `availableIn` doğrulaması yapar.
 

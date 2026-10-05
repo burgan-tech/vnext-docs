@@ -93,8 +93,8 @@ Property erişimi ve setter metodları (`SetUrl`, `SetHeaders`, `AddHeader`, `Re
 | Dapr sidecar circuit breaker / remote-invocation timeout korumasına ihtiyaç var mı? | **Tercih edin** | Hayır — bu katmanlar devrede değil |
 | Çağrı, veritabanını da barındıran host içinde mi çalışmalı? | Hayır (izole) | **Dikkat** — Orchestrator veritabanını da barındıran host'tur |
 
-:::warning[Şema paketi type `22`'yi henüz taşımıyor]
-`@burgan-tech/vnext-schema@0.0.54` paketindeki `task-definition.schema.json`, `attributes.type` enum'ında `22` değerini **içermiyor** (type `22` deprecated olduğundan eklenmesi planlanmamaktadır). Bu nedenle domain paketlerinde `npm run validate` bir External HTTP task tanımını **reddeder**; runtime tarafında `publish` ve çalıştırma sorunsuz çalışır.
+:::info[Şema desteği — vnext-schema 0.0.55]
+`@burgan-tech/vnext-schema@0.0.55` ile type `22` `task-definition.schema.json` enum'una eklendi; bu sürümle domain paketlerinde `npm run validate` External HTTP task tanımını kabul eder. 0.0.54 ve öncesi şemalar `22`'yi içermez ve tanımı reddeder (runtime tarafında `publish` ve çalıştırma her iki durumda da sorunsuzdur). Type `22` yine de v0.0.94'ten beri **deprecated**'dır — yeni tanımlarda type `6` HTTP task kullanın.
 :::
 
 :::info
