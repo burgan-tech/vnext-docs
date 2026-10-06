@@ -235,8 +235,9 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
 | `type` | string | **Evet** | Workflow türü: `C`, `F`, `S`, `P` (yukarıdaki tür tablosu) |
+| `executionType` | string | Hayır | Flow'un varsayılan çalıştırma modu (v0.0.99): `S` (sync) veya `A` (async). Kendi `executionType`'ını tanımlamayan transition'lara uygulanır — bkz. [Çalıştırma Modu (`executionType`)](#çalıştırma-modu-executiontype) |
 | `scripts` <sup>New</sup> | object | Hayır | Flow seviyesi helper ve izinli assembly tanımı (aşağıda) |
-| `states` | array | **Evet** | State listesi. Tam olarak **bir** `Initial` state (`stateType: 1`) içermelidir |
+| `states` | array | **Evet** | State listesi. **En fazla bir** `Initial` state (`stateType: 1`) içerebilir (v0.0.99 öncesinde tam olarak bir tane zorunluydu). Hiç Initial yoksa instance runtime'ın örtük `$start` state'inde doğar — bkz. [Initial state olmadan başlangıç (`$start`)](#initial-state-olmadan-başlangıç-start) |
 | `startTransition` | object | **Evet** | Başlangıç transition tanımı (aşağıda) |
 | `labels` | array | **Evet** | Çoklu dil etiketleri (`minItems: 1`). Her öğe: `label` + `language` |
 | `schema` | object | Hayır | Master schema referansı. `schema` ile `reference` objesi içerir |
@@ -249,7 +250,7 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
 | `cancel` | object \| null | Hayır | Cancel transition tanımı. Yalnızca `triggerType: 0` (manual) |
 | `exit` | object \| null | Hayır | Exit transition tanımı. Yalnızca `triggerType: 0` (manual) |
 | `updateData` | object \| null | Hayır | Update data transition. `target` her zaman `$self` |
-| `queryRoles` | array | Hayır | Root-level sorgu rolleri. DENY her zaman ALLOW'u geçersiz kılar |
+| `queryRoles` | array | Hayır | Root-level sorgu rolleri. DENY her zaman ALLOW'u geçersiz kılar. v0.0.99'dan itibaren `allOf` / `anyOf` kombinatörleri de kullanılabilir — bkz. [Query Roles](#query-roles) |
 | `output` <sup>New</sup> | object \| null | Hayır | Sync yanıt için opsiyonel output mapping (`scriptCode`, `IOutputHandler`). Ayrıntı: [Output Mapping](#output-mapping) |
 | `event` <sup>New</sup> | object \| null | Hayır | Workflow seviyesi event tanımı. Tanımlıysa harici bir event bu workflow'un **yeni bir instance'ını başlatabilir** (`action=start`). Transition seviyesi event'ten bağımsızdır. Ayrıntı: [Event Transition](#event-transition) |
 | `config` <sup>New</sup> | object \| null | Hayır | Flow seviyesi yapılandırma. Şu an built-in function cache ayarını (`functionCache`) içerir. `null` ise host varsayılanları geçerlidir. Ayrıntı: [Config (Built-in Function Cache)](#config-built-in-function-cache) |
@@ -275,7 +276,7 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 |------|-----|---------|----------|
 | `key` | string | **Evet** | State benzersiz tanımlayıcısı (pattern: `^[a-z0-9-]+$`) |
 | `stateType` | integer | **Evet** | State tipi — aşağıdaki enum tablosuna bakın |
-| `subType` | integer | Hayır | State alt tipi — aşağıdaki enum tablosuna bakın. Varsayılan: `0` |
+| `subType` | integer | Hayır | State alt tipi — aşağıdaki [`subType` enum tablosuna](#subtype-enum-değerleri) bakın. Varsayılan: `0` |
 | `versionStrategy` | string | **Evet** | Versiyon stratejisi: `None`, `Patch`, `Minor`, `Major` |
 | `labels` | array | **Evet** | Çoklu dil etiketleri (`minItems: 1`) |
 | `view` | object \| null | Hayır | State view tanımı: `view` (reference), `loadData` (boolean), `extensions` (string[]) |
@@ -293,7 +294,7 @@ Workflow tanımı içinde birçok yerde kullanılan genel referans objesidir. İ
 
 | Değer | Ad | Açıklama |
 |-------|----|----------|
-| `1` | **Initial** | Başlangıç state'i. Workflow'da tam olarak **bir tane** olmalıdır |
+| `1` | **Initial** | Başlangıç state'i. Workflow'da **en fazla bir tane** olabilir (v0.0.99'dan itibaren opsiyonel). Tanımlanmazsa instance örtük `$start` state'inde doğar — bkz. [Initial state olmadan başlangıç](#initial-state-olmadan-başlangıç-start) |
 | `2` | **Intermediate** | Ara state |
 | `3` | **Final** | Bitiş state'i |
 | `4` | **SubFlow** | Alt akış çağıran state |
@@ -307,7 +308,9 @@ State Function aktif state'in tipini Wizard olarak değerlendirdiğinde önce au
 
 Örneğin hesap açılışı akışında "hesap türü seçimi" state'inde kullanıcıdan vadeli/vadesiz seçimi alınacaksa bu seçim state view içinde veri alanı olarak modellenmemelidir. Seçim transition routing perspektifiyle tasarlanır; böylece her seçim ayrı transition görünürlüğü, loglama ve raporlama katkısı sağlar. State view varsa, summary veya wizard'a devam edeceği ekran olarak kullanılmalıdır.
 
-### `stateSubType` Enum Değerleri
+### `subType` Enum Değerleri
+
+State'in `subType` alanı, şemadaki `stateSubType` tanımını kullanır:
 
 | Değer | Ad | Açıklama |
 |-------|----|----------|
@@ -318,6 +321,10 @@ State Function aktif state'in tipini Wizard olarak değerlendirdiğinde önce au
 | `4` | Suspended | Geçici askıya alınmış |
 | `5` | Busy | Meşgul |
 | `6` | Human | İnsan müdahalesi gerektiren |
+| `7` | Cancelled | İptal edilmiş |
+| `8` | Timeout | Zaman aşımına uğramış |
+
+State Function yanıtında bu değer v0.0.99'dan itibaren üst seviye `stateSubType` alanında camelCase string olarak döner (`none`, `success`, `error`, `terminated`, `suspended`, `busy`, `human`, `cancelled`, `timeout`).
 
 ### SubFlow State
 
@@ -440,9 +447,9 @@ Onay adımı + "Bekleyen Onaylarım" senaryosunda `terminate: false` / `terminat
 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
-| `terminate` | boolean | **Evet** | `true`: state'e girişte pipeline **duraklatılır** ve client'a "long-poll'u sonlandır" sinyali verilir; `false`: pipeline duraklamaz, client sinyali yalnızca yeniden bağlanma ipucu olarak kullanır — bkz. [`terminate` semantiği](#terminate-semantiği) |
-| `fallbackTimeoutSeconds` | integer | Hayır | İstek fallback'e düşmeden önce açık tutulacağı maksimum saniye (`minimum: 1`, varsayılan `60`). Client `ack` gönderemezse bu süre sonunda platform pipeline'ı otomatik devam ettirir |
-| `roles` | array | **Koşullu** | Long-poll etkileşimini kullanabilecek roller. DENY her zaman ALLOW'u geçersiz kılar. `roles` ve `rule`'dan **tam olarak biri** tanımlanabilir; ikisi de yoksa herkes izinlidir |
+| `terminate` | boolean | **Evet** | `true`: state'e girişte pipeline **duraklatılır** ve client'a "long-poll'u sonlandır" sinyali verilir; `false`: pipeline duraklamaz, instance bu state'teyken `interaction` bloğu (ack'siz) yayınlanır ve client long-poll penceresini `fallbackTimeoutSeconds`'a göre ayarlar — bkz. [`terminate` semantiği](#terminate-semantiği) |
+| `fallbackTimeoutSeconds` | integer | Hayır | İstek fallback'e düşmeden önce açık tutulacağı maksimum saniye (`minimum: 1`, varsayılan `60`). `terminate: true`'da client `ack` gönderemezse bu süre sonunda platform pipeline'ı otomatik devam ettirir; `terminate: false`'ta client'ın varsayılan long-poll penceresinin yerini alır |
+| `roles` | array | **Koşullu** | Long-poll etkileşimini kullanabilecek roller. DENY her zaman ALLOW'u geçersiz kılar; v0.0.99'dan itibaren `allOf` / `anyOf` kombinatörleri de kullanılabilir. `roles` ve `rule`'dan **tam olarak biri** tanımlanabilir; ikisi de yoksa herkes izinlidir |
 | `rule` <sup>New</sup> v0.0.94 | object | **Koşullu** | `roles` yerine **koşul betiği** ile yetkilendirme — view ve notification kurallarıyla aynı [IConditionMapping](/docs/components/interfaces#iconditionmapping) sözleşmesi. `roles` ile birlikte tanımlanamaz (publish'te reddedilir). Betik `false` dönerse, hata fırlatırsa veya derlenemezse **fail-closed** çalışır: state sinyali yayınlanmaz ve ack `403` alır |
 
 **Örnek:**
@@ -501,13 +508,16 @@ public class InteractionGate : IConditionMapping
 | `terminate` | Pipeline | Instance durumu | State yanıtı |
 |---|---|---|---|
 | `true` | State'e giriş sonrası **OnEntry tamamlanınca duraklar** (pipeline adımı order 75): ack token'ı armlanır, `fallbackTimeoutSeconds` için tek seferlik fallback job'ı kurulur, epilog (schedule/auto/finish) çalışmaz | Ack veya fallback gelene kadar **Busy** kalır (SubFlow duraklamasıyla aynı dinlenme şekli) | `interaction` bloğu `terminateLongPoll: true` + `ack.href` ile döner |
-| `false` | **Duraklamaz** — pipeline normal akar, ack token'ı armlanmaz, fallback job'ı kurulmaz | Değişmez | <sup>New</sup> v0.0.95 `interaction` bloğu **yayınlanmaz** (aşağıya bakın) |
+| `false` | **Duraklamaz** — pipeline normal akar, ack token'ı armlanmaz, fallback job'ı kurulmaz; sunucu tarafında hiçbir şey armlanmaz | Değişmez | v0.0.98'den itibaren instance bu state'teyken `interaction` bloğu `terminateLongPoll: false` + `fallbackTimeoutSeconds` ile **her zaman** yayınlanır; `ack` yoktur (aşağıya bakın) |
 
 Ack (veya fallback) geldiğinde pipeline kaldığı yerden devam eder: token temizlenir, Busy çözülür ve epilog (Schedule → Auto → Finish → Finalize) çalışır. Ack ve fallback aynı anda gelirse `:lpack` kilidi ikisini serileştirir; token zaten temizlenmişse ikinci istek güvenli no-op'tur. Error-boundary ve auto-chain profillerinde bu adım **hiç çalışmaz** — bu transition'lar asla duraklamaz.
 
 #### State Yanıtındaki `interaction` Objesi
 
-State Function yanıtındaki `interaction` objesi, <sup>New</sup> v0.0.95 itibarıyla **yalnızca instance gerçekten ack beklerken** (`IsAwaitingLongPollAck`) döner — yani `terminate: true` bir state'e girilip pipeline duraklamışsa ve ack/fallback henüz gelmemişse. State tanımında `interaction.longPoll` bulunması tek başına bloğu üretmez; `terminate: false` bir state hiç `interaction` bloğu yayınlamaz. (Önceki davranış bloğu tanımdan türetiyor ve client'ı bekleyen bir şey olmadığı hâlde her poll'da ack göndermeye yönlendiriyordu; `ResponseShapeVersion` aynı değişiklikte yükseltildi ve tüm state ETag'leri bir kez geçersiz kılındı.)
+State Function yanıtındaki `interaction` objesinin ne zaman döndüğü `terminate` değerine bağlıdır:
+
+- **`terminate: true`** — v0.0.95'ten beri blok **yalnızca instance gerçekten ack beklerken** (`IsAwaitingLongPollAck`) döner: state'e girilip pipeline duraklamışsa ve ack/fallback henüz gelmemişse. Blok `ack.href` taşır. (Önceki davranış bloğu tanımdan türetiyor ve client'ı bekleyen bir şey olmadığı hâlde her poll'da ack göndermeye yönlendiriyordu; `ResponseShapeVersion` aynı değişiklikte yükseltildi ve tüm state ETag'leri bir kez geçersiz kılındı.)
+- **`terminate: false`** — v0.0.98'den itibaren blok, instance tanımı yapan state'te olduğu **her an** ve çağıran etkileşim gate'ini geçtiğinde (`rule`, yoksa `roles`, yoksa izin) döner. **`ack` yoktur**; sunucu tarafında hiçbir şey armlanmaz. v0.0.95–v0.0.97 arasında bu blok hatalı olarak bastırılıyordu; v0.0.98 bunu düzeltti (`ResponseShapeVersion` v12 → v13).
 
 ```json
 "interaction": {
@@ -517,18 +527,26 @@ State Function yanıtındaki `interaction` objesi, <sup>New</sup> v0.0.95 itibar
 }
 ```
 
+```json
+"interaction": {
+  "terminateLongPoll": false,
+  "fallbackTimeoutSeconds": 120
+}
+```
+
 | Alan | Açıklama |
 |------|----------|
-| `terminateLongPoll` | State'in `interaction.longPoll.terminate` değerini yansıtır |
-| `fallbackTimeoutSeconds` | Etkin fallback penceresi (varsayılan `60`; parent subflow override'ı varsa o değer) |
-| `ack` | Acknowledge endpoint href'i (`{ "href": "…" }` şekli) |
+| `terminateLongPoll` | State'in `interaction.longPoll.terminate` değerini yansıtır (her zaman döner) |
+| `fallbackTimeoutSeconds` | Etkin pencere (her zaman döner; state'in kendi değeri ya da parent subflow override'ı, varsayılan `60`) |
+| `ack` | Acknowledge endpoint href'i (`{ "href": "…" }` şekli). **Yalnızca** `terminateLongPoll: true` iken |
 
-Blok yalnızca etkileşimin yetkilendirme kolunu (`roles` ya da `rule`) geçen çağıranlara yayınlanır. Aktif bir subflow'daki `terminate` state'i için blok parent'a **yukarı taşınır** ve her seviye `ack.href`'i kendi endpoint'ine yeniden yazar — client her zaman en üst instance'ın ack'ini çağırır.
+Blok yalnızca etkileşimin yetkilendirme kolunu (`roles` ya da `rule`) geçen çağıranlara yayınlanır. Aktif bir subflow'daki state için blok parent'a **yukarı taşınır** ve `ack.href` poll edilen (en üst) instance'ın endpoint'ine yeniden yazılır — client her zaman en üst instance'ın ack'ini çağırır.
 
 Client davranışı:
 
-- **`interaction` bloğu var** → client aktif long-poll isteğini sonlandırır, girilen state'in ekranını render eder ve `ack` ile platformu bilgilendirir. Süre içinde ack gelmezse zamanlanmış fallback pipeline'ı otomatik devam ettirir.
-- **`interaction` bloğu yok** → bekleyen bir ack yoktur; client normal long-poll döngüsüne devam eder.
+- **`terminateLongPoll: true`** → client aktif long-poll isteğini sonlandırır, girilen state'in ekranını render eder ve `ack` ile platformu bilgilendirir. Süre içinde ack gelmezse zamanlanmış fallback pipeline'ı otomatik devam ettirir.
+- **`terminateLongPoll: false`** → ack gönderilmez; client `fallbackTimeoutSeconds` değerini kendi varsayılan long-poll penceresinin yerine kullanır (varsayılan 60 sn; state `120` tanımlıysa client 120 sn poll eder).
+- **`interaction` bloğu yok** → state long-poll tanımlamıyor veya çağıran gate'i geçemiyor (`terminate: true`'da ayrıca bekleyen bir ack yok); client normal long-poll döngüsüne devam eder.
 
 #### Long Poll Acknowledge
 
@@ -624,7 +642,8 @@ Kanonik adım sırası (pipeline `LifecycleOrder` değerleri), her trigger tipin
 | `view` | object \| null | Hayır | Transition view tanımı. Yalnızca `triggerType: 0` (manual) için geçerli |
 | `onExecutionTasks` | array | Hayır | Transition sırasında çalıştırılacak task listesi |
 | `mapping` | object \| null | Hayır | Transition input mapping betiği |
-| `roles` | array | Hayır | Yetkilendirme rolleri. DENY her zaman ALLOW'u geçersiz kılar |
+| `roles` | array | Hayır | Yetkilendirme rolleri. DENY her zaman ALLOW'u geçersiz kılar. v0.0.99'dan itibaren `allOf` / `anyOf` kombinatörleri kullanılabilir — bkz. [Yetkilendirme → Kombinatörler](/docs/concepts/authorization#kombinatörler-allof--anyof) |
+| `executionType` | string | Hayır | Transition'ın çalıştırma modu (v0.0.99): `S` (sync) veya `A` (async). Flow'un `executionType`'ını ve çağıranın `?sync` parametresini ezer — bkz. [Çalıştırma Modu](#çalıştırma-modu-executiontype) |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata. Platform annotations değerlerini yorumlamaz (passthrough). Çakışmaları önlemek için namespace'li key'ler kullanın (örn. `ui/visible-in`, `ui/priority`) |
 | `event` <sup>New</sup> | object \| null | **Koşullu** | Transition seviyesi event tanımı. `triggerType: 3` ise **zorunlu**. Ayrıntı: [Event Transition](#event-transition) |
 | `resourceLock` <sup>New</sup> | object \| null | Hayır | Transition sırasında çalışan dağıtık kaynak kilidi (Dapr `lock.redis`). Yalnızca **Manual** profilde çalışır; start, state-level ve shared transition'larda geçerlidir. Ayrıntı: [Kaynak Kilitleme](/docs/how-to/resource-lock) |
@@ -644,6 +663,27 @@ Kanonik adım sırası (pipeline `LifecycleOrder` değerleri), her trigger tipin
 |-------|----|----------|
 | `0` | Not applicable | Uygulanmaz (varsayılan) |
 | `10` | Default auto | Varsayılan otomatik transition (rule opsiyonel) |
+
+### Çalıştırma Modu (`executionType`)
+
+v0.0.99'dan itibaren bir istek sync mi async mi çalışacağı tanımda sabitlenebilir. `executionType` flow seviyesinde (`attributes.executionType`) ve state transition'larında, `sharedTransitions`'ta ve `startTransition`'da tanımlanabilir.
+
+| Değer | Anlamı | Yanıt |
+|-------|--------|-------|
+| `S` | Senkron — istek pipeline oturana kadar bekler | `200` + tam instance |
+| `A` | Asenkron — istek kabul edilir, pipeline arka planda çalışır | `202` + `{ id, status }` |
+
+**Öncelik:** transition `executionType` → flow `executionType` → çağıranın `?sync` query parametresi (varsayılan `false` = async). Tanım bir değer belirttiğinde `?sync` parametresi **yok sayılır**.
+
+- Otomatik transition'lara, runtime-iç yollara ve subflow start/forward'a uygulanmaz.
+- Yanıta yeni bir alan eklenmez. Trace'te `vnext.execution.requested`, `vnext.execution.effective` (`SYNC` / `ASYNC`) ve yalnızca tanım çağıranın modunu değiştirdiğinde `vnext.execution.overridden=true` tag'leri bulunur.
+- Geçersiz değer publish'te reddedilir: `Unknown execution type: X`.
+
+```json
+{ "key": "submit", "target": "review", "triggerType": 0, "executionType": "S" }
+```
+
+Bkz. [Async / Sync Yöntemi](/docs/how-to/async-sync).
 
 ### `versionStrategy` Enum Değerleri
 
@@ -736,16 +776,54 @@ Kurallar:
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
 | `key` | string | **Evet** | Transition key'i |
-| `target` | string | **Evet** | Hedef state (Initial state olmalı) |
+| `target` | string | **Evet** | Hedef state. **Tanımlı bir state key'i** olmalıdır; `$self`, `$start` veya boş değer publish'te reddedilir |
 | `triggerType` | integer | **Evet** | Sabit: `0` (yalnızca manual) |
 | `versionStrategy` | string | **Evet** | `None`, `Patch`, `Minor`, `Major` |
 | `labels` | array | **Evet** | Çoklu dil etiketleri |
 | `schema` | object \| null | Hayır | Start request body validation schema'sı |
 | `onExecutionTasks` | array | Hayır | Başlangıçta çalıştırılacak task'lar |
 | `mapping` | object \| null | Hayır | Input mapping betiği |
-| `roles` | array | Hayır | Yetkilendirme rolleri |
+| `roles` | array | Hayır | Yetkilendirme rolleri (`allOf` / `anyOf` kombinatörleri v0.0.99'dan itibaren desteklenir) |
+| `executionType` | string | Hayır | `S` / `A` — start isteğinin çalıştırma modu (v0.0.99). Bkz. [Çalıştırma Modu](#çalıştırma-modu-executiontype) |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 | `resourceLock` <sup>New</sup> | object \| null | Hayır | Dağıtık kaynak kilidi. Ayrıntı: [Kaynak Kilitleme](/docs/how-to/resource-lock) |
+
+### Initial state olmadan başlangıç (`$start`)
+
+v0.0.99'dan itibaren bir workflow **en fazla bir** Initial state (`stateType: 1`) tanımlayabilir; Initial state artık zorunlu değildir.
+
+- **Initial state tanımlıysa** davranış öncekiyle aynıdır.
+- **Initial state yoksa** instance runtime'ın ayrılmış, örtük **`$start`** state'inde doğar ve `startTransition.target` instance'ın nereye gireceğini belirler. `$start` hiçbir zaman `states` listesinde yer almaz; task'ı, view'ı ve transition'ı yoktur (tip olarak Initial sayılır). İlk transition kaydı `$start → step-1` şeklindedir.
+- `currentState`, start transition commit edilene kadar (async start, subflow child oluşturma) geçici olarak **`$start`** olabilir — client'lar bu değeri tanımalıdır.
+- Async start job'ı kalıcı olarak başarısız olursa instance `$start`'ta kalabilir. Böyle bir instance yalnızca **`availableIn` kısıtı olmayan** well-known transition'larla (`cancel` / `exit` / `updateData`) çıkabilir; `availableIn` `$start`'ı adlandıramaz.
+- Daha önce geçişli (pass-through) bir Initial state'ten otomatik hop'ta çalışan işler `startTransition.onExecutionTasks`'e taşınabilir; ancak bu durumda instance oluşturulurken çalışırlar ve instance verisi yalnızca start payload'ıdır.
+
+```json
+"attributes": {
+  "type": "F",
+  "startTransition": {
+    "key": "start",
+    "target": "step-1",
+    "triggerType": 0,
+    "versionStrategy": "Minor",
+    "labels": [{ "label": "Başlat", "language": "tr-TR" }]
+  },
+  "states": [
+    { "key": "step-1", "stateType": 2, "versionStrategy": "Minor", "labels": [{ "label": "Adım 1", "language": "tr-TR" }], "transitions": [] }
+  ]
+}
+```
+
+Publish hataları:
+
+| Durum | Mesaj |
+|-------|-------|
+| Birden fazla Initial state | `Workflow may contain at most one initial state. Found: N.` |
+| `$start` key'li bir state tanımı | `State key '$start' is reserved by the runtime.` |
+| `startTransition.target` boş | `StartTransition must declare a target state.` |
+| `target` tanımlı bir state değil (`$self` / `$start` dahil) | `The 'target' value in StartTransition does not match any state 'X'.` |
+
+Bu özellik vnext-schema `0.0.55` gerektirir.
 
 ### Davranış
 
@@ -791,7 +869,7 @@ Otomatik transition'lar **her** `updateData` sonrasında değerlendirilir; böyl
 - Instance aktifken sürekli veri basan senaryolarda (telemetri, paralel servis sonuçları, arka plan görevleri) client'a `stateTransition` değil **`updateData`** verin.
 - Paralel `updateData` altında mapping'ler **yalnızca delta** döndürmelidir: tam echo döndüren bir mapping, eşzamanlı yazarların daha taze değerlerini bayat kopyayla ezebilir.
 - Kabul edilen her `updateData` iki data satırı üretir (istek payload'ı + task çıktısı). Data versiyonu, instance başına `FOR UPDATE` kilidi altında `MAX(VersionNo)+1` ile hesaplanır; her satır üretildiği anda kalıcılaştırılır.
-- Aynı order'daki paralel branch'ler **farklı task tanımları** kullanmalıdır (task-journal anahtarı `transition+task+order` üçlüsüdür).
+- Aynı order'da aynı task'ı birden fazla kez çalıştırmak için (v0.0.99) her girişe ayrı bir `variableKey` verin; aksi halde yanıtlar aynı slot'a düşer ve tanım publish'te reddedilir — bkz. [Tasks → Çalıştırma Sırası](/docs/components/tasks/).
 :::
 
 > **Referans:** [vnext #877](https://github.com/burgan-tech/vnext/pull/877) — Busy-as-mutex locking, status-neutral updateData ve anlık InstanceData kalıcılığı.
@@ -834,6 +912,7 @@ Birden fazla state'den erişilebilen **ortak transition**'lardır. Standart tran
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
 | `availableIn` | (string \| object)[] | Hayır | Transition'ın geçerli olduğu state'ler. Öğeler bare state key veya rol daraltmalı `{ state, roles }` objesi olabilir <sup>New</sup> (aşağıya bakın). Tanımlanmazsa **tüm state'lerden** erişilebilir |
+| `executionType` | string | Hayır | `S` / `A` (v0.0.99) — bkz. [Çalıştırma Modu](#çalıştırma-modu-executiontype) |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 | `event` <sup>New</sup> | object \| null | **Koşullu** | Event tanımı. `triggerType: 3` ise **zorunlu** — bkz. [Event Transition](#event-transition) |
 | `resourceLock` <sup>New</sup> | object \| null | Hayır | Dağıtık kaynak kilidi. Ayrıntı: [Kaynak Kilitleme](/docs/how-to/resource-lock) |
@@ -861,7 +940,20 @@ Shared transition'larda `triggerType` yalnızca `0` (Manual), `2` (Scheduled) ve
 
 Rol bileşimi **AND**'dir: `transition.roles` global gate'tir, eşleşen `availableIn` öğesinin `roles`'u onu o state için daraltır — **ikisi de izin vermelidir**. Her iki seviye de aynı grant değerlendirme çekirdeğinden geçer; DENY-wins ve allowlist/blacklist kuralları iki seviyede özdeştir (bkz. [Yetkilendirme → Grant Değerlendirme](/docs/concepts/authorization)). Rol'süz (`roles` boş/yok) öğe hiçbir daraltma uygulamaz.
 
-Doğrulama kuralları: `state` mevcut bir state key'i olmalıdır, aynı state için **mükerrer öğe** reddedilir (ilk eşleşen kazandığı için mükerrer öğe sessizce ölü kalırdı), öğe içi rol grant'ları dynamic-role sözdizimi denetiminden geçer.
+Öğe `roles`'unda v0.0.99'dan itibaren `allOf` / `anyOf` kombinatörleri de kullanılabilir:
+
+```json
+"availableIn": [
+  {
+    "state": "approval",
+    "roles": [
+      { "allOf": [ { "role": "morph-idm.officer" }, { "role": "$user.branch" } ], "grant": "allow" }
+    ]
+  }
+]
+```
+
+Doğrulama kuralları: `state` mevcut bir state key'i olmalıdır (`$start` adlandırılamaz), aynı state için **mükerrer öğe** reddedilir (ilk eşleşen kazandığı için mükerrer öğe sessizce ölü kalırdı), öğe içi rol grant'ları dynamic-role sözdizimi denetiminden geçer.
 
 `availableIn`, shared transition'ların yanı sıra `cancel` / `exit` / `updateData` well-known transition'larında da aynı iki formu destekler ve execution'da **state gate** olarak uygulanır.
 
@@ -888,7 +980,20 @@ Doğrulama kuralları: `state` mevcut bir state key'i olmalıdır, aynı state i
 }
 ```
 
-State Function yanıtında bu tanım, deadline bekliyorken şu şekilde görünür: `"timeout": { "key": "abandoned", "target": "cancelled", "executeAtUtc": "…Z", "annotations": { "ui/countdown": "visible" } }`.
+State Function yanıtında bu tanım, deadline bekliyorken şu şekilde görünür:
+
+```json
+"timeout": {
+  "key": "abandoned",
+  "executeAtUtc": "…Z",
+  "target": { "key": "cancelled", "stateType": "finish", "stateSubType": "cancelled", "labels": [{ "label": "İptal", "language": "tr-TR" }] },
+  "annotations": { "ui/countdown": "visible" }
+}
+```
+
+:::warning v0.0.99 — `timeout.target` artık obje
+State Function yanıtındaki `timeout.target` v0.0.99'da **string'den objeye** dönüştü (`{ key, stateType, stateSubType, labels, subFlow }`); hedef state key'ini `target.key` ile okuyun. Tanımdaki `timeout.target` (yukarıdaki tablo) string olarak kalır.
+:::
 
 :::info Subflow override'ı bloğu bütün olarak değiştirir
 Parent'ın `subFlow.overrides.timeout` tanımı child'ın `timeout` bloğunu **annotations dahil bütün olarak** değiştirir; alanlar merge edilmez. <sup>New</sup> v0.0.95 öncesinde bu override hiç uygulanmıyordu — override ile başlatılan child instance'lar artık gerçekten timeout'a düşer. Ayrıntı: [SubFlow Overrides](../how-to/subflow-overrides).
@@ -1003,7 +1108,17 @@ Instance data her state'de merge ile genişlediğinden master schema'da **`requi
 | `helpers` | array | [sys-mappings](/docs/components/mapping-component) bileşenlerine referans (`key`, `version`, `domain`, `flow: "sys-mappings"`) |
 | `allowedAssemblies` | string[] | Script bağlamı için izinli .NET assembly'leri (sandbox allow-list'e eklenir) |
 
-Aynı `scripts` yapısı her mapping objesinde (transition `mapping`, `rule`, `timer`, subflow `mapping`, task `onExecutionTasks[].mapping` vb.) de tanımlanabilir. Helper bileşenleri, `REF` encoding ve sandbox ayrıntıları için bkz. [Mapping Bileşeni](/docs/components/mapping-component) ve [Scripting / Sandbox](/docs/configuration/scripting).
+Aynı `scripts` yapısı her mapping objesinde (transition `mapping`, `rule`, `timer`, subflow `mapping`, task `onExecutionTasks[].mapping` vb.) de tanımlanabilir.
+
+:::warning Publish kontrolü (v0.0.99)
+`scripts.allowedAssemblies` (flow seviyesinde veya herhangi bir script slot'unda) bildiren her workflow publish'te denetlenir: her **basit assembly adı** ya bir framework (TPA) assembly'si olarak ya da `Scripting:Sandbox:PluginDirectory` içindeki bir DLL olarak çözülmelidir. Çözülemezse publish `400` döner:
+
+```
+Assembly '{name}' declared in '{member}' is not available in this runtime (neither a framework assembly nor in the plugin directory). Use the simple assembly name without extension, or have the assembly mounted by the platform team.
+```
+
+`member` hatanın yerini gösterir (ör. `sys-flows.states[0].onEntries[1].mapping.scripts.allowedAssemblies[0]`). Kontrol `Scripting:Sandbox:Enabled=false` olsa bile çalışır — önceden zararsız olan eski/yanlış adlar bir sonraki publish'te `400` üretir. Script derlenmez, helper/REF çözülmez; bildirilmemiş bir assembly ihtiyacı hâlâ çalışma anında hata verir. Ayrıntı: [Scripting / Sandbox](/docs/configuration/scripting).
+::: Helper bileşenleri, `REF` encoding ve sandbox ayrıntıları için bkz. [Mapping Bileşeni](/docs/components/mapping-component) ve [Scripting / Sandbox](/docs/configuration/scripting).
 
 ### Mapping `encoding` ve `REF`
 
@@ -1050,12 +1165,22 @@ Bkz. [Async / Sync Yöntemi](/docs/how-to/async-sync) ve mapping yapısı için 
 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
-| `role` | string | **Evet** | Rol adı |
+| `role` | string | **Koşullu** | Rol adı. `role`, `allOf`, `anyOf`'tan **tam olarak biri** verilir |
+| `allOf` / `anyOf` | array | **Koşullu** | v0.0.99: kombinatör. Çocuklar yalnızca `{ "role": "..." }` (tek seviye, `grant` yok, iç içe yok) |
 | `grant` | string | **Evet** | `allow` veya `deny`. DENY her zaman ALLOW'u geçersiz kılar |
+
+```json
+"queryRoles": [
+  { "allOf": [ { "role": "morph-idm.officer" }, { "role": "$user.branch" } ], "grant": "allow" },
+  { "anyOf": [ { "role": "morph-idm.auditor" }, { "role": "morph-idm.risk" } ], "grant": "deny" }
+]
+```
+
+Kombinatörlerin üç değerli değerlendirmesi için bkz. [Yetkilendirme → Kombinatörler](/docs/concepts/authorization#kombinatörler-allof--anyof). İlk kombinatörü ancak tüm pod'lar — ve bu domain'e override damgalayan tüm domain'ler — v0.0.99 çalıştırdıktan sonra yayınlayın.
 
 **Etki alanı:** `queryRoles`, instance'ın **mevcut (current) state**'i üzerinde değerlendirilir ve built-in read yüzeylerinin (**state**, **data**, **view**, **schema**, **master**, **tasks**, **actions**, **incidents**) tamamı için tek bir "bu instance okunabilir mi?" cevabı verir. State seviyesi tanımı flow (root) seviyesini override eder.
 
-<sup>New</sup> v0.0.95 **In-process gate kaldırıldı.** Read fonksiyonları `queryRoles`'u artık kendi içlerinde **denetlemez** ve `403` üretmez. Karar tek bir yerde verilir: Internal Gateway, isteği iletmeden önce [`authorize?queryRoles=true`](/docs/components/functions/built-in#instance-authorize) fonksiyonunu çağırır ve cevabına göre isteği kabul veya reddeder. Bu fonksiyon `queryRoles`'u sorgulanan instance'tan aktif subflow zincirinin en derin yaprağına kadar **her hop için** değerlendirir ve sonuç bir **conjunction**'dır (her seviye izin vermelidir); her hop'ta parent'ın `subFlow.overrides.states.<s>.queryRoles` damgası önce, sonra state'in kendi tanımı, sonra root tanımı okunur. Önünde bu gateway olmayan bir runtime bu okumaları **reddetmez** — `queryRoles` tek başına bu process'in savunduğu bir sınır değildir. Rol *çözümü* (transition filtreleme, `x-roles`, human-task listesi) değişmemiştir. Ayrıntı için bkz. [Built-in Functions → Read fonksiyonlarında queryRoles authorize](/docs/components/functions/built-in#read-fonksiyonlarında-queryroles-authorize) ve [Yetkilendirme → Nerede Değerlendirilir?](/docs/concepts/authorization#nerede-değerlendirilir).
+<sup>New</sup> v0.0.95 **In-process gate kaldırıldı.** Read fonksiyonları `queryRoles`'u artık kendi içlerinde **denetlemez** ve `403` üretmez. Karar tek bir yerde verilir: Internal Gateway, isteği iletmeden önce [`authorize?queryRoles=true`](/docs/components/functions/built-in#instance-authorize) fonksiyonunu çağırır ve cevabına göre isteği kabul veya reddeder. v0.0.95–v0.0.98 arasında bu fonksiyon `queryRoles`'u aktif subflow zincirinin **her hop'u için** değerlendirip sonuçları AND'liyordu. **v0.0.99'dan itibaren karar yalnızca en derin aktif SubFlow yaprağında** verilir: parent'ın damgaladığı `subFlow.overrides.states.<s>.queryRoles` ?? yaprak state'in `queryRoles`'u ?? yaprak workflow'un `queryRoles`'u. Root/ara seviye AND'i kaldırıldığından, root'un `queryRoles` tanımladığı ama yaprağın tanımlamadığı akışlarda erişim **gevşer** — gerekirse `subFlow.overrides.states.<state>.queryRoles` veya yaprakta `queryRoles` ekleyin. Parent'a ait transition'lar ve `?ack=true` değişmedi. Önünde bu gateway olmayan bir runtime bu okumaları **reddetmez** — `queryRoles` tek başına bu process'in savunduğu bir sınır değildir. Rol *çözümü* (transition filtreleme, `x-roles`, human-task listesi) değişmemiştir. Ayrıntı için bkz. [Built-in Functions → Read fonksiyonlarında queryRoles authorize](/docs/components/functions/built-in#read-fonksiyonlarında-queryroles-authorize) ve [Yetkilendirme → Nerede Değerlendirilir?](/docs/concepts/authorization#nerede-değerlendirilir).
 
 ## İlgili
 

@@ -99,7 +99,7 @@ Her fonksiyon bir task çalıştırabilir ve task sonucundaki veri mapping ile i
 | `task` | `object` | **Koşullu** | Tek task tanımı. `task` veya `onExecutionTasks`'tan biri zorunlu |
 | `onExecutionTasks` | `array` | **Koşullu** | Sıralı çalıştırılacak task'lar. `task` veya `onExecutionTasks`'tan biri zorunlu |
 | `output` | `object` | **Koşullu** | Çıktı mapping betiği; `onExecutionTasks` tanımlıysa **zorunlu**. `IOutputHandler` uygular |
-| `labels` | `array` | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`) |
+| `labels` | `array` | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`). <sup>New</sup> v0.0.99 Artık yükleme sırasında düşürülmez; built-in [`catalog`](/docs/components/functions/built-in#catalog-fonksiyonu) yanıtında `functions[].labels` olarak döner |
 | `roles` | `array` | Hayır | Yetkilendirme rolleri. Her öğe: `role` (string) + `grant` (`allow` / `deny`). DENY her zaman ALLOW'u geçersiz kılar |
 | `rawResponse` | `boolean` | Hayır | `true`: mapped rawData doğrudan response olarak döndürülür. `false` (varsayılan): platform kendi pattern modeli üzerinden çıktı verir. Legacy API'lerden vnext'e geçiş senaryolarında kullanılır |
 | `cache` | `object` | Hayır | Read-through response cache konfigürasyonu — bkz. [Fonksiyon Cache](#fonksiyon-cache) |
@@ -108,6 +108,7 @@ Her fonksiyon bir task çalıştırabilir ve task sonucundaki veri mapping ile i
 | `outputSchema` <sup>New</sup> | `object \| array` | Hayır | Response body'yi tanımlayan `sys-schemas` kontratı; yalnızca deklaratif |
 | `inputView` <sup>New</sup> | `object \| array` | Hayır | Input toplamak için render edilecek `sys-views` kontratı |
 | `outputView` <sup>New</sup> | `object \| array` | Hayır | Output sunmak için render edilecek `sys-views` kontratı |
+| `executionLog` <sup>New</sup> v0.0.99 | `string` | Hayır | Fonksiyon yürütme journal'ı için opt-in: `E` (enabled) her çağrıyı journal'a yazar ve [fonksiyon metrik endpoint'lerinden](/docs/components/functions/built-in#fonksiyon-metrikleri) okunur kılar; `D` (disabled) veya alanın olmaması hiçbir şey kaydetmez. Journal asenkron ve best-effort'tur, yürütme süresini etkilemez |
 
 ### Scope Değerleri
 
@@ -142,6 +143,7 @@ Her fonksiyon bir task çalıştırabilir ve task sonucundaki veri mapping ile i
 | `order` | `integer` | **Evet** | Task çalışma sırası (`minimum: 1`) |
 | `task` | `object` | **Evet** | Task referansı (explicit: `key`, `domain`, `flow`, `version` veya ref: `ref`) |
 | `mapping` | `object` | **Evet** | Input/Output dönüşüm mapping'i (aşağıdaki tablo) |
+| `variableKey` <sup>New</sup> v0.0.99 | `string` | Hayır | Task yanıtının `context.OutputResponse` / `context.TaskResponse` içindeki **slot adı**. Format `^[A-Za-z_][A-Za-z0-9_]*$`, en fazla 100 karakter; olduğu gibi (verbatim) kullanılır. Etkin slot = `variableKey ?? camelCase(task.key)` (ör. `send-notification` → `sendNotification`) |
 
 #### Mapping Özellikleri
 
@@ -157,7 +159,7 @@ Her fonksiyon bir task çalıştırabilir ve task sonucundaki veri mapping ile i
 
 Tek bir **`task`** yerine **`attributes.onExecutionTasks`** ile **sırayla** birden fazla task çalıştırılabilir. Her öğede **`order`**, **`task`** referansı ve isteğe bağlı **`mapping`** bulunur. Sonraki task'lar, aynı fonksiyon yürütmesinde önceki task çıktılarını kullanabilir.
 
-İsteğe bağlı **`attributes.output`**, **`IOutputHandler`** uygulayan bir betiğe işaret eder. **`OutputHandler`** içinde sonuçlar **`context.OutputResponse`** üzerinden okunur (anahtarlar çalıştırılan task anahtarlarına göre, tipik olarak **camelCase**).
+İsteğe bağlı **`attributes.output`**, **`IOutputHandler`** uygulayan bir betiğe işaret eder. **`OutputHandler`** içinde sonuçlar **`context.OutputResponse`** üzerinden okunur. Her task'ın sonucu **etkin slot** adı altında tutulur: `variableKey` tanımlıysa o (verbatim), değilse task key'inin camelCase hali (`validate-account-policies` → `validateAccountPolicies`).
 
 :::tip Response header & status code forward
 Multi-task function'larda output handler'ın döndürdüğü `ScriptResponse`'un **`Headers`** ve **`StatusCode`** alanları, nihai function HTTP yanıtına **forward edilir**. Böylece output handler yalnızca gövdeyi değil, yanıt status'ünü (örn. `201`, `202`) ve `Location` / `ETag` gibi header'ları da belirleyebilir.
@@ -219,6 +221,36 @@ public class FunctionOutputMapping : IOutputHandler
     }
 }
 ```
+
+#### Aynı task'ı iki kez çalıştırma (`variableKey`)
+
+<sup>New</sup> v0.0.99 Aynı task'ı bir fonksiyonda iki kez çalıştırmak için her girişe farklı bir `variableKey` verin; sonuçlar ayrı slot'lara yazılır:
+
+```json
+"onExecutionTasks": [
+  {
+    "order": 1,
+    "task": { "key": "start-child", "domain": "core", "version": "1.0.0", "flow": "sys-tasks" },
+    "variableKey": "primaryChild",
+    "mapping": { "location": "./src/StartPrimaryChildMapping.csx", "code": "" }
+  },
+  {
+    "order": 1,
+    "task": { "key": "start-child", "domain": "core", "version": "1.0.0", "flow": "sys-tasks" },
+    "variableKey": "secondaryChild",
+    "mapping": { "location": "./src/StartSecondaryChildMapping.csx", "code": "" }
+  }
+]
+```
+
+```csharp
+var primary   = context.OutputResponse["primaryChild"];
+var secondary = context.OutputResponse["secondaryChild"];
+```
+
+:::warning Slot çakışması publish'te reddedilir
+Fonksiyonlarda slot çakışması, `order` değerinden **bağımsız** olarak **tüm `onExecutionTasks`** genelinde denetlenir: iki giriş aynı etkin slot'a düşüyorsa (ör. aynı task iki kez, `variableKey` olmadan) tanım publish'te reddedilir. Bu durum önceden runtime'da `Parallel tasks produced conflicting output for key '...'` hatasıyla patlıyordu. Geçersiz formatlı bir `variableKey` de reddedilir: *"... variableKey 'x' is not a valid response slot name: use letters, digits and '_', starting with a letter or '_' (max 100 characters)."* (Workflow task listelerinde çakışma **order bazında** denetlenir — bkz. [Mapping Rehberi](/docs/components/mappings).)
+:::
 
 ---
 
@@ -395,152 +427,25 @@ Workflow'un fonksiyon listesini keşfetmek için built-in [`catalog` fonksiyonun
 
 ## Sistem Fonksiyonları
 
-vNext platformu, her workflow instance'ı için hazır sistem fonksiyonları sağlar:
+vNext platformu, her workflow instance'ı için hazır **sistem (built-in) fonksiyonları** sağlar: `state`, `data`, `view`, `schema`, `master`, `catalog`, `tasks`, `actions`, `instance-correlation`, `authorize`, `permissions` ve domain seviyesinde `human-task`. Bu fonksiyonların `sys-functions` bileşeni yoktur ve aynı adlı bir custom function'ı **gölgeler**. Tam endpoint, response ve alan referansı için bkz. [Built-in Functions](/docs/components/functions/built-in).
 
 ### State Function
 
-Instance'ın mevcut durum bilgisini döndürür.
+Instance'ın mevcut durumunu, kullanılabilir transition'ları (rol filtreli, `labels` ve `target` ile), etkileşim (`interaction`), timeout ve correlation bilgilerini long-polling için döndürür:
 
-**Endpoint:**
 ```http
 GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/state
 ```
-
-**Response:**
-```json
-{
-  "data": {
-    "href": "/core/workflows/account-opening/instances/d4b161a8-7705-4bfb-9ba4-d76461bb35eb/functions/data?extensions=extension-user-session"
-  },
-  "view": {
-    "loadData": true,
-    "href": "/core/workflows/account-opening/instances/d4b161a8-7705-4bfb-9ba4-d76461bb35eb/functions/view"
-  },
-  "state": "account-type-selection",
-  "status": "A",
-  "activeCorrelations": [],
-  "transitions": [
-    {
-      "name": "select-demand-deposit",
-      "href": "/core/workflows/account-opening/instances/d4b161a8-7705-4bfb-9ba4-d76461bb35eb/transitions/select-demand-deposit"
-    },
-    {
-      "name": "execute-sub",
-      "href": "/core/workflows/account-opening/instances/d4b161a8-7705-4bfb-9ba4-d76461bb35eb/transitions/execute-sub"
-    }
-  ],
-  "eTag": "01KCHWT3QQFM6J9QQD9G4T0VRP"
-}
-```
-
-**Response Alanları:**
-
-| Alan | Tip | Açıklama |
-|------|-----|----------|
-| `data.href` | `string` | Data fonksiyon endpoint'i |
-| `view.loadData` | `boolean` | View'ın data yüklemesi gerekip gerekmediği |
-| `view.href` | `string` | View fonksiyon endpoint'i |
-| `state` | `string` | Mevcut state adı. State'te `alias` tanımlıysa role göre maskelenmiş etiket döner (bkz. aşağıdaki not) |
-| `status` | `string` | Instance durumu (A=Active, C=Completed) |
-| `activeCorrelations` | `array` | Aktif alt korelasyonlar |
-| `transitions` | `array` | Kullanılabilir transition'lar |
-| `eTag` | `string` | Cache kontrolü için ETag değeri |
 
 :::info State Alias (Rol Tabanlı Maskeleme)
 `state` alanı, aktif state'te `alias` tanımlıysa **role göre maskelenmiş** etiketi döndürebilir. İstek yapan aktörün rolleri alias `roles` listesine göre değerlendirilir (DENY her zaman ALLOW'u geçersiz kılar) ve eşleşen alias için istek diline (Accept-Language) uygun `label` döner; o dilde label yoksa `alias.name` döner. `alias` tanımlı değilse veya hiçbir rol eşleşmezse ham `state.key` döner. Detay için bkz. [State Alias](/docs/components/workflow#state-alias-rol-tabanlı-state-maskeleme).
 :::
 
-:::note Yanıt şekli için tam referans
-Yukarıdaki örnek sadeleştirilmiştir. `kind: "scheduled"` zamanlanmış transition girişleri, `incident` (Instance Incidents) bloğu, `interaction`, `functions`, `master` ve `correlations` alanları dahil **tam** response şekli için bkz. [Built-in Functions → State Fonksiyonu](/docs/components/functions/built-in#state-fonksiyonu).
-:::
+Tam yanıt şekli için bkz. [Built-in Functions → State Fonksiyonu](/docs/components/functions/built-in#state-fonksiyonu).
 
-### View Function
+### View ve Schema Function
 
-Instance'ın mevcut state veya transition için view verisini döndürür.
-
-**Endpoint:**
-```http
-GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/view?transitionKey={transition}&platform={platform}
-```
-
-**Query Parametreleri:**
-
-| Parametre | Tip | Açıklama |
-|-----------|-----|----------|
-| `transitionKey` | `string` | Belirli transition için view (opsiyonel) |
-| `platform` | `string` | Hedef platform: `web`, `ios`, `android` |
-
-**Response:**
-```json
-{
-  "key": "account-type-selection-view",
-  "content": "{\"type\":\"form\",\"title\":{\"en-US\":\"Choose Your Account Type\",\"tr-TR\":\"Hesap Türünüzü Seçin\"},\"fields\":[...]}",
-  "type": "Json",
-  "display": "full-page",
-  "label": ""
-}
-```
-
-**Response Alanları:**
-
-| Alan | Tip | Açıklama |
-|------|-----|----------|
-| `key` | `string` | View tanımlayıcısı |
-| `content` | `string` | View içeriği (JSON formatında) |
-| `type` | `string` | İçerik tipi (Json, Html, vb.) |
-| `display` | `string` | Gösterim modu (full-page, popup, bottom-sheet, vb.) |
-| `label` | `string` | Lokalize edilmiş etiket |
-
-### Schema Function
-
-Instance'ın mevcut state veya transition için schema verisini döndürür.
-
-**Endpoint:**
-```http
-GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/schema?transitionKey={transition}
-```
-
-**Response:**
-```json
-{
-  "key": "account-type-selection",
-  "type": "workflow",
-  "schema": {
-    "$id": "https://schemas.vnext.com/banking/account-type-selection.json",
-    "type": "object",
-    "title": "Account Type Selection Schema",
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "required": ["accountType"],
-    "properties": {
-      "accountType": {
-        "type": "string",
-        "oneOf": [
-          {
-            "const": "demand-deposit",
-            "description": "Vadesiz Hesap - Demand Deposit Account"
-          },
-          {
-            "const": "time-deposit",
-            "description": "Vadeli Hesap - Time Deposit Account"
-          },
-          {
-            "const": "investment-account",
-            "description": "Fonlu Hesap - Investment Account"
-          },
-          {
-            "const": "savings-account",
-            "description": "Tasarruf Hesabı - Savings Account"
-          }
-        ],
-        "title": "Account Type",
-        "description": "Type of account to be opened"
-      }
-    },
-    "description": "Schema for account type selection input",
-    "additionalProperties": false
-  }
-}
-```
+`…/functions/view?transitionKey=&platform=` state veya transition view'ını, `…/functions/schema?transitionKey=` transition'ın JSON Schema'sını döndürür (v0.0.99 itibarıyla her ikisi de bileşen `labels` listesini taşır). Ayrıntı: [View Fonksiyonu](/docs/components/functions/built-in#view-fonksiyonu), [Schema Fonksiyonu](/docs/components/functions/built-in#schema-fonksiyonu).
 
 ---
 

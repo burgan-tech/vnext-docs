@@ -8,6 +8,10 @@ description: Fetching instances from other workflows
 
 The GetInstances Task enables fetching instance data from other workflows with support for pagination, sorting, and filtering. This task is useful for cross-workflow data queries and building aggregated views.
 
+:::info[Field protection — v0.0.99]
+The task reads with the **caller's presented credential** and applies the target master schema's `x-roles` / `x-masking` / `x-encryption` — the same read service as instance GET/list. The former system visibility (`SystemRead`) was removed. The presented header set is the input mapping's headers plus every credential header (`sub`, `act_sub`, `position`, `client_id`, `role`) the mapping leaves unset; to read as another identity (e.g. a service role), set it in the input mapping. `X-Request-Id` is forwarded fill-if-absent.
+:::
+
 ## Overview
 
 | Property | Value |

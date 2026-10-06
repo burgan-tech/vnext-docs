@@ -133,6 +133,10 @@ Mapping script'leri incident bilgisine `context.Incident` (`ScriptIncidentInfo`)
 | `TotalIncidentCount` | Instance üzerinde **materialize edilmiş** incident sayısı — tam kalıcı geçmiş **değil**; çözülmemişler artı mevcut transition'da kaydedilenler |
 | `IncidentsLoaded` | Incident'ların bu script bağlamı için gerçekten yüklenip yüklenmediği |
 
+:::info v0.0.99 düzeltmesi
+v0.0.93–v0.0.98 arasında (incident'ların ayrı tabloya taşınmasından sonra) script'ler `HasActiveIncident = true` görürken `ActiveIncident` **`null`** ve `TotalIncidentCount` **`0`** dönüyordu — bir subflow fault'unu ele alan error-boundary mapping'leri dahil. v0.0.99'da `context.Incident` yüklenmiş incident'ları okur; ayrıca child'dan parent'a giden `InstanceSubFaultedEvent` payload'ı artık no-tracking olarak yüklenmiş incident'ları taşır, böylece parent tarafındaki error-boundary script'i child'ın incident bilgisini görür. Bu sürümlerde `ActiveIncident`'ın `null` olmasına karşı yazılmış geçici kontrolleri gözden geçirebilirsiniz.
+:::
+
 ## Migration'lar ve DbMigrator
 
 Geçiş iki migration ile yapıldı: **`MoveInstanceIncidentsToTable`** (yeni tablo + kolon oluşturur) ve **`BackfillInstanceIncidents`** (eski jsonb verisini idempotent şekilde yeni tabloya kopyalar). Büyük tablolarda migration süresi uzayabileceği için DbMigrator artık `SchemaMigration:{CommandTimeoutSeconds=600, LockExpirySeconds=900}` ayarlarını onurlandırır ve herhangi bir şema migration'ı başarısız olursa **non-zero exit code** ile döner.

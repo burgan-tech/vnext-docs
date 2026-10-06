@@ -79,7 +79,9 @@ Property erişimi ve setter metodları (`SetUrl`, `SetHeaders`, `AddHeader`, `Re
 
 ### Reserved trace header'ları
 
-`traceparent`, `tracestate`, `baggage`, `x-request-id`, `X-Correlation-Id` ve `X-Workflow-Instance-Id` task binding'inin `headers` alanında tanımlanamaz — invoker bu anahtarları görmezden gelir (`InvokerHelpers.IsReservedTraceHeader`). Güncel değerler otomatik enjekte edilir: `traceparent`/`tracestate` .NET HttpClient instrumentasyonu ile, workflow-context çifti ise `InvokerHelpers.ApplyTrustedCorrelationHeaders` ile Activity baggage'dan. External HTTP task, orchestrator'ın kendi task span'leri `ActivityContext`'ten oluşturulduğu (in-process Activity-baggage zincirini kesen) bir konumda çalıştığı için pipeline'ın oluşturduğu `TaskTraceContext`'i açıkça taşır — type 6'nın invoke zarfında context taşımasıyla aynı gerekçe.
+`traceparent`, `tracestate`, `baggage`, `X-Correlation-Id` ve `X-Workflow-Instance-Id` task binding'inin `headers` alanında tanımlanamaz — invoker bu anahtarları görmezden gelir (`InvokerHelpers.IsReservedTraceHeader`). Güncel değerler otomatik enjekte edilir: `traceparent`/`tracestate` .NET HttpClient instrumentasyonu ile, workflow-context çifti ise `InvokerHelpers.ApplyTrustedCorrelationHeaders` ile Activity baggage'dan. External HTTP task, orchestrator'ın kendi task span'leri `ActivityContext`'ten oluşturulduğu (in-process Activity-baggage zincirini kesen) bir konumda çalıştığı için pipeline'ın oluşturduğu `TaskTraceContext`'i açıkça taşır — type 6'nın invoke zarfında context taşımasıyla aynı gerekçe.
+
+<sup>New</sup> v0.0.99 `X-Request-Id` bu listeden çıktı ve **fill-if-absent** çalışır: mapping'de / `headers`'ta verilen boş olmayan değer olduğu gibi gönderilir (v0.0.80–v0.0.97 arasında sessizce atılıyordu), yoksa vNext'in kendi request id'si iletilir. Çağrı başına benzersiz UUID isteyen API'ler (ör. OHVPS/BKM) için değeri mapping'de `Guid.NewGuid()` ile üretin. Credential başlıkları (`sub`, `act_sub`, `position`, `client_id`, `role`) mapping vermediyse ya da boş bıraktıysa çağıranın isteğinden iletilir; mapping'deki dolu değer kazanır, 1024 karakteri aşan / kontrol karakteri içeren değerler ve morph-idm'in çözdüğü roller iletilmez. External HTTP task artık `variableKey` slot'una da uyar.
 
 ### `6` mı `22` mi?
 
@@ -91,8 +93,8 @@ Property erişimi ve setter metodları (`SetUrl`, `SetHeaders`, `AddHeader`, `Re
 | Dapr sidecar circuit breaker / remote-invocation timeout korumasına ihtiyaç var mı? | **Tercih edin** | Hayır — bu katmanlar devrede değil |
 | Çağrı, veritabanını da barındıran host içinde mi çalışmalı? | Hayır (izole) | **Dikkat** — Orchestrator veritabanını da barındıran host'tur |
 
-:::warning[Şema paketi type `22`'yi henüz taşımıyor]
-`@burgan-tech/vnext-schema@0.0.54` paketindeki `task-definition.schema.json`, `attributes.type` enum'ında `22` değerini **içermiyor** (type `22` deprecated olduğundan eklenmesi planlanmamaktadır). Bu nedenle domain paketlerinde `npm run validate` bir External HTTP task tanımını **reddeder**; runtime tarafında `publish` ve çalıştırma sorunsuz çalışır.
+:::info[Şema desteği — vnext-schema 0.0.55]
+`@burgan-tech/vnext-schema@0.0.55` ile type `22` `task-definition.schema.json` enum'una eklendi; bu sürümle domain paketlerinde `npm run validate` External HTTP task tanımını kabul eder. 0.0.54 ve öncesi şemalar `22`'yi içermez ve tanımı reddeder (runtime tarafında `publish` ve çalıştırma her iki durumda da sorunsuzdur). Type `22` yine de v0.0.94'ten beri **deprecated**'dır — yeni tanımlarda type `6` HTTP task kullanın.
 :::
 
 :::info

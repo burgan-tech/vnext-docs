@@ -67,7 +67,7 @@ Other components reference this component as a helper through the `scripts` obje
 | `helpers` | array | References to sys-mappings components (`key`, `version`, `domain`, `flow: "sys-mappings"`) |
 | `allowedAssemblies` | string[] | Allowed .NET assemblies for the script context (added to the sandbox allow-list) |
 
-For the allow-list and the default ban list, see [Scripting / Sandbox](/docs/configuration/scripting). For a flow-wide helper/assembly, use workflow [`attributes.scripts`](/docs/components/workflow#scripts-helpers--allowed-assemblies).
+For the allow-list and the default ban list, see [Scripting / Sandbox](/docs/configuration/scripting). Since v0.0.99, `scripts.allowedAssemblies` declared in `sys-flows`, `sys-tasks`, `sys-functions` and `sys-extensions` components is checked at publish (each name must resolve as a framework assembly or a DLL in the plugin directory, otherwise `400`); the check does **not** apply to sys-mappings components. For a flow-wide helper/assembly, use workflow [`attributes.scripts`](/docs/components/workflow#scripts-helpers--allowed-assemblies).
 
 ## REF Encoding
 

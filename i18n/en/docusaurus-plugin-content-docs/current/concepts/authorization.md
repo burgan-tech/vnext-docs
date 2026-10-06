@@ -90,12 +90,17 @@ These patterns are evaluated everywhere **available transition** and **data** au
 
 ## Master Schema Field-Level Visibility
 
-A flow's **master schema** can apply **field-level visibility** by defining the **`x-roles`** keyword on schema properties — i.e. it provides **column-level security**. The Data Function and data-returning endpoints (Get Instance, GetInstances, etc.) run the authorize layer and return only the fields the caller is allowed to see.
+A flow's **master schema** can apply **field-level visibility** by defining the **`x-roles`** keyword on schema properties — i.e. it provides **column-level security**. The Data Function and data-returning endpoints run the authorize layer and return only the fields the caller is allowed to see.
+
+<sup>New</sup> v0.0.99 `x-roles`, `x-masking` and `x-encryption` (in that order) apply on every read surface: **instance GET, instance list, data function, sync start/transition response** and the **GetInstance / GetInstances / GetInstanceData tasks**. Before, instance GET/list returned data unfiltered and the Get* tasks read with system visibility (`SystemRead`, removed); task reads are now evaluated with the caller's presented credential.
+
+**Credential forwarding:** every outbound task type forwards the request headers `sub`, `act_sub`, `position`, `client_id`, `role` where the task mapping leaves them absent or empty; a mapping value wins. Values over 1024 characters or containing control characters are not forwarded, and a role resolved by morph-idm is never forwarded. To read as another identity, set the credential in the input mapping.
 
 > **Note:** `roles` and `queryRoles` are for transition and state authorization. Schema property **field visibility** uses the `x-roles` keyword (same shape: `role` + `grant`).
 
 - Properties **without** an `x-roles` definition are visible to all authorized callers.
-- Properties with `x-roles` use the same system roles and JSONPath grants; `role` may be a static name or a JSONPath expression, `grant` ∈ `allow|deny` (DENY > ALLOW).
+- Properties with `x-roles` use the same system roles and JSONPath grants; `role` may be a static name or a JSONPath expression, `grant` ∈ `allow|deny` (DENY > ALLOW). Since v0.0.99 [combinators](#combinators-allof--anyof) are accepted too.
+- `x-masking` / `x-encryption` `roles` are allow-only exemption lists (no combinators).
 - For structure and examples, see [Schema → Field-Level Authorization: `x-roles`](/docs/components/schema#field-level-authorization-x-roles) and [Schema Definition → `x-roles`](/docs/how-to/view-consept/schema-tanimi).
 - The keyword is defined in `vnext-schema` [view-vocab.json](https://github.com/burgan-tech/vnext-schema/blob/master/vocabularies/view-vocab.json).
 
@@ -114,10 +119,39 @@ The **intent** of a `roles` / `queryRoles` set is interpreted in two ways depend
 
 In both modes **DENY always overrides ALLOW.** A deny-only set lets you express "allow everyone except X" without enumerating every permitted role.
 
-The canonical rule is evaluated over the whole grant set and the caller's **whole role set**, as two groups: `authorized = DenyGroupOk AND AllowGroupOk` — the deny group is an AND (evaluated first), the allow group is an OR, a set with no allow is a blacklist, an empty set allows. <sup>New</sup> v0.0.96 **Rule 5: a caller with no roles cannot clear a role-bound deny.** A static role (`blocked`) or a `$role.$.context…` reference is a statement about the caller's *roles*; with none to compare, "nothing matched" is not evidence the caller is not the denied one, so the deny refuses. Identity-bound denies (the four system roles, `$user.` / `$userBehalfOf.`) keep their normal evaluation. Example: `[deny: blocked]` with no roles → **refused**; `[deny: $InstanceStarter]` with no roles, caller not the starter → allowed. This applies to every surface and every provider and reverses the v0.0.79 behaviour for deny-only sets (more restrictive).
+The canonical rule is evaluated over the whole grant set and the caller's **whole role set**, as two groups: `authorized = DenyGroupOk AND AllowGroupOk` — the deny group is an AND (evaluated first), the allow group is an OR, a set with no allow is a blacklist, an empty set allows. <sup>New</sup> v0.0.96 **Rule 5: a caller with no roles cannot clear a role-bound deny.** A static role (`blocked`) or a `$role.$.context…` reference is a statement about the caller's *roles*; with none to compare, "nothing matched" is not evidence the caller is not the denied one, so the deny refuses. Identity-bound denies (the four system roles, `$user.` / `$userBehalfOf.`) keep their normal evaluation. Example: `[deny: blocked]` with no roles → **refused**; `[deny: $InstanceStarter]` with no roles, caller not the starter → allowed. This applies to every surface and every provider and reverses the v0.0.79 behaviour for deny-only sets (more restrictive). <sup>New</sup> v0.0.99 **Rule 6:** a role-less caller is no longer admitted by an allow `$role.` grant whose path resolves to `""` — a role-bound leaf is Unknown for them and an allow admits only on Yes.
 
 :::warning Backward impact
 An existing deny-only set is now treated as a **blacklist** (open to everyone except the listed roles). If your intent was "deny everyone," convert it to an allow-list by adding at least one `allow` grant.
+:::
+
+---
+
+## Combinators: allOf / anyOf
+
+<sup>New</sup> v0.0.99 — A grant may carry **exactly one** of `role`, `allOf` (AND) or `anyOf` (OR); `grant` stays on the outer grant. Children are `{ "role": "..." }` only (at least one, no `grant`, no nesting — depth 1); an unknown member on a child is rejected. The plain form is unchanged.
+
+```json
+"roles": [
+  { "allOf": [ { "role": "morph-idm.officer" }, { "role": "$user.$.context.Instance.Data.branch.managerId" } ], "grant": "allow" },
+  { "anyOf": [ { "role": "morph-idm.auditor" }, { "role": "morph-idm.risk" } ], "grant": "deny" }
+]
+```
+
+**Accepted in:** transition `roles`, workflow/state `queryRoles`, `availableIn[].roles`, function `roles`, `interaction.longPoll.roles`, subflow overrides and schema `x-roles`. **Not accepted in** `x-masking.roles` / `x-encryption.roles`.
+
+**Three-valued evaluation:** static roles and `$role.` leaves are **Unknown** for a role-less caller; identity leaves (system roles, `$user.`, `$userBehalfOf.`) are always Yes/No.
+
+| `allOf` children | Result | `anyOf` children | Result |
+|------------------|--------|------------------|--------|
+| any **No** | No | any **Yes** | Yes |
+| else any **Unknown** | Unknown | else any **Unknown** | Unknown |
+| all **Yes** | Yes | all **No** | No |
+
+A **deny fires on Yes or Unknown**; an **allow admits only on Yes**. Dynamic paths are checked per leaf at publish (must start with `$.context.`, case-sensitive, non-empty path); malformed schema `x-roles` entries and function `roles` with a malformed dynamic path are now rejected at publish. The `permissions` matrix shows combinator grants with `allOf` / `anyOf` and **without `role`**.
+
+:::warning Rollout floor
+Author the first combinator only after every pod — and every domain that stamps overrides onto this one — runs v0.0.99; an older pod cannot read it. Do not binary-downgrade once combinators are published.
 :::
 
 ---
@@ -128,11 +162,12 @@ An existing deny-only set is now treated as a **blacklist** (open to everyone ex
 |---------|-------|--------|
 | Transition | `roles` | Who can trigger the transition |
 | Transition `availableIn` entry | `roles` <sup>New</sup> | Who is offered the transition in that state (AND with transition `roles`) |
-| Flow / State | `queryRoles` | Who can query instances and states (state level overrides root; a conjunction down the active subflow chain). <sup>New</sup> v0.0.95 decided at the **gateway** via `authorize?queryRoles=true` — the read functions (`state`, `data`, `view`, `schema`, `master`, `tasks`, `actions`, incidents) no longer refuse in process |
+| Flow / State | `queryRoles` | Who can query instances and states (state level overrides root). <sup>New</sup> v0.0.99 inside a SubFlow the decision is made at the **deepest active leaf only**: parent-stamped override ?? leaf state `queryRoles` ?? leaf workflow `queryRoles`; the root/intermediate AND was removed, which loosens access where the root declares `queryRoles` but the leaf has none — add `subFlow.overrides.states.<state>.queryRoles` or leaf `queryRoles`. Parent-owned transitions and `?ack=true` are unchanged. <sup>New</sup> v0.0.95 decided at the **gateway** via `authorize?queryRoles=true` — the read functions (`state`, `data`, `view`, `schema`, `master`, `tasks`, `actions`, incidents) no longer refuse in process |
 | State `interaction.longPoll` | `roles` / `rule` <sup>New</sup> v0.0.94 | Who receives the long-poll termination signal and may acknowledge. <sup>New</sup> v0.0.95 decided at the gateway via `authorize?ack=true`; `POST …/longpoll/ack` no longer gates in process |
 | Function | `roles` | Who sees it in discovery (`/info`, `catalog`). <sup>New</sup> As of v0.0.88 this is no longer a gate on a direct custom function call — only the `authorize` function evaluates it |
 | State `alias` | `roles` | The role-masked view of a state |
-| Master schema property | `x-roles` | Column-level data visibility |
+| Master schema property | `x-roles` | Column-level data visibility (combinators accepted since v0.0.99) |
+| Master schema property | `x-masking.roles` / `x-encryption.roles` <sup>New</sup> v0.0.99 | Who sees the raw value (allow-only exemption list; no combinators) |
 
 ## One Evaluation Core <sup>New</sup>
 

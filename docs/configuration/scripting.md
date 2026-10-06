@@ -30,6 +30,7 @@ vNext script motoru (mapping, rule, timer, vb.), helper bileşenlerini ve sandbo
         "System.Linq.Expressions",
         "System.Text.RegularExpressions",
         "Microsoft.CSharp",
+        "System.ObjectModel",
         "netstandard"
       ],
       "BannedNamespaces": []
@@ -48,12 +49,28 @@ vNext script motoru (mapping, rule, timer, vb.), helper bileşenlerini ve sandbo
 | `Sandbox.Enabled` | boolean | Sandbox güvenlik kısıtlamalarını etkinleştirir |
 | `Sandbox.AllowUnsafe` | boolean | `unsafe` kod bloklarına izin (varsayılan `false`) |
 | `Sandbox.PluginDirectory` | string | Plugin/3. parti assembly'lerin yüklendiği dizin (varsayılan `/app/assemblies`) |
-| `Sandbox.AllowedAssemblies` | string[] | Script bağlamına izinli .NET assembly'leri (taban allow-list) |
+| `Sandbox.AllowedAssemblies` | string[] | Script bağlamına izinli .NET assembly'leri (taban allow-list). v0.0.99'da tabana `System.ObjectModel` eklendi — `ExpandoObject` üzerinde `foreach` önceden `CS0012` ile derlenemiyordu |
 | `Sandbox.BannedNamespaces` | string[] | Ek olarak yasaklanan namespace'ler (varsayılan ban listesine eklenir) |
 
 :::info[Allow-list nasıl genişler?]
 Mapping objelerindeki ve flow-level `attributes.scripts.allowedAssemblies` değerleri, bu taban allow-list'e **eklenir**. Yani bir helper'ın ihtiyaç duyduğu assembly (ör. `Newtonsoft.Json`) global ayara dokunmadan ilgili bileşende bildirilebilir. Bkz. [Mapping Bileşeni](/docs/components/mapping-component).
 :::
+
+## `allowedAssemblies` Publish Kontrolü
+
+v0.0.99'dan itibaren `scripts.allowedAssemblies` bildiren bileşenler (flow seviyesinde veya herhangi bir script slot'unda) **publish sırasında** denetlenir. Kapsam: `sys-flows`, `sys-tasks`, `sys-functions`, `sys-extensions` — **`sys-mappings` hariç**.
+
+- Her **basit assembly adı** (uzantısız, ör. `Newtonsoft.Json`) ya bir framework (TPA) assembly'si olarak ya da `Sandbox.PluginDirectory` içindeki bir DLL olarak çözülmelidir.
+- Çözülemezse publish `400` döner:
+
+  ```plaintext
+  Assembly '{name}' declared in '{member}' is not available in this runtime (neither a framework assembly nor in the plugin directory). Use the simple assembly name without extension, or have the assembly mounted by the platform team.
+  ```
+
+  `member` hatanın yerini gösterir, ör. `sys-flows.states[0].onEntries[1].mapping.scripts.allowedAssemblies[0]`.
+- Kontrol **`Sandbox.Enabled=false` olsa bile** çalışır: önceden zararsız olan eski/yanlış adlar bir sonraki publish'te `400` üretir — domain paketlerinizi yükseltmeden önce bildirilen adları temizleyin.
+- Hiçbir script derlenmez; helper/`REF` referansları çözülmez. Bildirilmemiş bir assembly ihtiyacı hâlâ çalışma anında hata verir.
+- Plugin dizini process başına bir kez okunur; yeni bir DLL mount edildiğinde host'u yeniden başlatın.
 
 ## Secret Cache
 

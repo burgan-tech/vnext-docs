@@ -16,7 +16,7 @@ Functions support three invocation styles:
 
 1. **Domain-level**: `/api/v1/{domain}/functions/{function}` — workflow-independent.
 2. **Instance-level**: `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}` — runs in instance context.
-3. **Built-in**: State, Data, View — three system-provided functions (see [Built-in Functions](/docs/components/functions/built-in)).
+3. **Built-in**: State, Data, View, Schema, Master, Catalog, Tasks, Instance Correlation and more — system-provided functions (see [Built-in Functions](/docs/components/functions/built-in)).
 
 ## Required Fields
 

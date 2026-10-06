@@ -260,6 +260,15 @@ var paymentSchedule = context.Instance.Data.paymentSchedule;
 var currentLogin = context.Instance.Data.login.currentLogin;
 ```
 
+<sup>New</sup> v0.0.99 — Şemada `x-encryption: { "type": "encrypt" }` ile işaretli alanlar script'lere (`context.Instance.Data`, `context.Instance.LatestData.Data` ve runtime'ın instance verisini koyduğu `context.Body`) **jeton** (`ENCRYPTED:AES256:i1:…`) olarak görünür; `x-masking` ise okuma yüzeylerine özgüdür, script'ler ham değeri görür. Düz değere ihtiyaç duyan kod instance'ın **kendi** verisinden yol vererek açar:
+
+```csharp
+var tckn = await context.Instance.DecryptAsync("customer.tckn", cancellationToken);
+// düz alan, bilinmeyen yol ya da yol yerine verilen jeton → null
+```
+
+Aynı jetonu aynı yola geri yazmak etkisizdir, düz metin yazmak yeniden şifreler; jetonu başka bir alana kopyalamak reddedilir. DynamicExpresso kuralları jetonu çözemez — encrypt alan üzerindeki koşulu C# script olarak yazın. Ayrıntı: [Schema Tanımı → `x-encryption`](/docs/how-to/view-consept/schema-tanimi).
+
 ### Related
 
 <sup>New</sup> `context.Related`, betiğin **ilişkili** bir workflow instance'ının verisini okumasını sağlar: bu instance'ı SubFlow/SubProcess olarak başlatan **parent** (bir üst seviye) veya bu instance'ın kendi **correlation'ları** (bir alt seviye). Bu API'den önce ilişkili veriye ulaşmanın tek yolu, veriyi output mapping'lerle parent/child sınırından kopyalamaktı — bu kopya hem bayatlıyor hem de instance payload'ını büyütüyordu.
@@ -293,8 +302,8 @@ Davranış ve tasarım notları:
 - Okuma, mevcut transition'ın **transaction'ı içinde** çalışır; aynı transition'da motorun kendi commit edilmemiş yazmalarını görür.
 - Cross-domain okuma internal endpoint'ler üzerinden, timeout / retry / circuit-breaker ile yapılır; aynı domain'de süreç dışına çıkılmaz.
 
-:::warning x-roles kopya ile taşınmaz
-`Related` okumaları **filtresizdir** (query-role kontrolü ve `x-roles` alan filtresi uygulanmaz) — çağrı, motorun kendi correlation çerçevesi içindeki deterministik bir okumadır. Bu yüzden ilişkili instance'ın `x-roles` ile kısıtlı bir alanını output mapping'le **bu** instance'ın verisine kopyalamak, o alanı bu instance'ı okuyabilen herkese açar. Kısıtlı alanları kopyalamadan, karar vermek için okuyup bırakın.
+:::warning Alan koruması kopya ile taşınmaz
+`Related` okumaları **filtresizdir** (query-role kontrolü ve `x-roles` / `x-masking` / `x-encryption` alan korumaları uygulanmaz; v0.0.99'da da korumalı okuma yüzeyleri arasında değildir). `x-masking` alanları ham gelir; `encrypt` alanları saklandığı gibi jeton olarak gelir ve `DecryptAsync` yalnızca instance'ın kendi verisini açtığından ilişkili instance'ın jetonu çözülemez — çağrı, motorun kendi correlation çerçevesi içindeki deterministik bir okumadır. Bu yüzden ilişkili instance'ın `x-roles` ile kısıtlı bir alanını output mapping'le **bu** instance'ın verisine kopyalamak, o alanı bu instance'ı okuyabilen herkese açar. Kısıtlı alanları kopyalamadan, karar vermek için okuyup bırakın.
 :::
 
 ### Mutations

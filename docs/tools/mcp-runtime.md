@@ -74,7 +74,7 @@ Her MCP instance'ı **tek domain**'dir — `OrchestrationBaseUrl` tek bir domain
 ## Tool grupları
 
 - **ComponentTools** — `list_components`, `list_workflows` / `list_tasks` / `list_functions` / `list_views` / `list_extensions` / `list_schemas` / `list_mappings`, `get_component`, `get_mapping_code` *(`AllowCodeRead` ile gated)*. Orchestration **Component Discovery API**'yi (`GET /{domain}/components/*`) sarar.
-- **RuntimeTools** — `list_instances`, `get_instance`, `get_instance_data`, `get_instance_state`, `get_instance_history`, `get_instance_hierarchy`, `get_runtime_config`.
+- **RuntimeTools** — `list_instances`, `get_instance`, `get_instance_data`, `get_instance_state`, `get_instance_history`, `get_instance_correlation` (v0.0.99 — eski adı `get_instance_hierarchy`), `get_runtime_config`.
 - **MetaTools** — `query_features`, `get_version_info`, `list_known_issues`, `get_deprecations`, `check_security_policy`, `list_meta_components`. `vnext-meta` npm paketini okur.
 - **MutatingRuntimeTools** *(`AllowMutations` ile gated)* — `start_instance`, `run_transition`, `retry_instance`, `publish_definitions`, `invalidate_cache`.
 

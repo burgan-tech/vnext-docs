@@ -26,7 +26,7 @@ Bu sayfa `overrides` bloğunun tam referansıdır. Long-poll ve state/transition
 
 **Hiçbir zaman override edilemez:** kurallar (view `rule`, long-poll `rule`) ve long-poll `terminate`. Bir override, long-poll tanımlamayan bir child state'e **asla** long-poll eklemez.
 
-Tüm `roles` / `queryRoles` listelerinde `DENY`, `ALLOW`'u her zaman geçersiz kılar (bkz. [Authorization](../concepts/authorization)).
+Tüm `roles` / `queryRoles` listelerinde `DENY`, `ALLOW`'u her zaman geçersiz kılar (bkz. [Authorization](../concepts/authorization)). v0.0.99 ile bu listeler `allOf` / `anyOf` kombinatör grant'larını da kabul eder.
 
 ## JSON Örneği
 
@@ -151,11 +151,13 @@ Sınırlar:
 
 ## Authorize ile ilişki
 
-<sup>New</sup> v0.0.95 ile tek karar noktası olan `authorize` fonksiyonu (`GET .../instances/{id}/functions/authorize?queryRoles=true`), aktif SubFlow zincirinin **tamamı** boyunca query rollerini **kesişim (conjunction)** olarak değerlendirir ve her atlamada o atlamanın override'larını okur: parent'ın `overrides.states.<child>.queryRoles` değeri child hop'unda, child'ın kendi parent'a uyguladığı override'lar bir sonraki hop'ta kullanılır. `authorize?ack=true` de long-poll rol override'larını aynı çözümlemeyle okur. Ayrıntılar için bkz. [Authorization](../concepts/authorization).
+<sup>New</sup> v0.0.95 ile tek karar noktası `authorize` fonksiyonudur (`GET .../instances/{id}/functions/authorize?queryRoles=true`). <sup>New</sup> v0.0.99 itibarıyla instance bir SubFlow içindeyken karar **yalnızca en derin aktif SubFlow yaprağında** verilir: parent'ın damgaladığı `overrides.states.<state>.queryRoles` ?? yaprak state'in `queryRoles`'u ?? yaprak workflow'un `queryRoles`'u (boş yaprak izin verir). Root ve ara seviyeler arasındaki kesişim (conjunction) kaldırıldı.
+
+Bu nedenle **override, parent'ın bir yaprağı kısıtlamasının yoludur**: root `queryRoles` tanımlayıp yaprak hiç tanımlamıyorsa root kısıtı artık uygulanmaz (erişim gevşer). Kısıtı korumak için parent'ta `subFlow.overrides.states.<state>.queryRoles` ya da yaprakta `queryRoles` tanımlayın. Parent'a ait transition'lar ve `authorize?ack=true` (long-poll rol override'larını aynı çözümlemeyle okur) değişmedi. Ayrıntılar için bkz. [Authorization](../concepts/authorization).
 
 ## İlgili Konular
 
 - [Workflow](../components/workflow) — `state.subFlow` ve `overrides` şeması
 - [Tutorial: SubFlow ve SubProcess](../getting-started/tutorial-subflow) — SubFlow kurulumu adım adım
-- [Authorization](../concepts/authorization) — rol grant'leri, `authorize` fonksiyonu ve zincir değerlendirmesi
+- [Authorization](../concepts/authorization) — rol grant'leri, `authorize` fonksiyonu ve yaprak değerlendirmesi
 - [View Seçimi](./view-selection) — child kurallarının view'ı nasıl seçtiği

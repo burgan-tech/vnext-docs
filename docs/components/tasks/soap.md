@@ -80,6 +80,13 @@ Mapping içinde `SoapTask` sınıfı üzerinden erişilebilir property'ler ve se
 | `ValidateSSL` | Read-only | Tanım dosyasında ayarlanır |
 | `AcceptedStatusCodes` | Read-only | Tanım dosyasında ayarlanır |
 
+:::info[Header iletimi — v0.0.99]
+- **`X-Request-Id`** artık reserved değildir (**fill-if-absent**): mapping'de / `headers`'ta verilen boş olmayan değer olduğu gibi gönderilir; yoksa vNext'in kendi request id'si iletilir. Çağrı başına benzersiz UUID isteyen API'ler için mapping'de `Guid.NewGuid()` ile üretin.
+- **Credential başlıkları** `sub`, `act_sub`, `position`, `client_id`, `role` mapping'de verilmemiş ya da boşsa çağıranın isteğinden iletilir; mapping'deki dolu değer kazanır. 1024 karakteri aşan ya da kontrol karakteri içeren değerler ve morph-idm'in çözdüğü roller iletilmez.
+
+Ayrıntı: [Gözlemlenebilirlik → reserved header'lar](/docs/how-to/observability).
+:::
+
 ## Standart Yanıt
 
 ```json

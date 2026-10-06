@@ -38,11 +38,11 @@ Every workflow definition must include the following top-level fields (per `vnex
 `attributes` is the workflow's behavioral definition. The schema requires:
 
 - `type` — workflow type (C/F/S/P)
-- `states` — list of workflow states (at least one `Initial` state)
+- `states` — list of workflow states. Since v0.0.99 **at most one** `Initial` state (`stateType: 1`) may be declared and it is optional; without one the instance is born in the runtime's implicit `$start` state and `startTransition.target` decides where it enters (see [Start without an Initial state](#start-without-an-initial-state-start))
 - `startTransition` — start transition definition
 - `labels` — multi-language labels
 
-Optional fields include `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, `output` (sync response mapping — see [Output Mapping](#output-mapping)), `event` (workflow-level event definition — see [Event-Driven Transitions](#event-event-driven-workflows)), and `config` (flow-level configuration — currently built-in function cache tuning, `config.functionCache.ttlSeconds`; host default 60s; the State Function is managed separately by the platform).
+Optional fields include `executionType` (v0.0.99, see [Execution mode](#execution-mode-executiontype)), `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, `output` (sync response mapping — see [Output Mapping](#output-mapping)), `event` (workflow-level event definition — see [Event-Driven Transitions](#event-event-driven-workflows)), and `config` (flow-level configuration — currently built-in function cache tuning, `config.functionCache.ttlSeconds`; host default 60s; the State Function is managed separately by the platform).
 
 ## Capability Matrix
 
@@ -76,9 +76,29 @@ The workflow's **`schema`** field defines the main structure of **instance data*
 
 A specially defined transition. Used to update instance data without locking the instance — and to advance the instance under parallel load. `target` must always be `$self`. See [Transition Execution Model](#transition-execution-model-lock-and-busy-check) below for its execution semantics.
 
+### Start without an Initial state (`$start`)
+
+Since v0.0.99 a workflow may declare **at most one** Initial state; it is no longer required.
+
+- With an Initial state, behavior is unchanged.
+- Without one, the instance is born in the reserved implicit **`$start`** state (no tasks, view or transitions; typed Initial; never listed in `states`) and `startTransition.target` decides where it enters. The first transition record is `$start → step-1`.
+- `currentState` may temporarily be **`$start`** until the start transition commits (async start, subflow child creation).
+- `startTransition.target` must be a **declared state**; `$self`, `$start` or empty are rejected at publish.
+- An instance stranded at `$start` (async start job failed permanently) can only leave through well-known transitions with no `availableIn` restriction; `availableIn` cannot name `$start`.
+
+Publish errors: `Workflow may contain at most one initial state. Found: N.` · `State key '$start' is reserved by the runtime.` · `StartTransition must declare a target state.` · `The 'target' value in StartTransition does not match any state 'X'.` Requires vnext-schema `0.0.55`.
+
+### Execution mode (`executionType`)
+
+Since v0.0.99 `executionType` (`"S"` sync / `"A"` async) may be set on the flow (`attributes.executionType`), on state transitions, `sharedTransitions` and `startTransition`. **Precedence:** transition → flow → the caller's `?sync` query (default `false` = async); when the definition sets a value the query parameter is ignored. Not applied to automatic transitions, runtime-internal paths or subflow start/forward. Effective sync → `200` + full instance; async → `202` `{ id, status }`. Trace tags: `vnext.execution.requested`, `vnext.execution.effective` (`SYNC`/`ASYNC`), `vnext.execution.overridden=true` only when the definition changed the caller's mode. Invalid value → publish error `Unknown execution type: X`. See [Sync vs Async execution](/docs/how-to/async-sync).
+
+```json
+{ "key": "submit", "target": "review", "triggerType": 0, "executionType": "S" }
+```
+
 ### Shared Transitions
 
-**Common transitions** accessible from multiple states. Specify via `availableIn` array which states can trigger it.
+**Common transitions** accessible from multiple states. Specify via `availableIn` array which states can trigger it. Since v0.0.99, `roles` on transitions and `availableIn` entries also accept `allOf` / `anyOf` combinators — see [Authorization](/docs/concepts/authorization).
 
 ### Cancel
 
@@ -112,6 +132,8 @@ Defines the list of **extensions** that will run for the flow and instance. Exte
   "allowedAssemblies": ["System.Security.Cryptography"]
 }
 ```
+
+Since v0.0.99 every declared `allowedAssemblies` name (flow level or any script slot) is checked at publish: it must resolve as a framework (TPA) assembly or a DLL in `Scripting:Sandbox:PluginDirectory`, otherwise publish returns `400` (`Assembly '{name}' declared in '{member}' is not available in this runtime …`). The check runs even with `Scripting:Sandbox:Enabled=false`.
 
 The same `scripts` object can be defined on any mapping object. Mapping `encoding` may also be **`REF`** (a reference to a sys-mappings component instead of inline code). See [Mapping Component](/docs/components/mapping-component) and [Scripting / Sandbox](/docs/configuration/scripting).
 
@@ -162,7 +184,7 @@ Start, state-level, and shared transitions may declare an optional `resourceLock
 
 ### Query Roles
 
-Authorization mechanism. Holds the information about **who can query** the workflow and the states within an instance. `queryRoles` can be defined at two levels: the **flow (root)** level and each **state** level. **Precedence:** the instance's **current state** `queryRoles` is evaluated first; if the state has none, the flow-level `queryRoles` is used as the base. It is enforced by the built-in **state/data/view/schema** read functions; if the caller is not allowed, the function returns **`403`**. See [Built-in Functions → QueryRoles authorization in read functions](/docs/components/functions/built-in#queryroles-authorization-in-read-functions).
+Authorization mechanism. Holds the information about **who can query** the workflow and the states within an instance. `queryRoles` can be defined at two levels: the **flow (root)** level and each **state** level. **Precedence:** the instance's **current state** `queryRoles` is evaluated first; if the state has none, the flow-level `queryRoles` is used as the base. Since v0.0.95 the decision is made by `authorize?queryRoles=true`, called by the Internal Gateway; read functions no longer return `403` in-process. Since v0.0.99 that decision is taken **at the deepest active SubFlow leaf only** (parent-stamped override ?? leaf state `queryRoles` ?? leaf workflow `queryRoles`); the root/intermediate AND was removed, which loosens access where the root declares `queryRoles` but the leaf has none — add `subFlow.overrides.states.<state>.queryRoles` or leaf `queryRoles` where needed. `allOf` / `anyOf` combinators are accepted in `queryRoles` since v0.0.99. See [Built-in Functions → QueryRoles authorization in read functions](/docs/components/functions/built-in#queryroles-authorization-in-read-functions) and [Authorization](/docs/concepts/authorization).
 
 ### State Notifications
 
@@ -198,7 +220,7 @@ A state may declare an optional `interaction.longPoll` block that makes **long-p
 |-------|------|----------|-------------|
 | `terminate` | boolean | yes | Whether leaving the state closes the open long-poll request |
 | `fallbackTimeoutSeconds` | integer | no | Max seconds to hold the request open before falling back (`minimum: 1`). If the client cannot send an ack, the platform closes the request automatically after this duration |
-| `roles` | array | yes | Roles allowed to use the long-poll interaction. DENY overrides ALLOW |
+| `roles` | array | conditional | Roles allowed to use the long-poll interaction. DENY overrides ALLOW; `allOf` / `anyOf` combinators accepted since v0.0.99 |
 
 ```json
 {
@@ -216,18 +238,23 @@ A state may declare an optional `interaction.longPoll` block that makes **long-p
 
 #### The `interaction` object in the State response
 
-The State function response carries an `interaction` object **whenever the state declares `interaction.longPoll`** (subject to role grants) — regardless of the `terminate` value:
+When the State function response carries the `interaction` object depends on `terminate` (always subject to the interaction gate: `rule`, else `roles`, else allow):
+
+- **`terminate: true`** — since v0.0.95 the block is returned **only while an ack is outstanding** (the pipeline paused on entry and no ack/fallback has arrived yet). It carries `ack.href`.
+- **`terminate: false`** — since v0.0.98 the block is returned **whenever the instance is in the declaring state**, with **no `ack`**; nothing is armed server-side. (v0.0.95–v0.0.97 suppressed it by mistake.)
 
 ```json
-"interaction": {
-  "terminateLongPoll": false,
-  "fallbackTimeoutSeconds": 600
-}
+"interaction": { "terminateLongPoll": false, "fallbackTimeoutSeconds": 120 }
 ```
 
-- `terminateLongPoll: true` → the client terminates its long-poll, renders the entered state, and acknowledges via the included `ack` HREF (a scheduled fallback resumes the pipeline if not acknowledged within `fallbackTimeoutSeconds`, default `60`).
-- `terminateLongPoll: false` → the client restarts the long-poll request if it has stopped — independent of the instance status — and keeps retrying within the `fallbackTimeoutSeconds` window.
-- `ack` is present only when `terminateLongPoll` is `true`.
+```json
+"interaction": { "terminateLongPoll": true, "fallbackTimeoutSeconds": 60, "ack": { "href": "/api/v1/core/workflows/account-opening/instances/{id}/longpoll/ack" } }
+```
+
+- `terminateLongPoll` and `fallbackTimeoutSeconds` are always present; `fallbackTimeoutSeconds` is the effective value (the state's own or a parent override; default `60`).
+- `terminateLongPoll: true` → the client terminates its long-poll, renders the entered state, and acknowledges via `ack.href` (a scheduled fallback resumes the pipeline if not acknowledged in time).
+- `terminateLongPoll: false` → no ack; `fallbackTimeoutSeconds` replaces the client's default long-poll window (default 60s; a state declaring `120` → the client polls for 120s).
+- `ack` is present only when `terminateLongPoll` is `true`. In a subflow the child's block bubbles up and `ack.href` is rewritten to the polled (top) instance.
 
 #### Long Poll Acknowledge
 
@@ -272,7 +299,7 @@ Autos are evaluated after **every** `updateData`, so "accumulate data, advance w
 - In scenarios that keep pushing data while the instance is active (telemetry, parallel service results, background tasks), give the client **`updateData`**, not `stateTransition`.
 - Under parallel `updateData`, mappings should return **delta-only** output: a full echo can overwrite concurrent writers' fresher values with stale copies.
 - Each accepted `updateData` produces two data rows (request payload + task output). The data version is computed as `MAX(VersionNo)+1` under a per-instance `FOR UPDATE` lock; every row is persisted the moment it is produced.
-- Parallel branches at the same order need **distinct task definitions** (the task-journal key is the `transition+task+order` triple).
+- To run the same task more than once at the same order, give each entry a distinct `variableKey` (v0.0.99); otherwise their responses file under the same slot and publish rejects the definition — see [Tasks → Execution Order](/docs/components/tasks/).
 :::
 
 > **Reference:** [vnext #877](https://github.com/burgan-tech/vnext/pull/877) — Busy-as-mutex locking, status-neutral updateData, and immediate InstanceData persistence.

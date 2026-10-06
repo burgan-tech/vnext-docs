@@ -96,6 +96,10 @@ Diğer bileşenlerin mapping objelerinde (ve workflow flow-level `attributes`'ı
 
 `allowedAssemblies` ile sandbox allow-list arasındaki ilişki ve varsayılan ban listesi için bkz. [Scripting / Sandbox Yapılandırması](/docs/configuration/scripting).
 
+:::note `allowedAssemblies` publish kontrolü (v0.0.99)
+v0.0.99'dan itibaren `scripts.allowedAssemblies` bildiren `sys-flows`, `sys-tasks`, `sys-functions` ve `sys-extensions` bileşenleri publish'te denetlenir: her ad bir framework assembly'si ya da plugin dizinindeki bir DLL olarak çözülmelidir, aksi halde publish `400` döner. Bu kontrol **sys-mappings bileşenlerinin publish'ine uygulanmaz**; ayrıca kontrol sırasında helper/`REF` referansları çözülmez — helper'ın ihtiyaç duyduğu assembly'yi tüketen bileşende bildirdiğinizde ad, o bileşenin publish'inde doğrulanır. Ayrıntı: [Scripting / Sandbox → allowedAssemblies Publish Kontrolü](/docs/configuration/scripting#allowedassemblies-publish-kontrolü).
+:::
+
 **Flow-level scripts:** Bir helper veya assembly tüm flow boyunca gerekiyorsa workflow `attributes.scripts` altında tanımlanır — bkz. [Workflow → Scripts](/docs/components/workflow#scripts-helpers--allowed-assemblies).
 
 ---

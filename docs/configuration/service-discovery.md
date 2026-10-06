@@ -104,7 +104,7 @@ Tanınmayan bir `Provider` değeri `http`'ye geriler — okunaksız bir provider
 
 **Sidecar `ERR_*` hataları** `remote_network_error`'a normalize edilir: sidecar hedefe ulaşamadığında `HTTP 500` + `{"errorCode":"ERR_DIRECT_INVOKE",…}` döner, `DaprRemoteTransport` bunu `HttpRequestException`'a çevirir, böylece error boundary'ler transport hatası olarak görmeye devam eder.
 
-**Retry profilleri**: okuma çağrıları (instance/data/state/view/hierarchy/list) retry edilir; mutasyonlar (`start`, subflow-forward, transitions, `sub/*`, busy, retry) **tek deneme** ile çağrılır — bu, `RemotePolicyFactory`'de yaşar çünkü Dapr resiliency hedefleri yalnızca app-id ve status code'a göre filtreler, mutasyon-tekilliğini ifade edemez.
+**Retry profilleri**: okuma çağrıları (instance/data/state/view/instance-correlation/list) retry edilir; mutasyonlar (`start`, subflow-forward, transitions, `sub/*`, busy, retry) **tek deneme** ile çağrılır — bu, `RemotePolicyFactory`'de yaşar çünkü Dapr resiliency hedefleri yalnızca app-id ve status code'a göre filtreler, mutasyon-tekilliğini ifade edemez.
 
 ## registry (kayıt / health)
 

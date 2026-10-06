@@ -11,7 +11,7 @@ Fan-Out Task, instance verisinden **çalışma zamanında** bir koleksiyon çöz
 Var olma sebebi, tasarım zamanında çözülemeyen paralellik ihtiyacıdır: eleman sayısı iş akışı tanımından değil **veriden** gelir — imzalanacak dokümanlar dizisi, bildirim gönderilecek alıcı listesi, mutabakatı yapılacak hesap kümesi.
 
 :::tip[Statik paralellik için Fan-Out'a ihtiyacınız yok]
-Aynı `order` değerine sahip, sayısı tanımda **sabit ve bilinen** task'lar zaten paralel çalışır (bkz. [Tasks Genel Bakış → Çalıştırma Sırası](/docs/components/tasks/)). Fan-Out'a yalnızca eleman sayısı **veriden** geldiğinde uzanın.
+Aynı `order` değerine sahip, sayısı tanımda **sabit ve bilinen** task'lar zaten paralel çalışır (bkz. [Tasks Genel Bakış → Çalıştırma Sırası](/docs/components/tasks/)). Aynı task'ı aynı `order`'da birden fazla kez çalıştırıyorsanız, v0.0.99'dan itibaren her girişe farklı bir `variableKey` verin; aksi halde yanıtlar aynı slot'a düşer ve tanım publish'te reddedilir. Fan-Out'a yalnızca eleman sayısı **veriden** geldiğinde uzanın.
 :::
 
 :::info[Şema desteği v0.0.53'ten itibaren mevcut]

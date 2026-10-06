@@ -15,9 +15,11 @@ Function APIs provide system-level operations for workflow instances. These buil
 3. [Data Function](#data-function)
 4. [View Function](#view-function)
 5. [Master Function](#master-function)
-6. [Authorization](#authorization)
-7. [Best Practices](#best-practices)
-8. [Related Documentation](#related-documentation)
+6. [Instance Correlation Function](#instance-correlation-function)
+7. [Authorization](#authorization)
+8. [Function Metrics](#function-metrics)
+9. [Best Practices](#best-practices)
+10. [Related Documentation](#related-documentation)
 
 ## Overview
 
@@ -28,6 +30,11 @@ The vNext Runtime platform provides three core function APIs that are automatica
 | **State** | Long-polling for instance state | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state` |
 | **Data** | Retrieve instance data | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/data` |
 | **View** | Get view content | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/view` |
+| **Instance Correlation** (v0.0.99) | Downward tree of the subflows/subprocesses an instance spawned | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/instance-correlation` |
+
+:::warning `hierarchy` removed (v0.0.99)
+The old `…/functions/hierarchy` route was removed in v0.0.99 and replaced by [`instance-correlation`](#instance-correlation-function). There is **no alias** — the old path falls through to custom-function resolution and returns `404`.
+:::
 
 > **Note:** For Schema Function and custom user-defined functions, see [Custom Functions](/docs/components/functions/custom).
 
@@ -75,9 +82,15 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
   },
   "interaction": {
     "terminateLongPoll": false,
-    "fallbackTimeoutSeconds": 600
+    "fallbackTimeoutSeconds": 120
   },
-  "state": "active",
+  "state": "review",
+  "stateType": "intermediate",
+  "stateSubType": "human",
+  "stateLabels": [
+    { "label": "İnceleme", "language": "tr-TR" },
+    { "label": "Review", "language": "en-US" }
+  ],
   "status": "A",
   "activeCorrelations": [
     {
@@ -98,6 +111,13 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
     {
       "href": "/core/workflows/oauth-flow/instances/f410f37d-dc4b-4442-af84-e3a4707bd949/transitions/approve",
       "name": "approve",
+      "labels": [{ "label": "Approve", "language": "en-US" }],
+      "target": {
+        "key": "approved",
+        "stateType": "finish",
+        "stateSubType": "success",
+        "labels": [{ "label": "Approved", "language": "en-US" }]
+      },
       "view": {
         "hasView": false,
         "loadData": true,
@@ -138,20 +158,43 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `view.loadData` | `boolean` | Whether view requires instance data |
 | `master` | `object` | Link to retrieve the instance's **master schema** — see [Master Function](#master-function) |
 | `master.href` | `string` | Master function endpoint URL |
-| `interaction` | `object` | Long-poll interaction directive. Present whenever the state declares `interaction.longPoll` (subject to role grants), regardless of the `terminate` value |
-| `interaction.terminateLongPoll` | `boolean` | `true`: terminate the long-poll and acknowledge via `ack`. `false`: restart a stopped long-poll independent of instance status, retrying within the fallback window |
-| `interaction.fallbackTimeoutSeconds` | `integer` | Fallback window in seconds (default `60`) |
-| `interaction.ack` | `object` | Acknowledge endpoint href. Present **only** when `terminateLongPoll` is `true` |
+| `interaction` | `object` | Long-poll interaction directive, served when the caller passes the interaction gate (`rule`, else `roles`, else allow). Publication depends on `terminate` — see [Interaction block publication rule](#interaction-block-publication-rule) |
+| `interaction.terminateLongPoll` | `boolean` | Always present. `true`: terminate the long-poll and acknowledge via `ack`. `false`: keep polling, using `fallbackTimeoutSeconds` as the long-poll window |
+| `interaction.fallbackTimeoutSeconds` | `integer` | Always present. Effective window in seconds (the state's own value or the parent override; default `60`) |
+| `interaction.ack` | `object` | Acknowledge endpoint href. Present **only** when `terminateLongPoll` is `true`; in a subflow chain it is rewritten to the polled (top) instance |
 | `state` | `string` | Current state of the instance |
+| `stateType` | `string` | Displayed state's type, camelCase: `initial`, `intermediate`, `finish`, `subFlow`, `wizard` |
+| `stateSubType` (v0.0.99) | `string` | Displayed state's sub type, camelCase: `none`, `success`, `error`, `terminated`, `suspended`, `busy`, `human`, `cancelled`, `timeout`. Describes the active subflow's state while one runs |
+| `stateLabels` (v0.0.99) | `array` | Displayed state's `labels` (`[{ label, language }]`, all languages; omitted when none declared) |
 | `status` | `string` | Instance status code (A=Active, C=Completed, etc.) |
 | `activeCorrelations` | `array` | Active sub-flows and correlations |
 | `transitions` | `array` | Available transitions from current state (filtered by role grants in +) |
+| `transitions[].labels` (v0.0.99) | `array` | The transition's `labels` (all languages; omitted when none). Also on scheduled entries |
+| `transitions[].target` (v0.0.99) | `object` | Target state: `key`, `stateType`, `stateSubType`, `labels`, `subFlow` (only for a subFlow target — the process key). `$self` resolves to the listing state (scheduled: the job's source state). Unresolvable target → `{ key }` only |
 | `transitions[].view` | `object` | View info for the transition |
 | `transitions[].view.hasView` | `boolean` | Whether a view exists for this transition |
 | `transitions[].schema` | `object` | Schema link for the transition (if defined) |
 | `transitions[].schema.hasSchema` | `boolean` | Whether a schema exists for this transition |
 | `transitions[].schema.href` | `string` | Schema function endpoint URL with transitionKey |
 | `eTag` | `string` | ETag for cache validation |
+
+:::note ResponseShapeVersion v14 (v0.0.99)
+v13 shipped in v0.0.98 (the `terminate: false` interaction fix); v14 in v0.0.99 (labels and targets). Each bump invalidates existing state ETags once. In v0.0.99 **`timeout.target` changed from a string to the same object as `transitions[].target`** (breaking, in place) — read `timeout.target.key`.
+:::
+
+### Interaction block publication rule
+
+| `terminate` | When is the block served? | `ack` | Client |
+|---|---|---|---|
+| `true` | Only while an ack is outstanding (unchanged since v0.0.95) | Present | Stop polling, complete the interaction, `POST …/longpoll/ack` |
+| `false` | (v0.0.98) Whenever the instance is in the declaring state | **Absent** — nothing is armed server-side | Keep polling; `fallbackTimeoutSeconds` replaces the client's default long-poll window (default 60 s; declared 120 → poll 120 s) |
+
+```json
+"interaction": { "terminateLongPoll": false, "fallbackTimeoutSeconds": 120 }
+"interaction": { "terminateLongPoll": true, "fallbackTimeoutSeconds": 60, "ack": { "href": "/api/v1/core/workflows/account-opening/instances/{id}/longpoll/ack" } }
+```
+
+v0.0.95–v0.0.97 suppressed the block for `terminate: false` (regression); fixed in v0.0.98.
 
 ### Transition filtering by role grants
 
@@ -338,6 +381,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/master
 - **Subflow forwarding**: when the instance has an active subflow instance, the request forwards to it and returns **its** master schema.
 - `queryRoles` authorization matches the other read functions: a denied caller gets **`403`**.
 - A workflow without a master schema returns **`404`**.
+- (v0.0.99) The master and schema responses carry `labels` — the schema component's `attributes.labels` (omitted when none). The schema/master function cache shape moved to v2. Components cached by an earlier build carry no labels until republish or cache expiry.
 - Typical uses: dynamic master-schema discovery (including the filter/sort vocabulary) and applying the master schema's [`x-context-target`](/docs/components/schema#data-context-vocabulary-data-vocab) annotations on every instance read.
 
 ## Authorization-aware ETag
@@ -504,7 +548,8 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/view
 | `content` | `string` or `object`/`array` | View content: **Json** type → object/array; **Html** and similar → string |
 | `type` | `string` | Content type (Json, Html, etc.) |
 | `display` | `string` | Display mode (full-page, popup, etc.) |
-| `label` | `string` | Localized label for the view |
+| `label` | `string` | Localized label for the view (unchanged) |
+| `labels` (v0.0.99) | `array` | The view component's `labels` (`[{ label, language }]`, all languages), for local and cross-domain views; omitted when none |
 
 ### Query Parameters
 
@@ -615,6 +660,47 @@ Host: api.example.com
 Accept: application/json
 ```
 
+## Instance Correlation Function
+
+(v0.0.99) Answers *what did this instance spawn, and what did those spawn?* It walks `InstanceCorrelation` rows **parent → child** recursively and returns a tree rooted at the queried instance (never its ancestors). SubFlow (`S`) and SubProcess (`P`) links appear, completed ones included. Replaces the removed `hierarchy` function (no alias; old path → `404`; MCP tool `get_instance_hierarchy` → `get_instance_correlation`; span `Instance.Read/instanceCorrelation`).
+
+```http
+GET /{domain}/workflows/{workflow}/instances/{instance}/functions/instance-correlation
+```
+
+```json
+{
+  "root": {
+    "id": "29f116ad-…", "key": "order-4711", "flow": "subflow-orchestration-parent", "domain": "core",
+    "flowVersion": "1.0.0", "currentState": "parent-subflow-state", "ownState": "parent-subflow-state",
+    "status": "B", "isCompleted": false, "href": "/api/v1/core/workflows/subflow-orchestration-parent/instances/29f116ad-…",
+    "children": [
+      { "id": "b673dbfe-…", "flow": "subflow-orchestration-child", "currentState": "grandchild-initial",
+        "ownState": "child-subflow-state", "status": "B", "subFlowType": "S", "isCompleted": false,
+        "parentState": "parent-subflow-state", "correlationId": "4367cf1e-…",
+        "createdAt": "2026-09-30T11:27:29.869552Z", "stateChangedAt": "2026-09-30T11:27:30.662794Z",
+        "href": "/api/v1/core/workflows/subflow-orchestration-child/instances/b673dbfe-…", "children": [] }
+    ]
+  }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `id`, `key`, `flow`, `domain`, `flowVersion` | The instance and its definition |
+| `currentState` | On a child: the correlation's tracked state (deepest active descendant). On the root: its own state |
+| `ownState` | Where this node itself is — use it to place nodes |
+| `status` | Instance status (`B`, `A`, `C`, `P`, `F`) |
+| `subFlowType` | `S` SubFlow / `P` SubProcess; absent on the root |
+| `isCompleted`, `completedAt`, `terminalOutcome` | Describe the **link**, not the instance; `terminalOutcome` is `completed` \| `faulted` \| `canceled` |
+| `parentState`, `correlationId`, `createdAt`, `stateChangedAt` | Link fields; absent on the root |
+| `href` | Link to the node's own instance resource |
+| `children[]` | Recursive, same shape |
+| `resolved` | Default `true`; `false` = the node is real but its subtree is incomplete |
+| `unresolvedReason` | `depth-exceeded` \| `hop-failed` (only that branch truncated; still `200`) \| `instance-missing` \| `hop-unsupported` (partner domain runs an older runtime without the batch route) |
+
+Null fields are omitted. The walk is batched per `(domain, flow, version)` hop and sibling hops run in parallel; a cross-domain branch costs one call to the internal `POST /{domain}/workflows/{workflow}/internal/correlations/batch` route (max 500 ids). Configuration `Workflow:InstanceCorrelation`: `MaxDescentDepth` 20 (1–100), `FanoutParallelism` 8 (1–256), `MaxConcurrentHops` 32 (1–1000). Authorization is the shared `queryRoles` verdict from `authorize?queryRoles=true`.
+
 ## Authorization
 
 Workflows can define **roles** and **queryRoles** on functions, flows, states, and transitions. The following system function endpoints expose permissions and authorization checks.
@@ -682,6 +768,8 @@ Before returning data, the **state**, **data**, **view** and **schema** function
 2. The caller's roles are evaluated as `allow`/`deny` (**DENY always overrides ALLOW**).
 3. If the result is not `allow`, the function returns **`403 Forbidden`**.
 
+**(v0.0.99) Leaf-only decision.** With an active SubFlow chain, `authorize?queryRoles=true` decides at the **deepest active leaf only**: parent-stamped `subFlow.overrides.states.<state>.queryRoles` ?? leaf state `queryRoles` ?? leaf workflow `queryRoles`. The root/intermediate levels are no longer ANDed — this loosens access where the root declares `queryRoles` but the leaf declares none; add a parent override or leaf `queryRoles` to keep the restriction. Parent-owned transitions and `?ack=true` are unchanged. Grants may use `allOf`/`anyOf` combinators, and the `permissions` matrix shows them (without `role`). The human-task leaf hop carries the caller's `act_sub`/`sub`.
+
 This lets an instance be opened or closed to different audiences depending on its current state (e.g. while under backoffice review only operator roles can see it). To pre-check whether a role is authorized on a given state, use the **Instance Authorize** (`queryRoles=true`) endpoint below. See [Workflow → Query Roles](/docs/components/workflow#query-roles) and [Authorization](/docs/concepts/authorization).
 
 ### Get Flow Permissions
@@ -744,7 +832,7 @@ GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?transitionKey=subm
 
 ### Instance Authorize
 
-Same response as Flow Authorize. With `queryRoles=true`, permission is evaluated against the instance’s current state (flow and state queryRoles). For instances in a subflow, the active subflow instance is used.
+Same response as Flow Authorize. With `queryRoles=true`, permission is evaluated against the instance’s current state (flow and state queryRoles). For instances in a subflow, (v0.0.99) only the deepest active leaf decides — the levels above are not ANDed.
 
 ```http
 GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/authorize?queryRoles=true&role=morph-idm.viewer
@@ -758,7 +846,7 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/autho
 | `version` | Optional. Flow version; default is latest. |
 | `transitionKey` | Transition to check (transition-level roles). |
 | `functionKey` | Function to check (function-level roles). |
-| `queryRoles` | When true, check flow and state queryRoles for the instance’s current state (and subflow context if applicable). |
+| `queryRoles` | When true, check flow and state queryRoles for the instance’s current state. (v0.0.99) In a subflow chain only the deepest active leaf decides: parent stamp ?? leaf state ?? leaf workflow `queryRoles`. |
 
 ## What's New in v0.0.79
 
@@ -767,6 +855,10 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/autho
 - **Well-known transitions listed**: configured `cancel`, `updateData` and `exit` transitions now appear in `transitions` (by configured key, with a `kind` discriminator) and their `roles` filter the list.
 
 > 🚧 Full English translation is pending. See the [Turkish page](/docs/components/functions/built-in) for the complete field tables and behavior notes.
+
+## Function Metrics
+
+(v0.0.99) Custom-function executions are journaled opt-in: set `attributes.executionLog: "E"` on the function (`"D"` or absent = nothing recorded). Read them via `GET /{domain}/functions/{function}/metrics` and `GET /{domain}/workflows/{workflow}/functions/{function}/metrics` (paged: `page`, `pageSize`, `from`, `to`, `succeeded`). Per-instance transition and state attempt metrics live at `…/instances/{instance}/transitions/{transitionKey}/metrics` and `…/instances/{instance}/states/{stateKey}/metrics`. See [Observability](/docs/how-to/observability) → "Metric Endpoints" for response shapes.
 
 ## Best Practices
 

@@ -74,7 +74,7 @@ Each MCP instance is **single-domain** — `OrchestrationBaseUrl` points at one 
 ## Tool groups
 
 - **ComponentTools** — `list_components`, `list_workflows` / `list_tasks` / `list_functions` / `list_views` / `list_extensions` / `list_schemas` / `list_mappings`, `get_component`, `get_mapping_code` *(gated by `AllowCodeRead`)*. Wraps the Orchestration **Component Discovery API** (`GET /{domain}/components/*`).
-- **RuntimeTools** — `list_instances`, `get_instance`, `get_instance_data`, `get_instance_state`, `get_instance_history`, `get_instance_hierarchy`, `get_runtime_config`.
+- **RuntimeTools** — `list_instances`, `get_instance`, `get_instance_data`, `get_instance_state`, `get_instance_history`, `get_instance_correlation` (v0.0.99 — formerly `get_instance_hierarchy`), `get_runtime_config`.
 - **MetaTools** — `query_features`, `get_version_info`, `list_known_issues`, `get_deprecations`, `check_security_policy`, `list_meta_components`. Read the `vnext-meta` npm package.
 - **MutatingRuntimeTools** *(gated by `AllowMutations`)* — `start_instance`, `run_transition`, `retry_instance`, `publish_definitions`, `invalidate_cache`.
 
