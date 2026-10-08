@@ -9,7 +9,7 @@ description: Bir FilePicker alanının runtime ile gidiş-dönüşü — x-stora
 
 Master schema'daki bir alan `x-storage` taşıyorsa, o alana gönderilen dosyanın baytları instance verisinin içinde **tutulmaz**; runtime baytları ayarlı bir blob deposuna (Dapr output binding) yazar ve alanın yerine küçük bir **handle** koyar. Client bu handle'ı veri olarak okur, formu düzenlerken geri gönderir ve dosyanın kendisini `functions/file` ile indirir. `x-storage` olmayan bir alanda davranış değişmez (baytlar eskisi gibi inline kalır).
 
-Bu sayfa client geliştiricisine yöneliktir. Alanın şemada nasıl tanımlandığı için bkz. [Schema Tanımı](./view-consept/schema-definition).
+Bu sayfa client geliştiricisine yöneliktir. Alanın şemada nasıl tanımlandığı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 
 ## Yazma şekli
 
@@ -100,23 +100,24 @@ GET|HEAD {domain}/workflows/{workflow}/instances/{instance}/functions/file?file=
 
 | Kod | Hata kodu | Ne zaman | Ne yapmalı |
 |-----|-----------|----------|-----------|
-| `400` | `Instance:100048` (`FileReferenceInvalid`) | `content` ile `file` birlikte; bilinmeyen `file` referansı; `start`'ta referans; geçersiz base64 | İsteği düzeltin; yeni dosya için `content`, mevcut dosya için kayıttan okuduğunuz handle/`{file}` gönderin. Yeniden denemek işe yaramaz. |
+| `400` | `Instance:100048` (`FileReferenceInvalid`) | `content` ile `file` birlikte; bilinmeyen `file` referansı; `start`'ta referans; geçersiz base64; `functions/file`'da eksik/boş `file` sorgu parametresi | İsteği düzeltin; yeni dosya için `content`, mevcut dosya için kayıttan okuduğunuz handle/`{file}` gönderin. Yeniden denemek işe yaramaz. |
 | `403` | — | `functions/file`: state'in `queryRoles` kuralı çağıranı reddediyor | Yetki sorunu; yeniden denemeyin. |
 | `404` | `Instance:100049` (`FileNotFound`) | `file` bu instance'ın kayıtlı verisinde yok; ya da dosyanın yolu `x-roles` ile çağıran için gizli | `owner` instance'ını doğrulayın. Gizli yol ile var olmayan dosya bilerek ayırt edilmez. |
-| `409` | `InstanceBusy` | Bir parent'ın subflow'u sonlanırken gelen yönlendirilmiş (forward) transition | Kısa bir beklemeyle aynı isteği yeniden deneyin. |
+| `409` | `InstanceBusy` | Bir parent'ın subflow'u sonlanırken gelen yönlendirilmiş (forward) transition; ya da hedef instance meşgul | Kısa bir beklemeyle aynı isteği yeniden deneyin. |
+| `413` | — | İstek gövdesi sınırı aşıldı (Kestrel veya sidecar) | Dosyayı küçültün ya da birden çok dosyaya bölün. Yeniden denemek işe yaramaz. |
 | `503` | `Instance:100047` (`FileStoreUnavailable`) | Blob deposu (binding) yazarken ulaşılamıyor | Yeniden deneyin (backoff ile). İstek `202`'den önce, eşzamanlı döner; başarısız `start` instance oluşturmaz, başarısız transition kaydı değiştirmez. |
 
 Parent'ın aktif bir subflow'u varsa, parent'a gönderilen transition leaf'e yönlendirilir ve dosya leaf'te depoya yazılır; client yine **parent'ın** id'sini ve parent'ın modunu alır (async ise `202`, sync ise `200`). Handle'daki `owner` yazan (leaf) instance'tır.
 
 ## Sınırlar
 
-- **Gövde boyutu:** base64, baytları yaklaşık %33 büyütür. Orchestration sidecar'ının istek gövdesi sınırı varsayılan olarak **64 MiB**'dır (`--max-body-size`); ortamınız farklı ayarlanmış olabilir. Büyük dosyaları bu sınırın altında tutun.
+- **Gövde boyutu:** base64 baytları yaklaşık 4/3 büyütür. İki sınır vardır ve etkin olan küçüğüdür: orchestration host'unun Kestrel `MaxRequestBodySize` değeri (appsettings'te **10 MiB**, ham gövde tamponu da 10 MiB) ve Dapr sidecar'ının `--max-body-size` değeri (**64 MiB**). Host sınırı yükseltilmedikçe etkin sınır **10 MiB**'dır; bu da yaklaşık **7,5 MiB** dosya demektir. Aşılırsa `413` döner.
 - **Silme yok:** dosya değiştirildiğinde veya alan temizlendiğinde eski nesne depoda kalır; runtime şimdilik silme/değiştirme temizliği yapmaz. Bir işlem geri alınırsa yazılmış nesne yetim kalabilir.
 - **Yalnızca kayıtlı handle okunur:** dosyaya yalnızca instance verisindeki handle üzerinden erişilir; client depo/binding adı veremez.
 - **Görev kayıtları korunmaz:** bir mapping baytları task isteğine koyarsa, bu task kaydında olduğu gibi saklanır (geliştirici kararı).
 
 ## İlgili
 
-- [Schema Tanımı](./view-consept/schema-definition) — `x-storage` bildirimi, `x-roles`
+- [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) — `x-storage` bildirimi, `x-roles`
 - [Instance Verisi](../concepts/instance-data)
 - [Async / Sync](./async-sync)

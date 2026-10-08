@@ -9,7 +9,7 @@ description: How a FilePicker field round-trips with the runtime — the x-stora
 
 When a master-schema field carries `x-storage`, the bytes of a file sent to that field are **not** kept inside the instance data. The runtime writes them to a configured blob store (a Dapr output binding) and puts a small **handle** in the field's place. The client reads that handle as data, sends it back when editing the form, and downloads the file itself through `functions/file`. A field without `x-storage` behaves as before (bytes stay inline).
 
-This page is for client developers. For declaring the field in the schema, see [Schema Definition](./view-consept/schema-definition) (Turkish).
+This page is for client developers. For declaring the field in the schema, see [Schema Definition](/docs/how-to/view-consept/schema-tanimi).
 
 ## Write shape
 
@@ -100,22 +100,23 @@ GET|HEAD {domain}/workflows/{workflow}/instances/{instance}/functions/file?file=
 
 | Code | Error code | When | What to do |
 |------|------------|------|-----------|
-| `400` | `Instance:100048` (`FileReferenceInvalid`) | `content` and `file` together; unknown `file` reference; a reference on `start`; invalid base64 | Fix the request: `content` for a new file, the handle/`{file}` read from the record for an existing one. Retrying does not help. |
+| `400` | `Instance:100048` (`FileReferenceInvalid`) | `content` and `file` together; unknown `file` reference; a reference on `start`; invalid base64; missing/blank `file` query parameter on `functions/file` | Fix the request: `content` for a new file, the handle/`{file}` read from the record for an existing one. Retrying does not help. |
 | `403` | — | `functions/file`: the state's `queryRoles` rejects the caller | An authorization problem; do not retry. |
 | `404` | `Instance:100049` (`FileNotFound`) | `file` is not in this instance's stored data; or the file's path is hidden from the caller by `x-roles` | Verify the `owner` instance. A hidden path is deliberately indistinguishable from a missing file. |
-| `409` | `InstanceBusy` | A forwarded transition arrived while a parent's subflow is finishing | Retry the same request after a short wait. |
+| `409` | `InstanceBusy` | A forwarded transition arrived while a parent's subflow is finishing; or the target instance is busy | Retry the same request after a short wait. |
+| `413` | — | The request body exceeds a size limit (Kestrel or sidecar) | Reduce the file size or split into several files. Retrying does not help. |
 | `503` | `Instance:100047` (`FileStoreUnavailable`) | The blob store (binding) is unreachable on write | Retry with backoff. It returns synchronously, before any `202`; a failed `start` creates no instance and a failed transition leaves the record unchanged. |
 
 When a parent has an active subflow, a transition sent to the parent is forwarded to the leaf and the file is written there; the client still receives the **parent's** id and the parent's mode (`202` when async, `200` when sync). The handle's `owner` is the writing (leaf) instance.
 
 ## Limits
 
-- **Body size:** base64 inflates bytes by about 33%. The orchestration sidecar's request body limit is **64 MiB** by default (`--max-body-size`); your environment may differ. Keep files under that limit.
+- **Body size:** base64 inflates bytes by about 4/3. Two limits apply and the smaller one wins: the orchestration host's Kestrel `MaxRequestBodySize` (**10 MiB** in appsettings; the raw-body buffer is also 10 MiB) and the Dapr sidecar's `--max-body-size` (**64 MiB**). Unless the host raises Kestrel's limit, the effective cap is **10 MiB**, i.e. about **7.5 MiB** of file. Exceeding it returns `413`.
 - **No delete yet:** when a file is replaced or the field is cleared the old object stays in the store; the runtime does no delete/replace cleanup for now. A rolled-back operation can leave an orphaned object.
 - **Only stored handles are readable:** a file is reachable only through a handle in instance data; a client cannot name a store or binding.
 - **Task records are not protected:** if a mapping puts bytes into a task request, they are stored in the task record as-is (a developer decision).
 
 ## Related
 
-- [Schema Definition](./view-consept/schema-definition) — the `x-storage` declaration, `x-roles`
+- [Schema Definition](/docs/how-to/view-consept/schema-tanimi) — the `x-storage` declaration, `x-roles`
 - [Instance Data](../concepts/instance-data)
