@@ -20,7 +20,7 @@ General mapping interface. Used for input and output bindings of tasks.
 **Usage Areas:**
 - Input data preparation and transformation before task execution
 - Output data processing after task execution
-- Data validation and transformation
+- Data transformation
 - Audit logging and metadata management
 
 **Methods:**
@@ -32,6 +32,12 @@ Task<ScriptResponse> OutputHandler(ScriptContext context);
 **Method Descriptions:**
 - `InputHandler`: Prepares input data before the task is executed, configures the WorkflowTask object
 - `OutputHandler`: Processes output data after the task is executed and merges it into the workflow instance
+
+:::warning InputHandler cannot stop the task
+The value `InputHandler` returns is only written to the task's audit record; the runtime does not read it for any decision. Whatever it returns — a `Data["error"]` entry, a `StatusCode` or an empty response — the task is **invoked** afterwards with the task as configured. For a task that writes (StartTrigger, DirectTrigger, SubProcess, an HTTP POST, a publish) the write happens even when the handler found the input invalid; `OutputHandler` only sees the result afterwards and cannot undo it.
+
+Validate **before** the task: a transition rule or condition, an automatic transition to an error state, or a preceding validation step decides whether the task runs at all. As a last resort, throwing from `InputHandler` prevents the invocation: the task fails as a task execution error, `OutputHandler` is not run, and since the failure is not a business response, `AcceptedStatusCodes` do not apply to it.
+:::
 
 ### ITimerMapping
 Used for schedule mapping. Special interface for timer-based workflows and scheduling operations.
