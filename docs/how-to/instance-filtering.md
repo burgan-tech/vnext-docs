@@ -68,6 +68,10 @@ Doğrudan veritabanı kolonları:
 | `completedAt` | DateTime | Tamamlanma zamanı | eq, ne, gt, ge, lt, le, between |
 | `isTransient` | boolean | Geçici işaret | eq, ne |
 
+:::note Sorgu token'ları
+Bu tablodaki operatörler **sorgu sözdizimidir** (istemcinin `filter` parametresinde gönderdiği token'lar) ve v0.0.100 ile değişmedi. Master şemada `x-filterOperators` ile yapılan **beyan** ise kanonik adlarla yazılır; eşleme için bkz. [Şema beyanı ve sorgu token'ı](#şema-beyanı-ve-sorgu-tokenı).
+:::
+
 ### JSON Veri Alanları (attributes)
 
 Instance'ın JSON verisinde saklanan alanlar `attributes` prefix'i ile filtrelenebilir. Ancak bir JSON alanının **filtrelenebilir ve sıralanabilir** olması, **master şemada** o alan için tanımlı vocabulary'e (`x-filterOperators` / `x-sortable`) bağlıdır — bkz. [Şema-Tabanlı Filtrelenebilirlik ve Sıralama](#şema-tabanlı-filtrelenebilirlik-ve-sıralama).
@@ -86,18 +90,50 @@ Instance tablo kolonları (`key`, `status`, `createdAt` …) doğrudan filtrelen
 
 Keyword tanımları için bkz. [Schema → Filtreleme & Sıralama Vocabulary'si](/docs/components/schema#filtreleme--sıralama-vocabularysi) ve [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 
+### Şema beyanı ve sorgu token'ı
+
+<sup>New</sup> v0.0.100 — `x-filterOperators` içinde **kanonik beyan adları** yazılır: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `contains`, `startsWith`, `endsWith`, `in`, `nin`, `isNull`, `includes`. Liste sorgusu, gelen token'ı önce bu adlara eşler, sonra beyanla karşılaştırır. Bu yüzden şemaya sorgu token'ı (`ge`, `like` …) yazmak, o alandaki her filtrenin reddedilmesine yol açıyordu; v0.0.100 ile böyle bir şema artık **publish'te reddedilir** ve hata mesajı doğru adı söyler.
+
+**Sorgu sözdizimi değişmedi:** istemciler `ge`, `le`, `ne`, `like`, `startswith` gibi token'ları göndermeye devam eder; runtime bunları aşağıdaki tabloya göre eşler.
+
+| Sorguda gönderilen token | Şemada beyan edilecek ad (`x-filterOperators`) |
+|---|---|
+| `eq` | `eq` |
+| `ne` | `neq` |
+| `gt` / `lt` | `gt` / `lt` |
+| `ge` | `gte` |
+| `le` | `lte` |
+| `between` | `between` |
+| `like`, `match` | `contains` |
+| `startswith` | `startsWith` |
+| `endswith` | `endsWith` |
+| `in` / `nin` | `in` / `nin` |
+| `isnull` | `isNull` |
+| `includes` (yalnız GraphQL) | `includes` |
+
+Publish'te şu durumlar reddedilir (kontrol `x-filterOperators`'ın yazıldığı her yerde yapılır: iç içe `properties`, `items`, `$defs`, kombinatörler):
+
+```
+Field 'amount': x-filterOperators value 'ge' is not a declaration name; declare 'gte'.
+Field 'amount': x-filterOperators value 'between2' is not an operator. Allowed: eq, neq, gt, gte, lt, lte, between, contains, startsWith, endsWith, in, nin, isNull, includes.
+Field 'amount': x-filterOperators lists 'gt' more than once.
+Field 'amount': x-filterOperators must be an array of operator names.
+```
+
+Büyük/küçük harf varyantları da (`StartsWith`, `GTE` …) "declaration name" hatasıyla reddedilir.
+
 <sup>New</sup> v0.0.94 — Master şemadaki bir skaler alan `x-indexed: true` ile **fiziksel index hazırlığına** dahil edilebilir; `wf indexes generate` ile üretilen SQL DBA tarafından uygulandığında `attributes.*` filtre ve sıralamaları JSON ifadesi yerine stored generated column + index üzerinden çalışır. `x-indexed` filtrelenebilirliği **değiştirmez** — yetki yine `x-filterOperators` / `x-sortable` ile belirlenir. Bkz. [Attribute Index'leri](/docs/how-to/attribute-indexes).
 
 ### Tip-Operatör İlişkisi
 
-İzin verilen operatörlerin davranışı, alanın JSON Schema `type` değerine göre değişir:
+İzin verilen operatörlerin davranışı, alanın JSON Schema `type` değerine göre değişir (operatörler beyan adlarıyla yazılmıştır):
 
 | Schema `type` | Operatör kategorisi | SQL davranışı |
 |---|---|---|
-| `number` / `integer` | `gt`, `lt`, `ge`, `le`, `between` | `accessor::numeric {op} @param` |
-| `string` + `gt`/`lt`/`ge`/`le`/`between` | tarih karşılaştırma | `accessor::timestamptz {op} @param` |
-| `string` + `eq`/`like`/`startswith`/`endswith`/`match` | metin karşılaştırma | `accessor ILIKE @param` |
-| `boolean` | `eq`, `ne` | equality |
+| `number` / `integer` | `gt`, `lt`, `gte`, `lte`, `between` | `accessor::numeric {op} @param` |
+| `string` + `gt`/`lt`/`gte`/`lte`/`between` | tarih karşılaştırma | `accessor::timestamptz {op} @param` |
+| `string` + `eq`/`contains`/`startsWith`/`endsWith` | metin karşılaştırma | `accessor ILIKE @param` |
+| `boolean` | `eq`, `neq` | equality |
 | `array` (instance verisinde JSON dizi) | `includes` | `Data @> @param`; yaprak yolda tek elemanlı dizi + kısmi nesne deseni |
 
 ### Kurallar
@@ -111,7 +147,7 @@ Keyword tanımları için bkz. [Schema → Filtreleme & Sıralama Vocabulary'si]
 "startDateTime": {
   "type": "string",
   "format": "date-time",
-  "x-filterOperators": ["eq", "gt", "ge", "lt", "le", "between"],
+  "x-filterOperators": ["eq", "gt", "gte", "lt", "lte", "between"],
   "x-sortable": true,
   "x-displayFormat": "yyyy-MM-dd'T'HH:mm:ssXXX"
 }
@@ -121,21 +157,24 @@ Keyword tanımları için bkz. [Schema → Filtreleme & Sıralama Vocabulary'si]
 
 ## Desteklenen Operatörler
 
-| Operatör | Açıklama | Örnek Değer |
-|----------|----------|-------------|
-| `eq` | Eşittir | `"1111"` |
-| `ne` | Eşit değildir | `"test"` |
-| `gt` | Büyüktür | `"100"` |
-| `ge` | Büyük veya eşittir | `"100"` |
-| `lt` | Küçüktür | `"100"` |
-| `le` | Küçük veya eşittir | `"100"` |
-| `between` | Arasında (dahil) | `["2024-01-01", "2024-12-31"]` |
-| `like` | İçerir (büyük/küçük harf duyarsız) | `"workflow"` |
-| `startswith` | İle başlar | `"payment"` |
-| `endswith` | İle biter | `"flow"` |
-| `in` | Listede | `["Active", "Busy"]` |
-| `nin` | Listede değil | `["Completed", "Faulted"]` |
-| `isnull` | Null veya null değil | `true` veya `false` |
+Bu tablo **sorgu token'larını** listeler. Bir `attributes.*` alanını filtrelemek için master şemada sağdaki **beyan adı** yazılmalıdır (bkz. [Şema beyanı ve sorgu token'ı](#şema-beyanı-ve-sorgu-tokenı)).
+
+| Sorgu token'ı | Açıklama | Örnek Değer | Şema beyanı |
+|----------|----------|-------------|-------------|
+| `eq` | Eşittir | `"1111"` | `eq` |
+| `ne` | Eşit değildir | `"test"` | `neq` |
+| `gt` | Büyüktür | `"100"` | `gt` |
+| `ge` | Büyük veya eşittir | `"100"` | `gte` |
+| `lt` | Küçüktür | `"100"` | `lt` |
+| `le` | Küçük veya eşittir | `"100"` | `lte` |
+| `between` | Arasında (dahil) | `["2024-01-01", "2024-12-31"]` | `between` |
+| `like` | İçerir (büyük/küçük harf duyarsız) | `"workflow"` | `contains` |
+| `startswith` | İle başlar | `"payment"` | `startsWith` |
+| `endswith` | İle biter | `"flow"` | `endsWith` |
+| `in` | Listede | `["Active", "Busy"]` | `in` |
+| `nin` | Listede değil | `["Completed", "Faulted"]` | `nin` |
+| `isnull` | Null veya null değil | `true` veya `false` | `isNull` |
+| `includes` | JSON dizisi verilen kısmi nesneyi içerir (yalnız GraphQL) | `{"userId":"..."}` | `includes` |
 
 ---
 
@@ -669,6 +708,8 @@ Aynı şey <sup>New</sup> v0.0.94 `filter.valueTooLong` için de geçerlidir: `G
 ### Şema Filtre Doğrulama Hatası — `Validation:900010`
 
 Master şemada **filtrelenemez** bir alan (`x-filterOperators` boş/yok) sorgulandığında veya alan için **izin verilmeyen bir operatör** kullanıldığında **`SchemaFilterValidationException`** fırlatılır. Aynı kural sıralama için `x-sortable` üzerinden geçerlidir. Bu, bir **master-schema policy** reddidir — yukarıdaki grammar hatalarından ayrıdır ve drift alarmı olarak loglanmaz. Bkz. [Şema-Tabanlı Filtrelenebilirlik ve Sıralama](#şema-tabanlı-filtrelenebilirlik-ve-sıralama).
+
+v0.0.100 öncesinde `x-filterOperators` içine sorgu token'ı (`ge`, `like` …) yazılmış bir şema publish ediliyor, ardından o alandaki her filtre bu hatayla reddediliyordu. <sup>New</sup> v0.0.100 ile bu durum sorgu anında değil **publish'te** yakalanır: `Field '<yol>': x-filterOperators value 'ge' is not a declaration name; declare 'gte'.` Tüm publish mesajları için bkz. [Şema beyanı ve sorgu token'ı](#şema-beyanı-ve-sorgu-tokenı).
 
 :::note
 Tüm red nedenleri tek seferde (en fazla 20 tanesi) döner — çağıran tek round-trip'te düzeltebilir.

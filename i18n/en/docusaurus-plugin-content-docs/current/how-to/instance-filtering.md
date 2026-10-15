@@ -68,6 +68,10 @@ Direct database columns:
 | `completedAt` | DateTime | Completion time | eq, ne, gt, ge, lt, le, between |
 | `isTransient` | boolean | Transient flag | eq, ne |
 
+:::note Query tokens
+The operators in this table are **query syntax** (the tokens a client sends in the `filter` parameter) and did not change in v0.0.100. A master-schema **declaration** in `x-filterOperators` uses the canonical names instead; see [Schema declaration vs. query token](#schema-declaration-vs-query-token).
+:::
+
 ### JSON Data Fields (attributes)
 
 Fields stored in the instance's JSON data can be filtered using the `attributes` prefix. However, whether a JSON field is **filterable and sortable** depends on the vocabulary (`x-filterOperators` / `x-sortable`) declared for that field in the **master schema** — see [Schema-Driven Filterability & Sorting](#schema-driven-filterability--sorting).
@@ -86,18 +90,50 @@ Instance table columns (`key`, `status`, `createdAt` …) are directly filterabl
 
 For keyword definitions, see [Schema → Filter & Sort Vocabulary](/docs/components/schema#filter--sort-vocabulary).
 
+### Schema declaration vs. query token
+
+<sup>New</sup> v0.0.100 — `x-filterOperators` lists **canonical declaration names**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `contains`, `startsWith`, `endsWith`, `in`, `nin`, `isNull`, `includes`. A list query maps its incoming token to these names first and then checks the declaration, so declaring a query token (`ge`, `like` …) used to make every filter on that field fail. Since v0.0.100 such a schema is **refused at publish**, and the message names the right declaration.
+
+**Query syntax is unchanged:** clients keep sending tokens such as `ge`, `le`, `ne`, `like`, `startswith`; the runtime maps them as follows.
+
+| Token sent in a query | Name to declare in `x-filterOperators` |
+|---|---|
+| `eq` | `eq` |
+| `ne` | `neq` |
+| `gt` / `lt` | `gt` / `lt` |
+| `ge` | `gte` |
+| `le` | `lte` |
+| `between` | `between` |
+| `like`, `match` | `contains` |
+| `startswith` | `startsWith` |
+| `endswith` | `endsWith` |
+| `in` / `nin` | `in` / `nin` |
+| `isnull` | `isNull` |
+| `includes` (GraphQL only) | `includes` |
+
+Publish refuses the following (every placement of `x-filterOperators` is checked: nested `properties`, `items`, `$defs`, combinators):
+
+```
+Field 'amount': x-filterOperators value 'ge' is not a declaration name; declare 'gte'.
+Field 'amount': x-filterOperators value 'between2' is not an operator. Allowed: eq, neq, gt, gte, lt, lte, between, contains, startsWith, endsWith, in, nin, isNull, includes.
+Field 'amount': x-filterOperators lists 'gt' more than once.
+Field 'amount': x-filterOperators must be an array of operator names.
+```
+
+Case variants (`StartsWith`, `GTE` …) are refused with the "declaration name" message as well.
+
 <sup>New</sup> v0.0.94 — A scalar master-schema field can opt into **physical index preparation** with `x-indexed: true`; once the SQL produced by `wf indexes generate` is applied by a DBA, `attributes.*` filters and sorts on that field run over a stored generated column + index instead of a JSON expression. `x-indexed` does **not** change filterability — that is still governed by `x-filterOperators` / `x-sortable`. See [Attribute Indexes](/docs/how-to/attribute-indexes).
 
 ### Type-Operator Relationship
 
-The behavior of an allowed operator depends on the field's JSON Schema `type`:
+The behavior of an allowed operator depends on the field's JSON Schema `type` (operators are given by their declaration names):
 
 | Schema `type` | Operator category | SQL behavior |
 |---|---|---|
-| `number` / `integer` | `gt`, `lt`, `ge`, `le`, `between` | `accessor::numeric {op} @param` |
-| `string` + `gt`/`lt`/`ge`/`le`/`between` | date compare | `accessor::timestamptz {op} @param` |
-| `string` + `eq`/`like`/`startswith`/`endswith`/`match` | text compare | `accessor ILIKE @param` |
-| `boolean` | `eq`, `ne` | equality |
+| `number` / `integer` | `gt`, `lt`, `gte`, `lte`, `between` | `accessor::numeric {op} @param` |
+| `string` + `gt`/`lt`/`gte`/`lte`/`between` | date compare | `accessor::timestamptz {op} @param` |
+| `string` + `eq`/`contains`/`startsWith`/`endsWith` | text compare | `accessor ILIKE @param` |
+| `boolean` | `eq`, `neq` | equality |
 | `array` (JSON array in instance data) | `includes` | `Data @> @param`; single-element array + partial object pattern at the leaf path |
 
 ### Rules
@@ -111,7 +147,7 @@ The behavior of an allowed operator depends on the field's JSON Schema `type`:
 "startDateTime": {
   "type": "string",
   "format": "date-time",
-  "x-filterOperators": ["eq", "gt", "ge", "lt", "le", "between"],
+  "x-filterOperators": ["eq", "gt", "gte", "lt", "lte", "between"],
   "x-sortable": true,
   "x-displayFormat": "yyyy-MM-dd'T'HH:mm:ssXXX"
 }
@@ -121,21 +157,24 @@ The behavior of an allowed operator depends on the field's JSON Schema `type`:
 
 ## Supported Operators
 
-| Operator | Description | Example Value |
-|----------|-------------|---------------|
-| `eq` | Equals | `"1111"` |
-| `ne` | Not equals | `"test"` |
-| `gt` | Greater than | `"100"` |
-| `ge` | Greater than or equal | `"100"` |
-| `lt` | Less than | `"100"` |
-| `le` | Less than or equal | `"100"` |
-| `between` | Between (inclusive) | `["2024-01-01", "2024-12-31"]` |
-| `like` | Contains (case insensitive) | `"workflow"` |
-| `startswith` | Starts with | `"payment"` |
-| `endswith` | Ends with | `"flow"` |
-| `in` | In list | `["Active", "Busy"]` |
-| `nin` | Not in list | `["Completed", "Faulted"]` |
-| `isnull` | Null or not null | `true` or `false` |
+This table lists **query tokens**. To filter an `attributes.*` field, the master schema declares the name in the right-hand column (see [Schema declaration vs. query token](#schema-declaration-vs-query-token)).
+
+| Query token | Description | Example Value | Schema declaration |
+|----------|-------------|---------------|--------------------|
+| `eq` | Equals | `"1111"` | `eq` |
+| `ne` | Not equals | `"test"` | `neq` |
+| `gt` | Greater than | `"100"` | `gt` |
+| `ge` | Greater than or equal | `"100"` | `gte` |
+| `lt` | Less than | `"100"` | `lt` |
+| `le` | Less than or equal | `"100"` | `lte` |
+| `between` | Between (inclusive) | `["2024-01-01", "2024-12-31"]` | `between` |
+| `like` | Contains (case insensitive) | `"workflow"` | `contains` |
+| `startswith` | Starts with | `"payment"` | `startsWith` |
+| `endswith` | Ends with | `"flow"` | `endsWith` |
+| `in` | In list | `["Active", "Busy"]` | `in` |
+| `nin` | Not in list | `["Completed", "Faulted"]` | `nin` |
+| `isnull` | Null or not null | `true` or `false` | `isNull` |
+| `includes` | JSON array contains the given partial object (GraphQL only) | `{"userId":"..."}` | `includes` |
 
 ---
 
@@ -485,6 +524,8 @@ A scalar filter value longer than **1000 characters** (decoded .NET `string.Leng
 ### Schema Filter Validation Error
 
 Querying a field that is **not filterable** in the master schema (`x-filterOperators` empty/absent), or using a **disallowed operator**, raises **`SchemaFilterValidationException`** (`Validation:900010`). The same applies to sorting via `x-sortable`. See [Schema-Driven Filterability & Sorting](#schema-driven-filterability--sorting).
+
+Before v0.0.100 a schema that declared a query token (`ge`, `like` …) in `x-filterOperators` published, and every filter on that field then failed with this error. <sup>New</sup> v0.0.100 catches it at **publish** instead: `Field '<path>': x-filterOperators value 'ge' is not a declaration name; declare 'gte'.` For all publish messages see [Schema declaration vs. query token](#schema-declaration-vs-query-token).
 
 ---
 

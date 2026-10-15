@@ -31,7 +31,7 @@ Sürüm gereksinimleri: runtime **v0.0.94+**, vnext-schema **0.0.54+**, workflow
 
 `x-indexed` yalnızca **master** şemalarda kullanılabilir. Master işareti, şema bileşeninin `attributes.type` alanının **tam olarak** `"master"` değerini taşımasıdır:
 
-- `attributes.type` serbest metindir; enum ile kısıtlanmaz, eski ve özel tipler geçerliliğini korur. Publish için boş olmaması yeterlidir.
+- `attributes.type` şemanın **rolünü** belirten opsiyonel bir enum'dur: `master`, `transition`, `component`, `function` veya boş/yok (rol yok). <sup>New</sup> v0.0.100 / vnext-schema 0.0.56 — eski serbest değerler (`workflow`, `schema`, `view`, …) schema paketi tarafından reddedilir, runtime ise uyarıyla kabul eder. Ayrıntı: [Şema Rolleri](/docs/concepts/schema-roles).
 - Yalnızca `"master"` değeri (büyük/küçük harf dahil birebir eşleşme) `x-indexed` metadata'sına izin verir ve index SQL'ine katkı sağlar. Eksik, `null`, boş ya da başka bir değer hiçbir zaman master anlamına gelmez.
 - Ayrı bir kök seviye `type` alanı **yoktur**; master işareti yalnızca `attributes.type`'tadır.
 - `latest` referansı master olmayan bir sürüme çözümleniyorsa daha eski bir master sürüme geri düşülmez.
@@ -81,14 +81,14 @@ Field 'items': x-indexed requires an explicit scalar type under object propertie
         "amount": {
           "type": "number",
           "x-indexed": true,
-          "x-filterOperators": ["gt", "ge", "lt", "le", "between"],
+          "x-filterOperators": ["gt", "gte", "lt", "lte", "between"],
           "x-sortable": true
         },
         "createdOn": {
           "type": "string",
           "format": "date-time",
           "x-indexed": true,
-          "x-filterOperators": ["ge", "le", "between"],
+          "x-filterOperators": ["gte", "lte", "between"],
           "x-sortable": true
         },
         "customer": {
@@ -97,7 +97,7 @@ Field 'items': x-indexed requires an explicit scalar type under object propertie
             "name": {
               "type": "string",
               "x-indexed": true,
-              "x-filterOperators": ["eq", "like", "startswith", "endswith"]
+              "x-filterOperators": ["eq", "contains", "startsWith", "endsWith"]
             }
           }
         },
@@ -110,7 +110,7 @@ Field 'items': x-indexed requires an explicit scalar type under object propertie
 }
 ```
 
-`amount` ve `createdOn` için B-tree, `customer.name` için metin araması (`like`/`startswith`/`endswith`/`contains`) nedeniyle ek olarak trigram GIN index'i üretilir. `notes` işaretlenmediği için hiçbir fiziksel yapı hazırlanmaz.
+`amount` ve `createdOn` için B-tree, `customer.name` için metin araması (`contains`/`startsWith`/`endsWith`) nedeniyle ek olarak trigram GIN index'i üretilir. `notes` işaretlenmediği için hiçbir fiziksel yapı hazırlanmaz.
 
 ## Index oluşturma akışı
 
@@ -160,7 +160,7 @@ SQL dosyası sırasıyla:
 5. Mevcut index'leri PostgreSQL-normalize edilmiş bir prototiple karşılaştırır (erişim yöntemi, key/include kolonları, sıralama, collation, operator class, partial predicate). **Yapısal olarak eşdeğer mevcut index'ler — eski adlı olanlar dahil — yeniden kullanılır**; değişmiş CLI-sahipli index'ler yeniden oluşturulur; yönetilmeyen ad çakışmaları hata verir. Yeni adlar okunabilir yol + index türü + tanım hash'i içerir (63 bayt altı).
 6. Güncellenen projeksiyonların eskimiş sahipli index'lerini kaldırır, seçilen index adlarını `AttributeIndexCatalog` tablosuna yazar, değişen tabloları `ANALYZE` eder ve atomik olarak commit eder.
 
-Fiziksel yapılar alan tipine ve sorgu metadata'sına göre belirlenir: sıralı karşılaştırmalar için **B-tree**, `contains`/`like`/`startswith`/`endswith` metin aramaları için **trigram GIN** (`pg_trgm` uzantısı `public` şemasında kurulabilir olmalı, runtime'ın `tr-TR-x-icu` collation'ı mevcut olmalı).
+Fiziksel yapılar alan tipine ve sorgu metadata'sına göre belirlenir: sıralı karşılaştırmalar için **B-tree**, `contains`/`startsWith`/`endsWith` metin aramaları (sorguda `like`/`startswith`/`endswith` token'ları) için **trigram GIN** (`pg_trgm` uzantısı `public` şemasında kurulabilir olmalı, runtime'ın `tr-TR-x-icu` collation'ı mevcut olmalı).
 
 :::warning
 Bu **bakım penceresi DDL'idir**, `CREATE INDEX CONCURRENTLY` değildir: tablo kilidi tutulduğu sürece okuyucular ve yazıcılar bloklanır. Büyük tablolarda stored-column yeniden yazımı için disk, WAL, replika ve süre planlaması yapın. Hata durumunda transaction geri alınır; oturumu kapatıp/`ROLLBACK` edip **aynı script'i** yeniden çalıştırın. Kısmi yapılar hiçbir zaman "hazır" olarak işaretlenmez.
@@ -210,7 +210,7 @@ Bir alanı `x-indexed: true` olarak işaretlemeyi şu durumlarda değerlendirin:
 
 - Büyük veri kümelerinde sık kullanılan filtrelerde geçiyorsa
 - Sayısal ya da tarih aralığı sorgularında kullanılıyorsa
-- Sık metin aramasına (`like`, `startswith`, `endswith`, `contains`) konu oluyorsa
+- Sık metin aramasına (`contains`, `startsWith`, `endsWith`) konu oluyorsa
 - Düzenli olarak sıralama anahtarıysa
 - Ölçülmüş bir sorgu maliyeti varsa ve index'in bunu düşürebileceği gösterilebiliyorsa
 

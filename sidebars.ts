@@ -80,6 +80,7 @@ const sidebars: SidebarsConfig = {
         'components/interfaces',
         'components/extension',
         'components/schema',
+        'concepts/schema-roles',
         'components/view',
         'components/urn-catalog',
       ],
