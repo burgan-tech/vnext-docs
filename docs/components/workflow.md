@@ -356,7 +356,7 @@ State Function yanıtında bu değer v0.0.99'dan itibaren üst seviye `stateSubT
 - **Hiç iletilmeyenler:** `updateData`, `cancel`, `exit`, timeout ve parent'ın **mevcut state'inde kullanılabilir** shared transition'ları parent'ta işlenir. Mevcut state'te kullanılabilir olmayan bir parent shared transition'ı iletilir (leaf genellikle `400` döner).
 - Ek maliyet p50'de yaklaşık **5 ms**.
 
-:::info Deprecation: `subflow-chain-reserve-claim`
+:::info[Deprecation: `subflow-chain-reserve-claim`]
 Eski accept-time zincir rezervi (`ChainReserved` talebi, `…/busy` ve `internal/busy-release` rotaları) v0.0.100'den itibaren **deprecated**'dır; en erken v0.0.103'te kaldırılacaktır. Bu runtime alıcı tarafı korur: eski sürümlü bir parent'tan gelen rezervli relay leaf'te eskisi gibi kabul edilir. **Karışık sürümlü domain'lerde aksiyon gerekmez.**
 :::
 
@@ -458,7 +458,7 @@ Dapr Binding yapılandırması [Notification Task](./tasks/notification) ile ayn
 
 State Function, client tarafında **long-polling** ile süreç durumunu döner. `interaction.longPoll` ile bu açık tutulan isteğin **ne zaman sonlandırılacağı** state tanımında **deklaratif** olarak belirtilir. Runtime, isteği bir transition gerçekleşene veya fallback timeout dolana kadar açık tutar. Böylece bir süreç tasarımında farklı client'lar süreci kendi **durak noktaları** ile belirleyebilir.
 
-:::tip Uçtan uca örnek
+:::tip[Uçtan uca örnek]
 Onay adımı + "Bekleyen Onaylarım" senaryosunda `terminate: false` / `terminate: true` + `rule` kullanımının tamamı için bkz. [Human Task ve "Bekleyen Onaylarım"](/docs/how-to/human-task-approval).
 :::
 
@@ -577,7 +577,7 @@ POST /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack
 
 Client hata alır veya talep gönderemezse `fallbackTimeoutSeconds` süresi dolduğunda platform pipeline'ı otomatik olarak devam ettirir. Bu sayede client çökmesi veya ağ hatası durumunda long-poll askıda kalmaz. Ack beklemeyen bir instance'a gelen ack idempotent olarak `200` döner (no-op). Aktif subflow zincirinde ack, parent'tan duraklamış (gerekirse cross-domain) child'a hop hop iletilir.
 
-:::warning Ack yetkisi artık in-process denetlenmiyor <sup>New</sup> v0.0.95
+:::warning[Ack yetkisi artık in-process denetlenmiyor <sup>New</sup> v0.0.95]
 Ack endpoint'i `roles`/`rule` kolunu artık **kendisi değerlendirmez**. Karar noktası tek: Internal Gateway isteği iletmeden önce [`authorize?ack=true`](/docs/components/functions/built-in#instance-authorize) fonksiyonunu çağırır; bu hedef, endpoint'in eskiden kullandığı aynı etkileşim gate'inden (`rule` → `roles` → izin) geçer — `rule` bir C# betiği olduğu için gateway'in kendisinin değerlendiremeyeceği tek kol budur. Önünde bu gateway olmayan bir runtime ack'i **reddetmez**. Bkz. [Yetkilendirme → Nerede Değerlendirilir?](/docs/concepts/authorization#nerede-değerlendirilir).
 :::
 
@@ -882,7 +882,7 @@ Davranış, instance'ın durumuna göre ikiye ayrılır:
 
 Otomatik transition'lar **her** `updateData` sonrasında değerlendirilir; böylece "veri biriktir, eşik sağlanınca ilerle" (fan-in) desenleri updateData fırtınası altında güvenle çalışır.
 
-:::info $self ile updateData karıştırılmamalı <sup>New</sup> v0.0.80 (breaking)
+:::info[$self ile updateData karıştırılmamalı <sup>New</sup> v0.0.80 (breaking)]
 `updateData`'nın hedefi her zaman `$self`'tir, ama `$self` **yalnızca `updateData` için** state lifecycle'ını atlar (OnEntry/OnExit çalışmaz, scheduled job'lar yeniden armlanmaz). `target: $self` yazan **başka herhangi bir transition** — tipik olarak bir **shared transition** — trigger'ının temel profilini korur ve state'in **tam** lifecycle'ını çalıştırır: OnExit/OnEntry ateşlenir, state'in timer'ları iptal edilip yeniden armlanır. Önceden `$self` hedefli her transition lifecycle'ı atlıyordu; domain tanımlarında `"target": "$self"` için grep yapıp bu davranışa dayanan mantığı `onExecutionTasks`'e taşımak gerekebilir. Ayrıntı: [Transition Pipeline → `+Self` Bileşimi](../concepts/transition-pipeline).
 :::
 
@@ -922,7 +922,7 @@ Cancel ile aynı yapıda. **Client implementasyonlarında** ekran çıkışları
 
 Cancel ile aynı yapıda, tek fark: `target` her zaman `$self` olmalıdır. Instance datasını instance'ı kilitlemeden güncellemek — ve paralel senaryolarda instance'ı ilerletmek — için kullanılır. Yürütme semantiği (lock/busy muafiyeti, subflow'da parent'ta karşılanma, auto değerlendirmesi) için bkz. [Transition Yürütme Modeli](#transition-yürütme-modeli-lock-ve-busy-check).
 
-:::info Well-known transition'ların keşfi ve yetkisi <sup>New</sup>
+:::info[Well-known transition'ların keşfi ve yetkisi <sup>New</sup>]
 `cancel`, `updateData` ve `exit` artık State fonksiyonunun `availableTransitions` listesinde — trigger tipine ve `availableIn` kapsamına göre — **configured key**'leriyle listelenir ve `roles` tanımları diğer transition'lar gibi listeyi **filtreler** (önceden `updateData`/`exit` üzerindeki `roles` hiç değerlendirilmiyordu). Roller execution'da enforce edilmez; `roles` client'a *ne sunulacağını* belirler. Execution tarafında ise `availableIn` **state gate** olarak uygulanır: kapsam dışı bir state'ten gelen istek `Transition:100024` ile reddedilir (önceden her state'ten çağrılabiliyordu). Bkz. [Built-in Functions → Well-known transition'lar listede](/docs/components/functions/built-in#well-known-transitionlar-listede).
 :::
 
@@ -1012,11 +1012,11 @@ State Function yanıtında bu tanım, deadline bekliyorken şu şekilde görün�
 }
 ```
 
-:::warning v0.0.99 — `timeout.target` artık obje
+:::warning[v0.0.99 — `timeout.target` artık obje]
 State Function yanıtındaki `timeout.target` v0.0.99'da **string'den objeye** dönüştü (`{ key, stateType, stateSubType, labels, subFlow }`); hedef state key'ini `target.key` ile okuyun. Tanımdaki `timeout.target` (yukarıdaki tablo) string olarak kalır.
 :::
 
-:::info Subflow override'ı bloğu bütün olarak değiştirir
+:::info[Subflow override'ı bloğu bütün olarak değiştirir]
 Parent'ın `subFlow.overrides.timeout` tanımı child'ın `timeout` bloğunu **annotations dahil bütün olarak** değiştirir; alanlar merge edilmez. <sup>New</sup> v0.0.95 öncesinde bu override hiç uygulanmıyordu — override ile başlatılan child instance'lar artık gerçekten timeout'a düşer. Ayrıntı: [SubFlow Overrides](../how-to/subflow-overrides).
 :::
 
@@ -1220,7 +1220,7 @@ Instance data her state'de merge ile genişlediğinden master schema'da **`requi
 
 Aynı `scripts` yapısı her mapping objesinde (transition `mapping`, `rule`, `timer`, subflow `mapping`, task `onExecutionTasks[].mapping` vb.) de tanımlanabilir.
 
-:::warning Publish kontrolü (v0.0.99)
+:::warning[Publish kontrolü (v0.0.99)]
 `scripts.allowedAssemblies` (flow seviyesinde veya herhangi bir script slot'unda) bildiren her workflow publish'te denetlenir: her **basit assembly adı** ya bir framework (TPA) assembly'si olarak ya da `Scripting:Sandbox:PluginDirectory` içindeki bir DLL olarak çözülmelidir. Çözülemezse publish `400` döner:
 
 ```

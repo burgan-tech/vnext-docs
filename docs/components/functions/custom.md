@@ -161,7 +161,7 @@ Tek bir **`task`** yerine **`attributes.onExecutionTasks`** ile **sırayla** bir
 
 İsteğe bağlı **`attributes.output`**, **`IOutputHandler`** uygulayan bir betiğe işaret eder. **`OutputHandler`** içinde sonuçlar **`context.OutputResponse`** üzerinden okunur. Her task'ın sonucu **etkin slot** adı altında tutulur: `variableKey` tanımlıysa o (verbatim), değilse task key'inin camelCase hali (`validate-account-policies` → `validateAccountPolicies`).
 
-:::tip Response header & status code forward
+:::tip[Response header & status code forward]
 Multi-task function'larda output handler'ın döndürdüğü `ScriptResponse`'un **`Headers`** ve **`StatusCode`** alanları, nihai function HTTP yanıtına **forward edilir**. Böylece output handler yalnızca gövdeyi değil, yanıt status'ünü (örn. `201`, `202`) ve `Location` / `ETag` gibi header'ları da belirleyebilir.
 :::
 
@@ -248,7 +248,7 @@ var primary   = context.OutputResponse["primaryChild"];
 var secondary = context.OutputResponse["secondaryChild"];
 ```
 
-:::warning Slot çakışması publish'te reddedilir
+:::warning[Slot çakışması publish'te reddedilir]
 Fonksiyonlarda slot çakışması, `order` değerinden **bağımsız** olarak **tüm `onExecutionTasks`** genelinde denetlenir: iki giriş aynı etkin slot'a düşüyorsa (ör. aynı task iki kez, `variableKey` olmadan) tanım publish'te reddedilir. Bu durum önceden runtime'da `Parallel tasks produced conflicting output for key '...'` hatasıyla patlıyordu. Geçersiz formatlı bir `variableKey` de reddedilir: *"... variableKey 'x' is not a valid response slot name: use letters, digits and '_', starting with a letter or '_' (max 100 characters)."* (Workflow task listelerinde çakışma **order bazında** denetlenir — bkz. [Mapping Rehberi](/docs/components/mappings).)
 :::
 
@@ -302,7 +302,7 @@ Bir fonksiyon, client'ların keşfedebileceği **deklaratif bir kontrat** taşı
 
 Değerlendirilemeyen bir rule loglanır ve **atlanır** (fatal değildir). Hiçbir öğe eşleşmezse slot "**kontrat yok**" olarak çözülür — bu bir hata değildir: doğrulama atlanır, `/info` `hasView`/`hasSchema` alanlarını `false` raporlar, içerik rotaları `404` döner.
 
-:::warning Ölü inputSchema
+:::warning[Ölü inputSchema]
 Yalnızca body taşıyamayan verb'ler bildiren bir fonksiyonda (`"verbs": ["GET"]` gibi) `inputSchema` tanımlamak **doğrulama hatasıdır** — şema hiçbir zaman değerlendirilemez.
 :::
 
@@ -312,7 +312,7 @@ Yalnızca body taşıyamayan verb'ler bildiren bir fonksiyonda (`"verbs": ["GET"
 
 Bir fonksiyon, isteğe bağlı **`attributes.cache`** bloğu ile **tüm yanıtını** bir Dapr state store'da cache'leyebilir. Cache **hit** olduğunda yanıt tek bir cache okumasıyla döner — task'lar hiç çalıştırılmaz; **miss** olduğunda fonksiyon normal çalışır ve sonuç cache'e yazılır (read-through). Gerçek bir konfigürasyon-değerlendirme fonksiyonunda yanıt süresi ~230ms'den ~93ms'ye düşmüştür.
 
-:::warning Yalnızca yan etkisiz fonksiyonlar
+:::warning[Yalnızca yan etkisiz fonksiyonlar]
 Cache, fonksiyon başına **opt-in**'dir ve yalnızca **yan etkisiz (read) fonksiyonlar** için etkinleştirilmelidir. Yazma/aksiyon içeren bir fonksiyonu cache'lemek, task'ların atlanması nedeniyle yan etkilerin kaybolmasına yol açar.
 :::
 
@@ -347,7 +347,7 @@ Cache, fonksiyon başına **opt-in**'dir ve yalnızca **yan etkisiz (read) fonks
 | `varyByHeaders` | `string[]` | Hayır | — | Sonucu değiştiren **tam (exact)** request-header adları. Belirtilen header'lar cache key'ine katılır |
 | `varyByHeaderPrefixes` | `string[]` | Hayır | — | Sonucu değiştiren request-header adı **prefiksleri** (ör. bir prefix ile başlayan tüm header'lar) |
 
-:::tip Vary-by header'lar (`#839`)
+:::tip[Vary-by header'lar (`#839`)]
 `varyByHeaders` ve `varyByHeaderPrefixes`, key-expression içinde kullanılabilen `varyKey(context)` yardımcı fonksiyonunun header-adı kümesini oluşturur (ikisi birleştirilir). Böylece runtime herhangi bir header konvansiyonuna bağlı kalmadan; aynı fonksiyonun farklı header değerleri için **ayrı cache varyantları** tutar. Instance `Instance.Data["varyBy"]` ile kendi kümesini sağlamazsa, domain'de tanımlı bu iki alan kullanılır.
 :::
 
@@ -395,7 +395,7 @@ PATCH  /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{fun
 DELETE /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/{function}
 ```
 
-:::info BFF Maliyeti
+:::info[BFF Maliyeti]
 POST, PATCH ve DELETE verb desteği, function endpoint'lerinin tam CRUD operasyonlarını karşılamasına olanak tanır. Bu sayede ayrı BFF katmanı geliştirme ihtiyacı minimize edilir.
 :::
 
@@ -437,7 +437,7 @@ Instance'ın mevcut durumunu, kullanılabilir transition'ları (rol filtreli, `l
 GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/functions/state
 ```
 
-:::info State Alias (Rol Tabanlı Maskeleme)
+:::info[State Alias (Rol Tabanlı Maskeleme)]
 `state` alanı, aktif state'te `alias` tanımlıysa **role göre maskelenmiş** etiketi döndürebilir. İstek yapan aktörün rolleri alias `roles` listesine göre değerlendirilir (DENY her zaman ALLOW'u geçersiz kılar) ve eşleşen alias için istek diline (Accept-Language) uygun `label` döner; o dilde label yoksa `alias.name` döner. `alias` tanımlı değilse veya hiçbir rol eşleşmezse ham `state.key` döner. Detay için bkz. [State Alias](/docs/components/workflow#state-alias-rol-tabanlı-state-maskeleme).
 :::
 

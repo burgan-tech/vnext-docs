@@ -101,7 +101,7 @@ Kalıcı taraf ise **Postgres compare-and-set**'tir <sup>New</sup> v0.0.92: `Try
 
 Scheduler arming (timer kurma) bu lock'un dışındadır (v0.0.85) — timer armlama lock almadan gerçekleşir.
 
-:::note updateData öncesi durum
+:::note[updateData öncesi durum]
 v0.0.86'dan önce updateData da accept lock'unu alıyordu; bu, N paralel notifier'ın (örn. subprocess → parent güncellemesi) parent'ın status lock'u üzerinde birbirleriyle çakışmasına ve her kaybedenin işe yaramayan bir lock için error-boundary retry backoff'u yakmasına yol açıyordu. v0.0.86, updateData'yı bu yarıştan tamamen çıkardı.
 :::
 

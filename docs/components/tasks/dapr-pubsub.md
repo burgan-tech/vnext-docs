@@ -88,7 +88,7 @@ spec:
     value: "kafka:9092"
 ```
 
-:::warning Kafka altında topic adı ve ACL
+:::warning[Kafka altında topic adı ve ACL]
 <sup>New</sup> v0.0.100 — `topic` değeri **olduğu gibi** kullanılır; runtime önek eklemez. vNext'in Kafka kurulumunda broker her domain kullanıcısına topic ve consumer group'larda yalnız `vnext.{domain}.*` yetkisi verir. Bu kalıbın dışındaki bir topic'e (ör. `user-events`) yayın ACL tarafından reddedilir, ta ki topic domain'e açıkça yetkilendirilene kadar. Runtime'ın kendi topic'leriyle aynı biçimi kullanın: `vnext.{domain}.{environment}.{olay}`.
 
 ```json

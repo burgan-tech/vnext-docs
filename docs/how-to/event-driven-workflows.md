@@ -192,7 +192,7 @@ Kurallar:
 - Lokalde YAML'lar orchestration sidecar'ına mount edilen klasöre konur; Kubernetes'te namespace'inizdeki `Subscription` custom resource'larıdır ve orchestration app-id'sine scope'lanır.
 - Deklaratif subscription'lar sidecar açılışında okunur. **YAML ekledikten/değiştirdikten sonra Dapr sidecar'ını yeniden başlatın.**
 
-:::warning Kafka altında domain topic'leri
+:::warning[Kafka altında domain topic'leri]
 Bu sayfadaki `my-domain.order-flow` gibi adlar Redis/RabbitMQ gibi ACL'siz broker'lar içindir. <sup>New</sup> v0.0.100 — Domain'in kendi yazdığı topic'ler (Subscription `topic`'i, [DaprPubSub Task](/docs/components/tasks/dapr-pubsub) `topic`'i) **olduğu gibi** kullanılır, runtime önek eklemez. Kafka'da broker her domain kullanıcısına yalnız `vnext.{domain}.*` yetkisi verdiği için bu topic'ler de o kalıba uymalı (ya da domain'e açıkça yetkilendirilmiş olmalı). Runtime topic'leriyle aynı biçim önerilir: örneğin `vnext.my-domain.production.order-flow` ve `vnext.my-domain.production.order-flow.abort`. Bkz. [Runtime topic adları](#runtime-topic-adları).
 :::
 
@@ -293,7 +293,7 @@ vnext.{APP_DOMAIN}.{environment}.{event}.v{n}
 
 Önek, Kafka ACL'si içindir: broker her domain kullanıcısına topic ve consumer group'larda `vnext.{domain}.*` yetkisi verir, dışındaki topic reddedilir. Consumer group'u runtime değil, Helm chart'ın Kafka component'i belirler (bkz. [Helm Chart](/docs/deployment/helm-chart)).
 
-:::warning Topic adı değişikliği — rollout'tan önce outbox'ı boşaltın
+:::warning[Topic adı değişikliği — rollout'tan önce outbox'ı boşaltın]
 v0.0.100 ile **tüm runtime topic adları değişir**. Eski adlı topic'lerde kalan mesajlar yeni sürümde tüketilmez. Outbox satırı topic adını yazıldığı anda saklar; güncellemeden önce yazılmış satırlar eski ada gönderilir. Bu yüzden yeni sürüme geçmeden önce outbox'ı boşaltın.
 :::
 

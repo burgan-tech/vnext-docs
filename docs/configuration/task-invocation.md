@@ -67,7 +67,7 @@ Yetenek kapısı sayesinde yanlış bir yapılandırma (local invoker'ı olmayan
 | `soap` | SOAP (tip `16`) | `LocalSoapTaskInvoker` | `http` ile aynı adlandırılmış HTTP client'ları ve bağlantı sınırını paylaşır |
 | `statestore` | State Store (tip `17`) | `LocalStateStoreTaskInvoker` | Paylaşımlı `IStateStoreClient` üzerinden çalışır; function response cache'ini de besler |
 
-:::warning v0.0.99 — `cacheaside` modu kaldırıldı
+:::warning[v0.0.99 — `cacheaside` modu kaldırıldı]
 `cacheaside` wire tipi, `LocalCacheAsideTaskInvoker` ve Execution tarafındaki `CacheAsideTaskInvoker` v0.0.99'da kaldırıldı. Cache-Aside task'ı (tip `18`) tamamen Orchestration'daki executor'da çalışır: **cache get/set `statestore` modunu izler** (State Store task'ı ve function response cache ile aynı gateway), `sourceTask` ise kendi tipinin yönlendirmesiyle çalışır (ör. bir `http` kaynak `Modes:http`'e tabidir). Ortam konfigürasyonunuzdan `Workflow:TaskInvocation:Modes:cacheaside` (veya `Workflow__TaskInvocation__Modes__cacheaside`) girişini **kaldırın**. Bkz. [Cache-Aside Task](/docs/components/tasks/cache-aside) ve [v0.0.99 Breaking Changes](/blog/breaking-changes/breaking-changes-v0-0-99).
 :::
 

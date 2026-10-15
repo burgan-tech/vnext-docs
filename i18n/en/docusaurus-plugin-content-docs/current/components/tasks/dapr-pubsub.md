@@ -110,7 +110,7 @@ spec:
     value: "none"
 ```
 
-:::warning Topic names and ACLs under Kafka
+:::warning[Topic names and ACLs under Kafka]
 <sup>New</sup> v0.0.100 — the `topic` value is used **verbatim**; the runtime adds no prefix. In vNext's Kafka setup the broker grants each domain's user only `vnext.{domain}.*` on topics and consumer groups. Publishing to a topic outside that pattern (e.g. `user-events`) is refused by the ACL unless the topic is explicitly granted to the domain. Use the same shape as the runtime's own topics: `vnext.{domain}.{environment}.{event}`.
 
 ```json

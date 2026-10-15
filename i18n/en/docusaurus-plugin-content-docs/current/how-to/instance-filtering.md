@@ -68,7 +68,7 @@ Direct database columns:
 | `completedAt` | DateTime | Completion time | eq, ne, gt, ge, lt, le, between |
 | `isTransient` | boolean | Transient flag | eq, ne |
 
-:::note Query tokens
+:::note[Query tokens]
 The operators in this table are **query syntax** (the tokens a client sends in the `filter` parameter) and did not change in v0.0.100. A master-schema **declaration** in `x-filterOperators` uses the canonical names instead; see [Schema declaration vs. query token](#schema-declaration-vs-query-token).
 :::
 
@@ -513,7 +513,7 @@ GET /banking/workflows/payment-workflow/instances?filter={...}&page=1&pageSize=2
 
 ## Error Handling
 
-:::note Updated for v0.0.84
+:::note[Updated for v0.0.84]
 Instance-query parsing is now **fail-closed**: anything the runtime cannot execute exactly as authored (filter, sort, groupBy, aggregation) is rejected up front with HTTP 400, instead of being silently dropped and running unfiltered. The `error.code` shapes below (`invalid_filter`, `unsupported_operator`, `invalid_column`) are superseded by the `Validation:9000xx` codes documented on the [Turkish page](/docs/how-to/instance-filtering) (section "Hata Yönetimi"), with sub-codes such as `filter.unknownOperator` and `sort.invalidJson`. Full English translation of that section is pending.
 :::
 
@@ -537,7 +537,7 @@ Before v0.0.100 a schema that declared a query token (`ge`, `like` …) in `x-fi
 4. **Use Date Ranges Wisely**: Narrow date ranges improve query performance
 5. **Avoid Wildcard Searches on Large Datasets**: Use `startswith` or `endswith` instead of `like` when possible
 
-:::tip v0.0.86 — `attributes.*` equality filters are now indexed
+:::tip[v0.0.86 — `attributes.*` equality filters are now indexed]
 Equality (`eq`) filters on `attributes.*` fields compile to a `@>` containment predicate; a partial GIN index (`jsonb_path_ops`, `WHERE IsLatest = true`) on `InstancesData.Data` now serves it. Previously every such filter was a full table scan.
 :::
 

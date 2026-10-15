@@ -6,7 +6,7 @@ description: Runs the HTTP call directly inside the Orchestrator instead of hopp
 
 # External HTTP Task (Type: `22`)
 
-:::warning Deprecated — v0.0.94
+:::warning[Deprecated — v0.0.94]
 Type `22` is **deprecated** since v0.0.94. From that version the standard [HTTP Task](./http) (type `6`) already runs inside the Orchestrator by default (`Workflow:TaskInvocation:Modes:http = "Local"`), so the hop-free call that was type `22`'s only difference is now type `6`'s behaviour too. Use type `6` for new definitions; existing type `22` definitions keep working but the type will not be added to the `@burgan-tech/vnext-schema` enum. Details: [Task Invocation](../../configuration/task-invocation).
 :::
 

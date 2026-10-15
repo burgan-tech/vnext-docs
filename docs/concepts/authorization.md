@@ -148,7 +148,7 @@ Kural 5, rolsüz çağıranın nadir olmamasından doğar: anonim/cihaz token'ı
 
 6. <sup>New</sup> v0.0.99 **Rolsüz çağıran, `""` olarak çözülen bir `$role.` ALLOW'u ile kabul edilmez.** Önceden yol boş string'e çözüldüğünde rolsüz çağıranın boş rol adıyla "eşleşip" geçebildiği durum kapatıldı: rol-bağlı bir yaprak rolsüz çağıran için **Unknown**'dur ve allow yalnızca **Yes**'te kabul eder (bkz. [Kombinatörler](#kombinatörler-allof--anyof)). Deny'lar (kural 5) ve düz statik / sistem rolü grant'ları değişmedi.
 
-:::warning Geriye dönük etki
+:::warning[Geriye dönük etki]
 Yalnızca `deny` grant'ı içeren mevcut bir set artık **blacklist** olarak değerlendirilir (listelenenler dışındaki herkese açık). Niyetiniz "herkesi engelle" idiyse en az bir `allow` grant'ı ekleyerek allow-list'e çevirin.
 :::
 
@@ -202,7 +202,7 @@ Set kararı kanonik kuralla aynıdır, yalnızca "eşleşme" üç değerli hale 
 
 **Publish kuralları:** dinamik yollar her yaprak için ayrı denetlenir (`$.context.` ile başlamalı — büyük/küçük harf duyarlı — ve boş navigasyon yolu içermemeli). Hatalı şema `x-roles` girdileri ve hatalı dinamik yol taşıyan function `roles` girdileri artık publish'te reddedilir (önceden runtime sessizce atlıyordu). `permissions` (yetki matrisi) yanıtında kombinatör grant'ları `allOf` / `anyOf` ile ve **`role` olmadan** gösterilir; matrisi okuyan istemci `role`'süz grant'a tolerans göstermelidir.
 
-:::warning Rollout tabanı
+:::warning[Rollout tabanı]
 İlk `allOf` / `anyOf` grant'ını ancak **tüm pod'lar** — ve bu domain'e override damgalayan **tüm domain'ler** — v0.0.99 çalıştırdıktan sonra yazın; eski bir pod kombinatör grant'ını okuyamaz. Kombinatör içeren tanımlar publish edildikten sonra runtime'ı ikili (binary) olarak eski sürüme düşürmeyin.
 :::
 

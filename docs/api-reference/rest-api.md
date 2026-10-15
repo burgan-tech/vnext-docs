@@ -60,7 +60,7 @@ Component (workflow, task, function, schema, view, extension) **deploy** etmek i
 | `Disabled` | Yenilenecek bir şey yok: `ServiceDiscovery:Enabled=false`, `Provider=dapr` veya `Cache:Enabled=false` |
 | `Failed` | Registry okunamadı — **yeniden deneyin**; `success: false` döner |
 
-:::warning `GET /api/v1/definitions/re-initialize` kaldırıldı
+:::warning[`GET /api/v1/definitions/re-initialize` kaldırıldı]
 v0.0.95 itibarıyla bu endpoint **yoktur** (`404`). Zaten no-op'tu; eski CLI ve init host bu 404'ü yalnızca uyarı olarak loglar, exit code değişmez — ancak discovery cache yenilenmez. Bkz. [Service Discovery → Cache](/docs/configuration/service-discovery).
 :::
 
@@ -140,7 +140,7 @@ Dört seçiciden **tam olarak biri** verilmelidir; sıfır veya iki seçici `Aut
 
 **Responses:** `200` → `{"allowed": true}`, `403` → `{"allowed": false}` — karar **her iki durumda da gövdededir**. Yanıtlanamayan soru (instance yok, hatalı istek) hata zarfıyla `4xx`/`5xx` döner.
 
-:::warning In-process `queryRoles` denetimleri kaldırıldı — v0.0.95
+:::warning[In-process `queryRoles` denetimleri kaldırıldı — v0.0.95]
 `state`, `data`, `view`, `schema`, `master`, `tasks`, `actions`, `instance-correlation`, `incidents`, `incidents/active` fonksiyonları ve `POST …/longpoll/ack` artık kendi içlerinde `queryRoles` / interaction kapısını **değerlendirmez**. Karar yalnızca `authorize` üzerinden verilir; Internal Gateway'in bu fonksiyonu çağırmadığı bir deployment'ta bu yüzeylerde `queryRoles` **uygulanmaz**. Görünürlük çözümü (transition filtreleme, `x-roles`) değişmemiştir. Ayrıntı: [Yetkilendirme](/docs/concepts/authorization).
 :::
 
@@ -183,7 +183,7 @@ Workflow'un tanımlı function'larının **rol filtreli** listesini döner (`{ "
 - Yetkilendirme: in-process gate yok; gateway `authorize?queryRoles=true` ile karar verir.
 - Ayrıntı: [Built-in Functions → Instance Correlation](/docs/components/functions/built-in).
 
-:::warning `…/functions/hierarchy` kaldırıldı — v0.0.99
+:::warning[`…/functions/hierarchy` kaldırıldı — v0.0.99]
 Eski `GET …/instances/{instance}/functions/hierarchy` rotası kaldırıldı; **alias yoktur**, eski yol custom function çözümlemesine düşer ve `404` döner. `instance-correlation`'a geçin.
 :::
 
@@ -326,7 +326,7 @@ Gövde serbest (free-form) JSON da olabilir — bkz. yukarıdaki *Serbest payloa
 - `200 OK` → ack kabul edildi (pipeline devam etti veya zaten devam etmişti)
 - `404 Not Found` → instance/workflow yok
 
-:::note Yetkilendirme — v0.0.95
+:::note[Yetkilendirme — v0.0.95]
 Endpoint `interaction.longPoll.roles` / `rule` kolunu **kendi içinde değerlendirmez**; karar gateway'in çağırdığı `GET …/functions/authorize?ack=true` ile verilir (yukarıya bakın). Bu sayede gateway'in kendi başına değerlendiremeyeceği C# `rule` kolu da kapsanır.
 :::
 

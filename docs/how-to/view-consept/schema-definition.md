@@ -437,7 +437,7 @@ Anahtar ve tuz **her instance için** runtime tarafından ilk korumalı yazmada 
 
 `roles` bir **muafiyet listesidir** ve yalnızca `allow` kabul eder (`x-masking.roles` için de aynısı): eşleşen çağıran değeri açık görür, eşleşmeyen (yanlış yazılmış, rolsüz, listede olmayan) herkes dönüştürülmüş değeri görür. `deny` publish'te reddedilir; dinamik roller `$.context.` ile başlamalıdır ve `allOf` / `anyOf` kombinatörleri burada kabul edilmez.
 
-:::warning Kapsam
+:::warning[Kapsam]
 `x-roles`, `x-masking` ve `x-encryption` tek bir okuma servisinden geçen tüm yüzeylerde aynı şekilde uygulanır: **instance GET, instance liste, data function, senkron start/transition yanıtı** ve **GetInstance / GetInstances / GetInstanceData task'leri**. (v0.0.99 öncesinde instance GET ve liste veriyi filtresiz dönüyor, Get* task'leri sistem görünürlüğüyle — `SystemRead` — okuyordu; bu ayrıcalık kaldırıldı.) Task okumaları, task'in hedefe sunduğu başlık setiyle değerlendirilir: input mapping'deki başlıklar + request'te olup mapping'de verilmemiş ya da boş bırakılmış her credential başlığı (`sub`, `act_sub`, `position`, `client_id`, `role`). Mapping'de dolu bir değer varsa mapping kazanır; 1024 karakteri aşan ya da kontrol karakteri içeren değerler taşınmaz. Aynı kural tüm task türleri (HTTP, SOAP, DaprService, DaprHttpEndpoint, Start, SubProcess, DirectTrigger) için geçerlidir. `role` yalnız çağıranın gönderdiği haliyle taşınır; morph-idm'in çözdüğü roller taşınmaz, hedef bunları iletilen credential'dan kendisi çözer. Lokal ve cross-domain davranış aynıdır. Başlık vermeyen bir task çağıranı adına okur; başka bir kimlikle (örn. servis rolü) okumak için credential'ı input mapping'de verin. Şema okunamazsa düz metin değil saklanan biçim döner.
 
 Task'in döndürdüğü şifreli bir değeri başka bir alana kopyalamak yazma sırasında reddedilir.
@@ -480,7 +480,7 @@ Kapsam dışı (korumasız): transition geçmişi, `context.Related`, custom fun
 
 **Runtime bu kurala hiçbir şey yapmaz:** at-rest şifreleme, okuma maskelemesi ya da filtre reddi uygulanmaz; değer client'ın gönderdiği haliyle (ciphertext) saklanır ve döner. Bu yüzden `source: client` kuralı master şema dahil her şemada kabul edilir ve `x-filterOperators` / `x-sortable` ile çakışma kuralları ona uygulanmaz. Publish'te yalnız alanlar doğrulanır; örneğin `key` eksikse: `x-encryption.key is required for source 'client': the address of the recipient's public key.`
 
-:::note `x-encrypt`
+:::note[`x-encrypt`]
 Daha önce önerilen `x-encrypt` keyword'ü hiçbir sürümde yayımlanmadı. Client tarafı şifreleme için `x-encryption` + `"source": "client"` kullanın; `x-encrypt` paket doğrulamasında reddedilir.
 :::
 
@@ -530,7 +530,7 @@ Okuma yüzeylerinde dönüşümler sırayla uygulanır: önce `x-roles` (yetkisi
 | `SchemaEncryption:SecretCacheEntries` | `100000` | Instance anahtarlarının süreç içi (in-process) önbellek kapasitesi; anahtarlar Redis'e yazılmaz |
 | `SchemaEncryption:SecretCacheSlidingMinutes` | `30` | Önbellekteki anahtarın kayan (sliding) son kullanma süresi |
 
-:::tip ETag
+:::tip[ETag]
 Aynı versiyonla yeniden publish edilen bir şema ETag'i değiştirmez. `x-roles`, `x-masking` veya `x-encryption` keyword'lerini değiştirdiğinizde **şema versiyonunu artırın**; aksi halde istemciler ve data function önbelleği eski yanıtı kullanmaya devam edebilir.
 :::
 

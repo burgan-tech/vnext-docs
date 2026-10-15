@@ -34,7 +34,7 @@ The vNext Runtime platform provides three core function APIs that are automatica
 | **Instance Correlation** (v0.0.99) | Downward tree of the subflows/subprocesses an instance spawned | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/instance-correlation` |
 | **File** <sup>New</sup> v0.0.100 | Bytes of an `x-storage` file referenced by the instance data | `GET\|HEAD /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file=` |
 
-:::warning `hierarchy` removed (v0.0.99)
+:::warning[`hierarchy` removed (v0.0.99)]
 The old `…/functions/hierarchy` route was removed in v0.0.99 and replaced by [`instance-correlation`](#instance-correlation-function). There is **no alias** — the old path falls through to custom-function resolution and returns `404`.
 :::
 
@@ -182,7 +182,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `transitions[].schema.href` | `string` | Schema function endpoint URL with transitionKey |
 | `eTag` | `string` | ETag for cache validation |
 
-:::note ResponseShapeVersion v14 (v0.0.99)
+:::note[ResponseShapeVersion v14 (v0.0.99)]
 v13 shipped in v0.0.98 (the `terminate: false` interaction fix); v14 in v0.0.99 (labels and targets). Each bump invalidates existing state ETags once. In v0.0.99 **`timeout.target` changed from a string to the same object as `transitions[].target`** (breaking, in place) — read `timeout.target.key`.
 :::
 

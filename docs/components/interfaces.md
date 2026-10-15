@@ -61,7 +61,7 @@ Task çalıştırılmadan **önce** çağrılır; girdi verisini hazırlar veya 
 
 **Tipik kullanım:** dinamik endpoint üretimi, kimlik doğrulama token'ı hazırlama, özelleştirilmiş header yapılandırması.
 
-:::warning InputHandler task'ı durduramaz
+:::warning[InputHandler task'ı durduramaz]
 `InputHandler`'ın dönüş değeri yalnızca task'ın audit kaydına yazılır; runtime onu hiçbir karar için okumaz. Ne döndürürseniz döndürün — `Data["error"]`, `StatusCode` veya boş bir yanıt — task ardından yapılandırıldığı haliyle **çalıştırılır**. Yazan task'larda (StartTrigger, DirectTrigger, SubProcess, HTTP POST, publish) yazma, handler girdiyi geçersiz bulmuş olsa bile gerçekleşir; `OutputHandler` sonucu sonradan görür ve geri alamaz.
 
 Doğrulamayı task'tan **önce** yapın: transition kuralı/koşulu, hata state'ine giden otomatik transition veya öncesinde çalışan bir doğrulama adımı task'ın hiç çalışıp çalışmayacağına karar verir. Son çare olarak `InputHandler` içinden exception fırlatmak çağrıyı engeller: task bir task yürütme hatası olarak başarısız olur, `OutputHandler` çalışmaz ve bu hata bir iş yanıtı olmadığı için `AcceptedStatusCodes` ona uygulanmaz.

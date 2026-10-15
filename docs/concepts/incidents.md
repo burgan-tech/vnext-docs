@@ -12,7 +12,7 @@ description: Error boundary hatalarının InstanceIncidents tablosunda kalıcı 
 
 Incident'lar kendi tablosunda tutulur: **`InstanceIncidents`**, instance başına **sınırsız geçmiş** (her hata için bir satır), instance silindiğinde cascade-delete edilir. Instance'ın kendisinde de denormalize edilmiş bir bayrak vardır: **`Instances.HasActiveIncident`** — açık (çözülmemiş) bir incident olup olmadığını söyler ve pipeline bu bayrağı okuyarak karar verir; incident satırlarının kendisi yalnızca bayrak `true` olduğunda materialize edilir.
 
-:::info Geçmiş model
+:::info[Geçmiş model]
 Daha önce incident'lar `Instances.Incidents` adlı bir jsonb kolonunda, en yeni beşle sınırlı olarak tutuluyordu. Bu kolon veritabanında **donmuş (unmapped)** halde kalır; sonraki bir sürümde kaldırılacaktır. `MoveInstanceIncidentsToTable` ve `BackfillInstanceIncidents` migration'ları eski verileri yeni tabloya taşımıştır.
 :::
 
@@ -48,7 +48,7 @@ Blok **içerik değil, link** taşır: incident'ın kendisi (mesaj, hata kodu, v
 
 Hiçbir incident yüzeyinde **stack trace** dönmez (operatörler bunları loglardan/APM'den okur).
 
-:::note Yetkilendirme — v0.0.95
+:::note[Yetkilendirme — v0.0.95]
 v0.0.95 itibarıyla `GET …/incidents` ve `GET …/incidents/active`, `queryRoles` kapısını **kendi içlerinde değerlendirmez**; karar, Internal Gateway'in isteği iletmeden önce sorduğu `GET …/functions/authorize?queryRoles=true` ile verilir (state, data, view, schema, master, tasks ve actions fonksiyonlarıyla aynı tek karar noktası). Gateway'in `authorize`'ı çağırmadığı bir deployment'ta bu iki endpoint `queryRoles` uygulamaz. Bkz. [REST API → authorize](/docs/api-reference/rest-api).
 :::
 
@@ -97,7 +97,7 @@ Aşağıdaki tablo `IncidentDetailDto`'nun (API yanıtı) alanlarını gösterir
 | `resolvedAt` | `string \| null` (ISO 8601 UTC) | Çözülme anı; çözülmediyse `null` |
 | `retryCount` | `integer` | **Her zaman `0`** döner — bkz. [Bilinen sınır: retryCount](#bilinen-sınır-retrycount) |
 
-:::note Doğrulama notu
+:::note[Doğrulama notu]
 Brief'te `taskKey` olarak geçen alan, kaynak koddaki gerçek adıyla **`task`**'tır; tablo kaynağa göre düzeltilmiştir. `stackTrace` alanı entity'de (persistence) var olsa da API'ye dönen `IncidentDetailDto`'da **hiç yer almaz** — hiçbir client yüzeyi stack trace döndürmez.
 :::
 
@@ -133,7 +133,7 @@ Mapping script'leri incident bilgisine `context.Incident` (`ScriptIncidentInfo`)
 | `TotalIncidentCount` | Instance üzerinde **materialize edilmiş** incident sayısı — tam kalıcı geçmiş **değil**; çözülmemişler artı mevcut transition'da kaydedilenler |
 | `IncidentsLoaded` | Incident'ların bu script bağlamı için gerçekten yüklenip yüklenmediği |
 
-:::info v0.0.99 düzeltmesi
+:::info[v0.0.99 düzeltmesi]
 v0.0.93–v0.0.98 arasında (incident'ların ayrı tabloya taşınmasından sonra) script'ler `HasActiveIncident = true` görürken `ActiveIncident` **`null`** ve `TotalIncidentCount` **`0`** dönüyordu — bir subflow fault'unu ele alan error-boundary mapping'leri dahil. v0.0.99'da `context.Incident` yüklenmiş incident'ları okur; ayrıca child'dan parent'a giden `InstanceSubFaultedEvent` payload'ı artık no-tracking olarak yüklenmiş incident'ları taşır, böylece parent tarafındaki error-boundary script'i child'ın incident bilgisini görür. Bu sürümlerde `ActiveIncident`'ın `null` olmasına karşı yazılmış geçici kontrolleri gözden geçirebilirsiniz.
 :::
 

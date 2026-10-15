@@ -64,7 +64,7 @@ The schema package 0.0.56, the CLI (`npm run validate`) and Forge **refuse** a l
 attributes.type 'workflow' is not a schema role (master, transition, component, function) and will be refused in a future release; use 'master' for a flow's data schema, 'transition' / 'function' for a request body, 'component' for an embedded view's dataSchema, or omit it.
 ```
 
-:::warning Not the other components' `attributes.type`
+:::warning[Not the other components' `attributes.type`]
 This role enum applies only to the **schema component** (`flow: sys-schemas`). The `attributes.type` of workflows (`C` / `F` / `S` / `P`), tasks (numeric task type), views (content type) and extensions (numeric extension type) keep their own enums and are unaffected.
 :::
 

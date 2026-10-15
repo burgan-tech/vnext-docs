@@ -93,11 +93,11 @@ Chart, `appVersion` alanında hedeflediği runtime imaj etiketini taşır. v0.0.
 | `1.0.122` | `0.0.99` | — |
 | `1.0.123` | `0.0.100` | Kafka pub/sub seçeneği (`global.dapr.pubsub.type`), `global.blobStorageComponents` (x-storage), Execution gRPC values'ları kaldırıldı (bkz. [1.0.123'e geçiş](#chart-10123e-geçiş-runtime-00100)) |
 
-:::warning Dapr bileşen ayak izi — v0.0.93 (chart ≥ 1.0.111)
+:::warning[Dapr bileşen ayak izi — v0.0.93 (chart ≥ 1.0.111)]
 Runtime v0.0.93 ile Dapr bileşenleri **yalnızca tüketen host'a** yüklenir (`vnext/docs/runtime/dapr-component-footprint.md`): `state` → orchestrator + execution; `lock` → orchestrator + db-migrator; `pubsub` → orchestrator, execution, inbox, outbox; `pubsub-broadcast` → yalnız orchestrator. `lock` execution/inbox/outbox'tan, `state` inbox/outbox'tan kaldırıldı; `AddRedis()` / `Redis__Standalone__EndPoints__*` env'leri, `dapr-placement` bağımlılığı ve `DAPR_PLACEMENT_HOST` runtime'dan silindi (Redis **sunucusu** kalır — Dapr bileşenlerini besler). Monitor API host'u (`/api/v1/monitor`, port 4203) da bu sürümde kaldırıldı. Chart, `global.dapr.redis.scopes.<state|lock|pubsub|pubsubBroadcast>` ile bu politikayı **değiştirmenize** (liste birleşmez, yerine geçer) izin verir; 0.0.90 öncesi bir imaj sabitleyen domain `Redis__Standalone__EndPoints__0`'ı kendi values'ında yeniden eklemelidir.
 :::
 
-:::info Orchestrator'da `state` bileşeni zorunlu — v0.0.94 (chart ≥ 1.0.115)
+:::info[Orchestrator'da `state` bileşeni zorunlu — v0.0.94 (chart ≥ 1.0.115)]
 v0.0.94'ten itibaren `http`, `daprservice`, `soap`, `statestore` ve `cacheaside` task'ları varsayılan olarak **Orchestrator process'i içinde** çalışır (`Workflow:TaskInvocation`). `statestore` / `cacheaside` bu yüzden orchestrator sidecar'ından bir `state` bileşeni ister: chart'ın varsayılan scope'u bunu sağlar; özel bir `storeName` kullanan task/function cache tanımlarında ilgili bileşenin scope'una **orchestrator app-id'si** de eklenmelidir, aksi halde ilk kullanımda çözümlenemez. Bileşen taşınamıyorsa `"statestore": "Remote"` / `"cacheaside": "Remote"` ile eski yol korunur. Ayrıntı: [Task Invocation](/docs/configuration/task-invocation).
 :::
 
@@ -218,7 +218,7 @@ Boyut sınırları: base64 gövdeyi yaklaşık 4/3 büyütür. Orchestration hos
 
 ## Chart 1.0.123'e geçiş (runtime 0.0.100)
 
-:::warning Güncellemeden önce
+:::warning[Güncellemeden önce]
 - **Outbox'ı boşaltın.** Tüm runtime topic adları `vnext.{appDomain}.{environment}.*` olarak değişir. Eski topic'lerde kalan mesajlar tüketilmez; güncellemeden önce yazılmış outbox satırları eski topic adını taşır. Rollout'tan önce outbox'ın boşaldığından emin olun.
 - **Kaldırılan gRPC values'ları.** Orchestration → Execution gRPC transport'u runtime'dan kaldırıldı; çağrı her zaman Dapr HTTP service invocation'dır (bkz. [Task Invocation](/docs/configuration/task-invocation)). `execution.grpcPort`, `Kestrel__GrpcPort` ve `orchestrator.appEnvConfig.ExecutionApi__Transport` chart'tan çıkarıldı; bunları set eden bir override etkisizdir.
 - **`execution.dapr.protocol` `"http"` kalmalıdır.** Execution sidecar'ını `grpc`'ye çevirmiş bir ortam `http`'ye döndürülmelidir. Dapr sidecar'ının kendi gRPC portları ve OTLP gRPC bundan etkilenmez.

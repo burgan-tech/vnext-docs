@@ -317,7 +317,7 @@ Autos are evaluated after **every** `updateData`, so "accumulate data, advance w
 - **Never forwarded:** `updateData`, `cancel`, `exit`, the timeout, and parent shared transitions **available in the current state** are handled on the parent. A parent shared transition not available in the current state is forwarded (the leaf normally answers `400`).
 - Added cost is about **5 ms** at p50.
 
-:::info Deprecation: `subflow-chain-reserve-claim`
+:::info[Deprecation: `subflow-chain-reserve-claim`]
 The old accept-time chain reserve (the `ChainReserved` claim, the `…/busy` and `internal/busy-release` routes) is **deprecated** since v0.0.100 and will be removed no earlier than v0.0.103. This runtime keeps the receiving side: a reserved relay from an older parent is still admitted at the leaf as before. **Mixed-version domains need no action.**
 :::
 

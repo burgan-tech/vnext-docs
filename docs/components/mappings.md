@@ -48,7 +48,7 @@ Göreve iletilecek verileri hazırlamak için kullanılır. Task çalıştırıl
 - Task yapılandırmasını ayarlama
 - Başlık ve kimlik doğrulama bilgisi ekleme
 
-:::warning InputHandler task'ı durduramaz
+:::warning[InputHandler task'ı durduramaz]
 `InputHandler`'ın dönüş değeri yalnızca task'ın audit kaydına yazılır; runtime onu hiçbir karar için okumaz. Ne döndürürseniz döndürün — `Data["error"]`, `StatusCode` veya boş bir yanıt — task ardından yapılandırıldığı haliyle **çalıştırılır**. Yazan task'larda (StartTrigger, DirectTrigger, SubProcess, HTTP POST, publish) yazma, handler girdiyi geçersiz bulmuş olsa bile gerçekleşir; `OutputHandler` sonucu sonradan görür ve geri alamaz.
 
 Doğrulamayı task'tan **önce** yapın: transition kuralı/koşulu, hata state'ine giden otomatik transition veya öncesinde çalışan bir doğrulama adımı task'ın hiç çalışıp çalışmayacağına karar verir. Son çare olarak `InputHandler` içinden exception fırlatmak çağrıyı engeller: task bir task yürütme hatası olarak başarısız olur, `OutputHandler` çalışmaz ve bu hata bir iş yanıtı olmadığı için `AcceptedStatusCodes` ona uygulanmaz.
@@ -310,7 +310,7 @@ Davranış ve tasarım notları:
 - Okuma, mevcut transition'ın **transaction'ı içinde** çalışır; aynı transition'da motorun kendi commit edilmemiş yazmalarını görür.
 - Cross-domain okuma internal endpoint'ler üzerinden, timeout / retry / circuit-breaker ile yapılır; aynı domain'de süreç dışına çıkılmaz.
 
-:::warning Alan koruması kopya ile taşınmaz
+:::warning[Alan koruması kopya ile taşınmaz]
 `Related` okumaları **filtresizdir** (query-role kontrolü ve `x-roles` / `x-masking` / `x-encryption` alan korumaları uygulanmaz; v0.0.99'da da korumalı okuma yüzeyleri arasında değildir). `x-masking` alanları ham gelir; `encrypt` alanları saklandığı gibi jeton olarak gelir ve `DecryptAsync` yalnızca instance'ın kendi verisini açtığından ilişkili instance'ın jetonu çözülemez — çağrı, motorun kendi correlation çerçevesi içindeki deterministik bir okumadır. Bu yüzden ilişkili instance'ın `x-roles` ile kısıtlı bir alanını output mapping'le **bu** instance'ın verisine kopyalamak, o alanı bu instance'ı okuyabilen herkese açar. Kısıtlı alanları kopyalamadan, karar vermek için okuyup bırakın.
 :::
 
@@ -486,7 +486,7 @@ public class MyMapping : ScriptBase, IMapping
 }
 ```
 
-:::tip Secret cache ve performans
+:::tip[Secret cache ve performans]
 `GetSecret`/`GetSecrets` çağrıları process-wide bir bundle cache'in arkasındadır (varsayılan TTL 30 sn, bkz. [Configuration → Scripting / Sandbox](../configuration/scripting#secret-cache)). Rotasyon sonrası bundle en fazla TTL kadar bayat kalabilir. `GetSecret` senkrondur ve cache miss'te **thread'i bloklar** — gecikmeye duyarlı yollarda `GetSecretAsync` tercih edin.
 :::
 

@@ -92,7 +92,7 @@ await using var conn = new NpgsqlConnection(connectionString);
 await conn.OpenAsync(context.CancellationToken);
 ```
 
-:::warning Sürücü bağımlılıkları
+:::warning[Sürücü bağımlılıkları]
 - Runtime'ın zaten taşımadığı **tüm bağımlılık zincirini** mount edin.
 - Platforma özgü build taşıyan paketlerde (ör. `Microsoft.Data.SqlClient`) NuGet paketinin `runtimes/unix/lib/<tfm>/` kopyasını ya da `dotnet publish -r linux-x64` çıktısını kullanın; `lib/` altındaki kopya `PlatformNotSupportedException` fırlatan bir stub'tır.
 - SqlClient bazı sürümlerde `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` ile çalışmaz; Alpine imajlarda ICU gerekir.

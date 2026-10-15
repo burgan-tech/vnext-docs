@@ -68,7 +68,7 @@ Doğrudan veritabanı kolonları:
 | `completedAt` | DateTime | Tamamlanma zamanı | eq, ne, gt, ge, lt, le, between |
 | `isTransient` | boolean | Geçici işaret | eq, ne |
 
-:::note Sorgu token'ları
+:::note[Sorgu token'ları]
 Bu tablodaki operatörler **sorgu sözdizimidir** (istemcinin `filter` parametresinde gönderdiği token'lar) ve v0.0.100 ile değişmedi. Master şemada `x-filterOperators` ile yapılan **beyan** ise kanonik adlarla yazılır; eşleme için bkz. [Şema beyanı ve sorgu token'ı](#şema-beyanı-ve-sorgu-tokenı).
 :::
 
@@ -725,7 +725,7 @@ Tüm red nedenleri tek seferde (en fazla 20 tanesi) döner — çağıran tek ro
 4. **Tarih Aralıklarını Akıllıca Kullanın**: Dar tarih aralıkları sorgu performansını artırır
 5. **Büyük Veri Setlerinde Wildcard Aramadan Kaçının**: Mümkün olduğunda `like` yerine `startswith` veya `endswith` kullanın
 
-:::tip v0.0.86 — `attributes.*` eşitlik filtreleri artık indeksli
+:::tip[v0.0.86 — `attributes.*` eşitlik filtreleri artık indeksli]
 `attributes.` altındaki alanlara **eşitlik** (`eq`) filtreleri `@>` containment predicate'i üretir; bu predicate'i karşılamak için `InstancesData.Data` üzerinde `IsLatest = true` koşullu, `jsonb_path_ops` opsiyonlu kısmi bir **GIN index** eklendi. Öncesinde her `attributes.*` eşitlik filtresi tam tablo taramasıydı.
 :::
 

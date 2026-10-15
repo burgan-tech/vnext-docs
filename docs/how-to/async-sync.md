@@ -44,7 +44,7 @@ POST /api/v1/{domain}/workflows/{wf}/instances/start
 
 Response: **`202 Accepted`** + `{ "id": "...", "status": { "code": "InProgress" } }` — işleme başlandığını gösterir.
 
-:::info 202 Accepted
+:::info[202 Accepted]
 Asenkron (`sync=false`) start ve transition istekleri başarı durumunda artık `200` yerine **`202 Accepted`** döner — iş tamamlanmamış, durable arkaplan işlemesi için kuyruğa alınmıştır. `sync=true` istekler, hata sonuçları ve custom output-response yolu değişmemiştir.
 :::
 
@@ -133,7 +133,7 @@ Tanımda bir değer varsa `?sync` query parametresi o istek için **yok sayılı
 | `vnext.execution.effective` | Tanım uygulandıktan sonra gerçekten çalışan mod (`SYNC` / `ASYNC`) |
 | `vnext.execution.overridden` | Yalnızca tanım çağıranın modunu değiştirdiğinde `true` |
 
-:::tip Client etkisi
+:::tip[Client etkisi]
 `executionType` tanımlı bir transition'da client'ın `?sync` beklentisi tutmayabilir — `sync=false` gönderen bir client `200` + tam instance, `sync=true` gönderen bir client `202` alabilir. Client'lar yanıtı **HTTP status koduna göre** dallandırmalıdır.
 :::
 

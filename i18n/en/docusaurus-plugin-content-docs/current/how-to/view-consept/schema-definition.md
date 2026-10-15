@@ -8,7 +8,7 @@ description: Anatomy of schema.json, JSON Schema basics and the x-* extensions
 
 # Schema Definition
 
-:::info Translation pending
+:::info[Translation pending]
 Translation pending — the Turkish page is the source of truth.
 :::
 

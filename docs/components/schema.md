@@ -190,7 +190,7 @@ Operatörlerin alan tipine göre (numeric / tarih / metin / boolean / dizi) davr
 
 **`{instance}` şablonu:** Aynı mantıksal alan farklı instance'larda gelebilir (örn. cihaz başına bir device-manager instance'ı). Key'e `{instance}` (instance id) eklemek her instance'ın değerini ayrı bir konuma yazar. Akışlar arası **singleton** değerler için `{instance}` kullanmayın — sabit bir key'de kalsın ki sonraki akışın `x-context-source`'u bulabilsin. Kullanılabilir şablon değişkenleri: `{instance}`, `{subject}`.
 
-:::note Geriye dönük uyumluluk
+:::note[Geriye dönük uyumluluk]
 JSON Schema (draft 2020-12) bilinmeyen keyword'lere izin verir: standart validator'lar `x-context-*` anotasyonlarını yok sayar. Anotasyonsuz bir şema bugünkü gibi davranır — benimseme şema başına ve kademelidir.
 :::
 
@@ -262,7 +262,7 @@ Eski bir değerle karşılaşıldığında davranış katmana göre farklıdır:
 attributes.type 'workflow' is not a schema role (master, transition, component, function) and will be refused in a future release; use 'master' for a flow's data schema, 'transition' / 'function' for a request body, 'component' for an embedded view's dataSchema, or omit it.
 ```
 
-:::warning Diğer bileşenlerin `attributes.type` alanıyla karıştırmayın
+:::warning[Diğer bileşenlerin `attributes.type` alanıyla karıştırmayın]
 Buradaki rol enum'u yalnız **schema bileşeninin** (`flow: sys-schemas`) `attributes.type` alanı içindir. Workflow (`C` / `F` / `S` / `P`), task (sayısal task türü), view (içerik türü) ve extension (sayısal extension türü) bileşenlerinin `attributes.type` alanları kendi enum'larını taşır ve bu değişiklikten etkilenmez.
 :::
 

@@ -77,7 +77,7 @@ public class Mapping : ITransitionMapping
 }
 ```
 
-:::warning Anahtar kararlılığı (gece-yarısı bug'ı)
+:::warning[Anahtar kararlılığı (gece-yarısı bug'ı)]
 Kilit anahtarını üretirken `DateTime.UtcNow` gibi **her çağrıda değişen** değerler kullanma. Aksi halde 23:59'da alınan kilidin anahtarı ile 00:00'da hesaplanan anahtar farklı olabilir. Anahtarı, akış başında verilere yazılmış **kalıcı bir değerden** (ör. `transactionDate`) türet. Otomatik release, alım anındaki anahtarı instance'a kaydettiği için bu sınıf hataya karşı ayrıca korumalıdır — ama yine de deterministik anahtar üret.
 :::
 
