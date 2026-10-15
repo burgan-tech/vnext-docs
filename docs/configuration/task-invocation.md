@@ -126,6 +126,15 @@ Değişiklik **bir sonraki Orchestration host başlangıcında** etkili olur, bi
 
 `http`/`soap`'ı yük altında Remote'a geri almak, hedef başına bağlantı tavanını `MaxConnectionsPerServer` (50) değerinden Execution host'un sabit `10`'una düşürür; tek hedefe yoğun trafik gönderen bir tipi geri alırken bu düşüşü hesaba katın.
 
+## Remote yolun transport'u: yalnız Dapr HTTP
+
+<sup>New</sup> v0.0.100 — Remote çözülen bir task için Orchestration → Execution çağrısı **her zaman Dapr HTTP service invocation**'dır (`POST api/v1/execution/invoke/{type}/{key}`). Opt-in gRPC transport'u kaldırıldı:
+
+- `ExecutionApi:Transport` artık okunmaz; kalmış bir `grpc` değeri yok sayılır. `Kestrel:GrpcPort` kaldırıldı.
+- Yalnız `ExecutionApi__Transport=grpc`, Execution sidecar'ında `app-protocol: grpc` ve app-port'u gRPC portuna çevirmenin üçünü birden yapmış ortamlar etkilenir: Execution sidecar'ı `app-protocol: http`'ye döndürülmelidir.
+- Helm chart 1.0.123'ten `execution.grpcPort`, `Kestrel__GrpcPort` ve `ExecutionApi__Transport` çıkarıldı; `execution.dapr.protocol` `"http"` kalmalıdır (bkz. [Helm Chart](/docs/deployment/helm-chart)).
+- Kaldırılan yalnız uygulama seviyesindeki Orchestration → Execution gRPC servisidir. Sidecar'lar arası trafik, uygulamaların sidecar'ın gRPC API'siyle (state, lock, pub/sub) konuşması ve OTLP gRPC export'u etkilenmez.
+
 ## Gözlemlenebilirlik
 
 - `TaskInvocationDispatcher`, task span'ına `vnext.task.invocation.mode` etiketini (`Local` | `Remote`) ekler; bir task'ın hangi yoldan gittiği trace'ten okunur. Geri alma sonrası yeni pod'ların ayarı aldığını bu etiketle doğrulayın.

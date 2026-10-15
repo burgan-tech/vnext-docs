@@ -582,6 +582,7 @@ public sealed class ScriptContext
     public Dictionary<string, dynamic> Definitions { get; private set; }
     public Dictionary<string, dynamic?> TaskResponse { get; private set; } = new();
     public Dictionary<string, dynamic> MetaData { get; private set; } = new();
+    public CancellationToken CancellationToken { get; }
 
     public void SetBody(object? body);
     public void SetStandardResponse(StandardTaskResponse response);
@@ -603,6 +604,7 @@ public sealed class ScriptContext
 | `Definitions` | Tekrar kullanılabilir bileşen tanımları (sözlük). |
 | `TaskResponse` | Tamamlanan task'ların sonuçları (**anahtar:** camelCase task tanımlayıcısı). |
 | `MetaData` | Süre/tanılama metrikleri ve özel audit datası. |
+| `CancellationToken` | <sup>New</sup> v0.0.100 — Bağlamın kurulduğu işlemin token'ı (istek, transition job'ı, event teslimi); token yoksa `CancellationToken.None`. Kendi I/O'sunu yapan script'ler (ör. plugin veritabanı sürücüsü) bunu sürücüye geçirir. Handler parametresi değil property'dir; mapping interface'leri değişmedi. Bkz. [Scripting → Plugin'ler](/docs/configuration/scripting). |
 | `OutputResponse` | Bazı akışlarda ([IOutputHandler](#ioutputhandler)) function çıktı eşlemesinde toplanmış veya seçilen task çıktısına alternatif bir erişim noktası olabilir; genelde tek tek task çıktıları için `TaskResponse` kullanılır. |
 
 #### Builder deseni

@@ -88,6 +88,19 @@ spec:
     value: "kafka:9092"
 ```
 
+:::warning Kafka altında topic adı ve ACL
+<sup>New</sup> v0.0.100 — `topic` değeri **olduğu gibi** kullanılır; runtime önek eklemez. vNext'in Kafka kurulumunda broker her domain kullanıcısına topic ve consumer group'larda yalnız `vnext.{domain}.*` yetkisi verir. Bu kalıbın dışındaki bir topic'e (ör. `user-events`) yayın ACL tarafından reddedilir, ta ki topic domain'e açıkça yetkilendirilene kadar. Runtime'ın kendi topic'leriyle aynı biçimi kullanın: `vnext.{domain}.{environment}.{olay}`.
+
+```json
+"config": {
+  "pubSubName": "messagebus",
+  "topic": "vnext.core.production.user-registered"
+}
+```
+
+Runtime'ın kendi topic adları için bkz. [Event-Driven Workflow'lar → Runtime topic adları](/docs/how-to/event-driven-workflows#runtime-topic-adları).
+:::
+
 ### RabbitMQ
 
 ```yaml
@@ -146,6 +159,6 @@ spec:
 | Problem | Çözüm |
 |---------|-------|
 | PubSub component not found | PubSub component configuration ve app ID'yi kontrol edin |
-| Topic configuration error | Topic name ve pubsub component uyumunu kontrol edin |
+| Topic configuration error | Topic name ve pubsub component uyumunu kontrol edin; Kafka altında topic `vnext.{domain}.*` kalıbına uymalıdır |
 | Message serialization failed | `SetData` metoduna valid object geçtiğinizden emin olun |
 | Metadata format error | `SetMetadata` metoduna `Dictionary<string, string?>` formatında data gönderin |

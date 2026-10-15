@@ -110,6 +110,19 @@ spec:
     value: "none"
 ```
 
+:::warning Topic names and ACLs under Kafka
+<sup>New</sup> v0.0.100 — the `topic` value is used **verbatim**; the runtime adds no prefix. In vNext's Kafka setup the broker grants each domain's user only `vnext.{domain}.*` on topics and consumer groups. Publishing to a topic outside that pattern (e.g. `user-events`) is refused by the ACL unless the topic is explicitly granted to the domain. Use the same shape as the runtime's own topics: `vnext.{domain}.{environment}.{event}`.
+
+```json
+"config": {
+  "pubSubName": "messagebus",
+  "topic": "vnext.core.production.user-registered"
+}
+```
+
+For the runtime's own topic names see [Event-Driven Workflows](/docs/how-to/event-driven-workflows).
+:::
+
 ### RabbitMQ
 ```yaml
 apiVersion: dapr.io/v1alpha1
@@ -517,7 +530,7 @@ else
 **Solution:** Check PubSub component configuration and app ID
 
 ### Problem: Topic configuration error
-**Solution:** Check topic name and pubsub component compatibility
+**Solution:** Check topic name and pubsub component compatibility; under Kafka the topic must match `vnext.{domain}.*`
 
 ### Problem: Message serialization failed
 **Solution:** Make sure you pass a valid object to SetData method
