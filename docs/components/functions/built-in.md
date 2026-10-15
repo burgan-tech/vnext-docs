@@ -21,10 +21,11 @@ Function API'leri, workflow instance'ları için sistem seviyesi operasyonlar sa
 9. [Actions Fonksiyonu](#actions-fonksiyonu)
 10. [Human Task Fonksiyonu](#human-task-fonksiyonu)
 11. [Instance Correlation Fonksiyonu](#instance-correlation-fonksiyonu)
-12. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
-13. [Fonksiyon Metrikleri](#fonksiyon-metrikleri)
-14. [En iyi Uygulamalar](#en-iyi-uygulamalar)
-15. [Ilgili Dökümanlar](#ilgili-dökümanlar)
+12. [File Fonksiyonu](#file-fonksiyonu)
+13. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
+14. [Fonksiyon Metrikleri](#fonksiyon-metrikleri)
+15. [En iyi Uygulamalar](#en-iyi-uygulamalar)
+16. [Ilgili Dökümanlar](#ilgili-dökümanlar)
 
 ## Genel Bakış
 
@@ -42,15 +43,18 @@ vNext Runtime platformu, her workflow instance'ı için otomatik olarak kullanı
 | **Actions** <sup>New</sup> v0.0.93 | Bir task kaydının yürütme alt adımları | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/actions?taskId=` |
 | **Human Task** | Çağıranın sorumlu olduğu human task listesi (domain seviyesi) | `GET /{domain}/functions/human-task` |
 | **Instance Correlation** <sup>New</sup> v0.0.99 | Instance'ın başlattığı subflow/subprocess ağacı (aşağı yönlü, recursive) | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/instance-correlation` |
+| **File** <sup>New</sup> v0.0.100 | Instance verisindeki bir `x-storage` dosyasının baytları | `GET\|HEAD /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file=` |
 
 :::warning `hierarchy` fonksiyonu kaldırıldı (v0.0.99)
 Eski `…/functions/hierarchy` rotası v0.0.99 ile **kaldırıldı** ve yerini [`instance-correlation`](#instance-correlation-fonksiyonu) aldı. **Alias yoktur**: eski yol custom function çözümlemesine düşer ve `404` döner. Client'ları ve kayıtlı dashboard sorgularını (`Instance.Read/hierarchy` span'i → `Instance.Read/instanceCorrelation`) güncelleyin.
 :::
 
-> **Not:** Kullanıcı tanımlı fonksiyonlar için bkz. [Custom Functions](/docs/components/functions/custom). Sistem fonksiyon key'leri (`state`, `data`, `tasks`, `actions`, …) aynı adlı bir custom function'ı **gölgeler**.
+> **Not:** Kullanıcı tanımlı fonksiyonlar için bkz. [Custom Functions](/docs/components/functions/custom). Sistem fonksiyon key'leri (`state`, `data`, `tasks`, `actions`, …) aynı adlı bir custom function'ı **gölgeler**. <sup>New</sup> v0.0.100 `file` da artık rezerve bir sistem adıdır: key'i `file` olan bir custom function instance rotasında çağrılamaz.
 
 :::caution[QueryRoles yetkilendirmesi — karar noktası gateway'dedir]
 Read fonksiyonlarının tamamı (**state**, **data**, **view**, **schema**, **master**, **tasks**, **actions**, **instance-correlation**, incident rotaları) tek bir `queryRoles` cevabını paylaşır: `state`'i okuyamayan çağıran `data`'yı da okuyamaz. <sup>New</sup> v0.0.95 itibarıyla bu karar fonksiyonların **içinde** verilmez; Internal Gateway isteği iletmeden önce [`authorize?queryRoles=true`](#instance-authorize) fonksiyonunu çağırır ve `403`'ü gateway üretir. Ayrıntı için bkz. [Read fonksiyonlarında queryRoles authorize](#read-fonksiyonlarında-queryroles-authorize).
+
+**İstisna:** <sup>New</sup> v0.0.100 [File Fonksiyonu](#file-fonksiyonu) ham dosya (ör. kimlik belgesi) döndürebildiği için `queryRoles`'u **kendi içinde** de denetler ve `403` üretir.
 :::
 
 Bu fonksiyonlar şunları sağlar:
@@ -1057,6 +1061,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/tasks
 - Subflow'a **inmez**: incident geçmişi gibi her zaman adreslenen instance için cevap verir.
 - State gövdesine task linki eklenmez; `ResponseShapeVersion` ve fingerprint ETag'i bu fonksiyondan etkilenmez.
 - <sup>New</sup> v0.0.99 `hook` ve `order`, `InstanceTasks` tablosunda gerçek kolonlara taşındı (migration `AddInstanceTaskTriggerAndOrderColumns`). Transition/state bazlı deneme (attempt) görünümü için bkz. [Fonksiyon Metrikleri](#fonksiyon-metrikleri).
+- <sup>New</sup> v0.0.100 Workflow'u `attributes.history: "none"` olan bir instance için task journal hiç yazılmaz; fonksiyon `200` ile **boş liste** döner. Bkz. [Workflow → History Modu](/docs/components/workflow#history-modu).
 
 ## Actions Fonksiyonu
 
@@ -1081,6 +1086,7 @@ Yanıt sahip `taskId`/`taskKey`'i yansıtır ve `{ id, status, startedAt, finish
 - Fonksiyon, adreslenen task'ın rotadaki instance'a ait olduğunu doğrular; değilse **`404`** (`Instance:100038`) döner — bir task asla başka bir instance'ın rol gate'i üzerinden okunamaz.
 - Yetkilendirme ve subflow davranışı Tasks Fonksiyonu ile aynıdır.
 - **Bilinen boşluk:** runtime bugün `InstanceAction` satırı **yazmamaktadır**; okuma sözleşmesi hazırdır ve yazıcı gelene kadar fonksiyon her task için boş liste döner.
+- <sup>New</sup> v0.0.100 `attributes.history: "none"` olan bir instance'ta fonksiyon `404` yerine `200` ile **boş liste** döner (task kaydı yoktur). Bkz. [Workflow → History Modu](/docs/components/workflow#history-modu).
 
 ## Human Task Fonksiyonu
 
@@ -1237,6 +1243,40 @@ Tüm node'ları `resolved: true` olan ağaç tamdır. Çözümlenmemiş bir node
 | `Workflow:InstanceCorrelation:MaxConcurrentHops` | `32` | 1–1000 | Tüm in-flight istekler genelinde eşzamanlı hop; bağlantı havuzunun altında tutun |
 
 Değerler başlangıçta doğrulanır.
+
+## File Fonksiyonu
+
+<sup>New</sup> v0.0.100 Master schema'da `x-storage` ile işaretli bir alanın dosyasını döndürür. Instance verisinde dosyanın yerinde yalnızca bir **handle** (`component`, `file`, `name`, `mimeType`, `size`, `eTag`, `owner`) durur; baytlar bu fonksiyonla okunur. Client tarafı gidiş-dönüş (yazma şekli, echo kuralı) için bkz. [Dosya Alanları (x-storage)](/docs/how-to/file-fields).
+
+### Endpoint
+
+```http
+GET  /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file={guid}
+HEAD /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file={guid}
+```
+
+| Parametre | Konum | Gerekli | Açıklama |
+|-----------|-------|---------|----------|
+| `workflow` / `instance` | Path | Evet | Handle'daki `owner.flow` / `owner.instance` |
+| `file` | Query | Evet | Handle'daki `file` GUID'i. Eksik veya boşsa **`400`** (`Instance:100048`) |
+| `If-None-Match` | Header | Hayır | `"<eTag>"`; eşleşirse depoya gidilmeden **`304`** |
+| `Range` / `If-Range` | Header | Hayır | Kısmi okuma: **`206`**, karşılanamayan aralık **`416`** |
+
+### Davranış
+
+- **Yalnızca bu instance'ın güncel verisi.** Handle, instance'ın **en son** verisinde (`LatestData`) `x-storage` yollarında aranır: SubFlow'a inilmez, geçmiş satırlara bakılmaz. Binding adı ve nesne anahtarı kayıttan gelir, çağırandan asla alınmaz; kayıttaki handle geçerli değilse depo hiç çağrılmaz. Bulunamazsa **`404`** (`Instance:100049`).
+- **Yetki motorun içinde, bu sırayla:**
+  1. State'in `queryRoles`'u (state override → state → workflow). Reddedilirse **`403`** — dosya aranmadan önce karar verilir; reddedilen çağıran hangi dosyaların var olduğunu öğrenemez.
+  2. Dosyanın yolunun ve tüm üst yollarının `x-roles` grant'leri. Yol gizliyse **`404`** — varlık açığa çıkmaz.
+
+  Bu, `queryRoles` kararının gateway'de verildiği [genel kuralın](#read-fonksiyonlarında-queryroles-authorize) bilinçli bir istisnasıdır: dosya endpoint'i ham kimlik belgesi döndürebilir.
+- **Yanıt başlıkları** (`200`): `Content-Type` = kayıtlı `mimeType` (ayrıştırılamazsa `application/octet-stream`), `ETag: "<eTag>"`, `Accept-Ranges: bytes`, `Cache-Control: private, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'`.
+- **`Content-Disposition`:** varsayılan `inline`; etkin içerik türlerinde (`text/html`, `application/xhtml+xml`, `image/svg+xml`, `text/xml`, `application/xml`, `text/javascript`, `application/javascript` ve her `+xml`) **`attachment`**.
+- `HEAD` yalnızca başlıkları döner. `Range` dilimi bellekte alınır (binding nesneyi tamamen okur).
+- Depo ulaşılamazsa **`503`** (`Instance:100047`); master schema yüklenemezse **`503`** (`Instance:100050`).
+- `file` rezerve bir sistem adıdır; aynı key'li custom function instance rotasında gölgelenir.
+
+Betik içinden (yetkilendirmesiz, servisler arası) okuma için bkz. [Mappings → Dosya okuma (`GetFileAsync`)](/docs/components/mappings#dosya-okuma-getfileasync).
 
 ## Yetkilendirme (Authorization)
 

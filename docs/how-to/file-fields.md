@@ -7,9 +7,9 @@ description: Bir FilePicker alanının runtime ile gidiş-dönüşü — x-stora
 
 # Dosya Alanları (`x-storage`)
 
-Master schema'daki bir alan `x-storage` taşıyorsa, o alana gönderilen dosyanın baytları instance verisinin içinde **tutulmaz**; runtime baytları ayarlı bir blob deposuna (Dapr output binding) yazar ve alanın yerine küçük bir **handle** koyar. Client bu handle'ı veri olarak okur, formu düzenlerken geri gönderir ve dosyanın kendisini `functions/file` ile indirir. `x-storage` olmayan bir alanda davranış değişmez (baytlar eskisi gibi inline kalır).
+Master schema'daki bir alan `x-storage` taşıyorsa, o alana gönderilen dosyanın baytları instance verisinin içinde **tutulmaz**; runtime baytları ayarlı bir blob deposuna (Dapr output binding) yazar ve alanın yerine küçük bir **handle** koyar. Client bu handle'ı veri olarak okur, formu düzenlerken geri gönderir ve dosyanın kendisini `functions/file` ile indirir. `x-storage` olmayan bir alanda davranış değişmez (baytlar eskisi gibi inline kalır). <sup>New</sup> v0.0.100
 
-Bu sayfa client geliştiricisine yöneliktir. Alanın şemada nasıl tanımlandığı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+Bu sayfa client geliştiricisine yöneliktir. Alanın şemada nasıl tanımlandığı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi); binding bileşeninin (blob storage) kurulumu için bkz. [Helm Chart](/docs/deployment/helm-chart).
 
 ## Yazma şekli
 
@@ -85,16 +85,19 @@ GET|HEAD {domain}/workflows/{workflow}/instances/{instance}/functions/file?file=
 
 | Başlık | Değer |
 |--------|-------|
-| `Content-Type` | kayıtlı `mimeType` |
+| `Content-Type` | kayıtlı `mimeType` (ayrıştırılamıyorsa `application/octet-stream`) |
 | `ETag` | `"<eTag>"` (tırnaklı) |
 | `Accept-Ranges` | `bytes` |
 | `Cache-Control` | `private, max-age=31536000, immutable` |
 | `X-Content-Type-Options` | `nosniff` |
-| `Content-Disposition` | `inline; filename*=UTF-8''…` |
+| `Content-Security-Policy` | `sandbox; default-src 'none'` (her zaman — tür client'ın beyanıdır, yanıt bu origin'de belge olarak çalışmaz) |
+| `Content-Disposition` | `inline; filename*=UTF-8''…`; etkin içerik türlerinde (`text/html`, `application/xhtml+xml`, `image/svg+xml`, `text/xml`, `application/xml`, `text/javascript`, `application/javascript` ve her `+xml`) **`attachment`** |
 
 - **Koşullu istek:** `If-None-Match: "<eTag>"` gönderirseniz ve eşleşirse `304` döner; depoya gidilmez. `file` id'si içeriğe bağlı olduğundan yanıt `immutable` önbelleklenebilir.
 - **Range:** `Range: bytes=…` ile `206 Partial Content` alırsınız; karşılanamayan aralık `416`. Dilim bellekte alınır (depodan dosya tamamen okunur), yani Range ağ trafiğini azaltır, depo okumasını değil.
 - **HEAD:** yalnızca başlıkları döndürür.
+
+Endpoint'in referansı (yetki sırası, parametreler) için bkz. [Built-in Functions → File Fonksiyonu](/docs/components/functions/built-in#file-fonksiyonu). Sunucu tarafında (mapping betiğinde) dosyayı okumak için `ScriptBase.GetFileAsync` kullanılır — bkz. [Mappings → Dosya okuma](/docs/components/mappings#dosya-okuma-getfileasync).
 
 ## Durum kodları
 
@@ -105,7 +108,8 @@ GET|HEAD {domain}/workflows/{workflow}/instances/{instance}/functions/file?file=
 | `404` | `Instance:100049` (`FileNotFound`) | `file` bu instance'ın kayıtlı verisinde yok; ya da dosyanın yolu `x-roles` ile çağıran için gizli | `owner` instance'ını doğrulayın. Gizli yol ile var olmayan dosya bilerek ayırt edilmez. |
 | `409` | `InstanceBusy` | Bir parent'ın subflow'u sonlanırken gelen yönlendirilmiş (forward) transition; ya da hedef instance meşgul | Kısa bir beklemeyle aynı isteği yeniden deneyin. |
 | `413` | — | İstek gövdesi sınırı aşıldı (Kestrel veya sidecar) | Dosyayı küçültün ya da birden çok dosyaya bölün. Yeniden denemek işe yaramaz. |
-| `503` | `Instance:100047` (`FileStoreUnavailable`) | Blob deposu (binding) yazarken ulaşılamıyor | Yeniden deneyin (backoff ile). İstek `202`'den önce, eşzamanlı döner; başarısız `start` instance oluşturmaz, başarısız transition kaydı değiştirmez. |
+| `503` | `Instance:100047` (`FileStoreUnavailable`) | Blob deposu (binding) yazarken veya okurken ulaşılamıyor; depoda artık bulunmayan bir nesnenin okunması da bu kodu döner (bkz. [Bilinen kısıtlar](#bilinen-kısıtlar)) | Yeniden deneyin (backoff ile). İstek `202`'den önce, eşzamanlı döner; başarısız `start` instance oluşturmaz, başarısız transition kaydı değiştirmez. |
+| `503` | `Instance:100050` (`FileSchemaUnavailable`) | Akışın master schema'sı yüklenemiyor ve gövdede `content` veya `file` üyesi taşıyan bir nesne var (yazma), ya da `functions/file` ile okuma yapılıyor | Şema çözülünce yeniden deneyin. Hiçbir şey uygulanmamıştır; `content`/`file` üyesi taşımayan gövdeler etkilenmez. |
 
 Parent'ın aktif bir subflow'u varsa, parent'a gönderilen transition leaf'e yönlendirilir ve dosya leaf'te depoya yazılır; client yine **parent'ın** id'sini ve parent'ın modunu alır (async ise `202`, sync ise `200`). Handle'daki `owner` yazan (leaf) instance'tır.
 
@@ -115,9 +119,29 @@ Parent'ın aktif bir subflow'u varsa, parent'a gönderilen transition leaf'e yö
 - **Silme yok:** dosya değiştirildiğinde veya alan temizlendiğinde eski nesne depoda kalır; runtime şimdilik silme/değiştirme temizliği yapmaz. Bir işlem geri alınırsa yazılmış nesne yetim kalabilir.
 - **Yalnızca kayıtlı handle okunur:** dosyaya yalnızca instance verisindeki handle üzerinden erişilir; client depo/binding adı veremez.
 - **Görev kayıtları korunmaz:** bir mapping baytları task isteğine koyarsa, bu task kaydında olduğu gibi saklanır (geliştirici kararı).
+- **Master schema'yı transition şeması olarak kullanmayın:** transition şeması **yazma** şeklini doğrular; master schema'daki `x-storage` düğümü ise kalıcı handle'ı tarif eder ve `content` tanımlayamaz. Aynı şema transition'da kullanılırsa sıkı (`additionalProperties: false`) bir düğüm yüklemeyi reddeder. Dosya alanı taşıyan transition'lara kendi şemalarını verin.
+
+## Bilinen kısıtlar
+
+<sup>New</sup> v0.0.100 Aşağıdaki kısıtlar runtime'ın `vnext-meta/known-issues.json` kaydında `>=0.0.100` için açık olarak listelenir (henüz düzeltilmiş sürüm yok).
+
+| Kısıt (known-issue id) | Etki | Ne yapmalı |
+|------------------------|------|-----------|
+| Rollback'te yetim nesne (`file-store-orphans-on-rollback`) | Nesne, unit of work commit edilmeden ve transition kabul edilmeden **önce** depoya yazılır. Sonrasında bir rollback ya da `409` (Busy, subflow tamamlanma penceresi) olursa depoda referanssız bir nesne kalır; runtime bunu izlemez/toplamaz. | Binding'in arkasındaki bucket/dizine bir yaşam döngüsü (expiry) kuralı uygulayın; kapsamı `FileStorage:KeyPrefix` ile daraltın. Yetim nesne instance verisine zarar vermez. |
+| Silme yok (`file-store-no-delete`) | Alanı temizlemek (`null`/göndermemek) veya değiştirmek eski nesneyi **silmez**; retention ya da çöp toplama yoktur — instance için yazılmış her nesne depoda kalır. | Saklama süresini deponun kendi yaşam döngüsü kurallarıyla yönetin. `FileStorage:KeyPrefix`'i ilk yazımdan sonra değiştirmeyin, aksi halde kayıtlı nesnelere ulaşılamaz. |
+| Task kaydında baytlar (`file-in-task-record`) | Task kayıtları (`InstanceTask.Request` / `Response`) `x-storage` takasının kapsamında değildir: dosya baytlarını (ör. base64 string) task isteğine/yanıtına koyan bir mapping bunları task kaydına olduğu gibi yazar. | Mapping'ler arasında içeriği değil handle'ı taşıyın; baytları yalnızca task'ın ihtiyaç duyduğu yerde `ScriptBase.GetFileAsync` ile okuyun ve task yanıtına geri yazmayın. |
+| Domain'ler arası referans (`file-trusted-payload-cross-domain`) | Güvenilir (trusted) payload bayrağı domain sınırını geçmez: başka domain'i hedefleyen Start/SubProcess trigger task'ları, DirectTrigger ve proxy'lenen SubFlow forward'ları o domain'in public endpoint'lerini çağırır; gövdedeki `content`'siz bir handle orada `400` `Instance:100048` ile reddedilir. | Domain'ler arası gövdelerde handle yerine `content` (base64) gönderin ya da dosyayı sahibi olan domain'de `ScriptBase.GetFileAsync` ile okuyun. |
+| Seed verisi depoya alınmaz (`file-seed-data-not-offloaded`) | Tanımın seed verisinden eklenen instance verisi yazma hattına workflow geçirmez; seed'deki `x-storage` içeriği depoya taşınmaz, instance verisinde **inline** kalır. | Seed verisine dosya içeriği koymayın; instance oluştuktan sonra bir transition ile yükleyin. |
+| Örtüşen async proxy geri alması (`file-async-proxy-overlapping-revert`) | Aynı parent üzerinden aktif SubFlow'a proxy'lenen iki örtüşen async istekte, biri başarısız olup geri alındığında diğerinin koyduğu Busy damgasını temizleyebilir; child'ın bir sonraki bildirimi parent'ın durumunu düzeltir. | Normal işleyişte gerekmez (kendiliğinden düzelir). Client'lar aynı parent'a örtüşen async transition göndermemelidir. |
+| Kayıp nesne `503` görünür (`file-missing-object-503`) | Depoda artık bulunmayan (lifecycle kuralı veya elle silinmiş) bir nesnenin okunması `503` `Instance:100047` döner; Dapr binding iki durumu da aynı hata olarak raporladığından depo kesintisinden ayırt edilemez. | Instance verisinin hâlâ referans verdiği nesneleri expire etmeyin. `503` yalnızca tek bir dosya için sürüyorsa depoda nesne anahtarını (`FileStorage:KeyPrefix` + `file`) kontrol edin. |
+| Yinelenen üye adları (`file-duplicate-property-names`) | `x-storage` düğümünde bir üye adı tekrarlanırsa (ör. iki `content` veya `file`) sonuç (takas, koruma veya ret) tanımsızdır. | Yinelenen üye adı olmayan, düzgün JSON gönderin; standart JSON serializer'lar bunu zaten üretmez. |
 
 ## İlgili
 
 - [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) — `x-storage` bildirimi, `x-roles`
 - [Instance Verisi](../concepts/instance-data)
 - [Async / Sync](./async-sync)
+- [Built-in Functions → File Fonksiyonu](/docs/components/functions/built-in#file-fonksiyonu) — endpoint referansı
+- [Mappings → Dosya okuma (`GetFileAsync`)](/docs/components/mappings#dosya-okuma-getfileasync) — betikten dosya okuma
+- [REST API](/docs/api-reference/rest-api) — hata kodları
+- [Helm Chart](/docs/deployment/helm-chart) — blob storage binding'i ve `FileStorage` ayarları

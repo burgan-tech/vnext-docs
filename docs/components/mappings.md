@@ -22,6 +22,7 @@ Bu doküman, workflow betikleriyle **girdi/çıktı haritalaması** yapmayı ve 
    - [XML yardımcıları](#xml-yardımcıları)
    - [Loglama](#loglama)
    - [Konfigürasyon](#konfigürasyon)
+   - [Dosya okuma (`GetFileAsync`)](#dosya-okuma-getfileasync)
 7. [Implementasyon Örnekleri](#implementasyon-örnekleri)
 8. [Notification Mapping](#notification-mapping)
 9. [Best Practices](#best-practices)
@@ -273,6 +274,8 @@ var tckn = await context.Instance.DecryptAsync("customer.tckn", cancellationToke
 ```
 
 Aynı jetonu aynı yola geri yazmak etkisizdir, düz metin yazmak yeniden şifreler; jetonu başka bir alana kopyalamak reddedilir. DynamicExpresso kuralları jetonu çözemez — encrypt alan üzerindeki koşulu C# script olarak yazın. Ayrıntı: [Schema Tanımı → `x-encryption`](/docs/how-to/view-consept/schema-tanimi).
+
+<sup>New</sup> v0.0.100 — Yukarıdaki jeton davranışı yalnızca `x-encryption.source: "runtime"` (varsayılan, at-rest) alanlar içindir. `source: "client"` ile işaretli bir alan, **client'ın kendi şifrelediği** ciphertext'i taşır: runtime bu alanı şifrelemez, çözmez, maskelemez — değer gönderildiği gibi saklanır ve script'lere de öyle görünür. Düz değer runtime'da hiçbir zaman bulunmaz; çözme, özel anahtarı tutan alıcı sisteme aittir.
 
 ### Related
 
@@ -644,10 +647,8 @@ public class PaymentProcessingMapping : ScriptBase, IMapping
             if (amount == null || amount <= 0)
             {
                 LogWarning("Geçersiz ödeme tutarı alındı: {0}", args: new object?[] { amount });
-                return Task.FromResult(new ScriptResponse
-                {
-                    Data = new { error = "Geçersiz tutar" }
-                });
+                // Hata döndürmek task'ı durdurmaz; fırlatmak çağrıyı engeller.
+                throw new ArgumentException("Geçersiz tutar");
             }
 
             LogDebug("Ödeme tutarı işleniyor: {0}", args: new object?[] { amount });
@@ -738,6 +739,57 @@ public class ConfigAwareMapping : ScriptBase, IMapping
   }
 }
 ```
+
+### Dosya okuma (`GetFileAsync`)
+
+<sup>New</sup> v0.0.100 Master schema'da `x-storage` ile işaretli bir alanın dosyası instance verisinde yalnızca bir **handle** olarak durur (bkz. [Dosya Alanları](/docs/how-to/file-fields)). Baytlara ihtiyaç duyan bir betik, handle'ın koordinatlarıyla dosyayı okur:
+
+```csharp
+public abstract class ScriptBase
+{
+    protected Task<ScriptFile> GetFileAsync(string domain, string flow, string instance, string file);
+}
+
+public sealed record ScriptFile(byte[] Content, string? Name, string? MimeType, long Size, string ETag);
+```
+
+| Parametre | Kaynak |
+|-----------|--------|
+| `domain`, `flow`, `instance` | Handle'daki `owner.domain`, `owner.flow`, `owner.instance` |
+| `file` | Handle'daki `file` GUID'i |
+
+`ScriptFile.ETag`, baytların SHA-256'sıdır (küçük harf hex, tırnaksız). `System.IO` sandbox'ta yasak olduğundan içerik stream değil `byte[]` olarak döner.
+
+```csharp
+public class SendDocumentMapping : ScriptBase, IMapping
+{
+    public async Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext context)
+    {
+        var doc = context.Instance.Data.identityDocument; // kalıcı handle
+        var file = await GetFileAsync(
+            (string)doc.owner.domain, (string)doc.owner.flow,
+            (string)doc.owner.instance, (string)doc.file);
+
+        // Baytlar yalnızca bu task'ın isteğine konur; task kaydına da yazılırlar.
+        var httpTask = task as HttpTask;
+        httpTask.SetBody(new
+        {
+            fileName = file.Name,
+            contentType = file.MimeType,
+            content = Convert.ToBase64String(file.Content)
+        });
+        return new ScriptResponse();
+    }
+
+    public Task<ScriptResponse> OutputHandler(ScriptContext context) =>
+        Task.FromResult(new ScriptResponse());
+}
+```
+
+- **Aynı domain:** okuma process içinde yapılır. **Başka domain:** sahibi olan domain'in dahili `GET …/instances/{instance}/internal/file?file=` rotası çağrılır.
+- **Yetkilendirme yoktur** (çağıran kimliği, `queryRoles` veya `x-roles` değerlendirilmez) — servisler arası okumadır. Handle yine o instance'ın **güncel** verisinde bulunmalı ve geçerli olmalıdır; binding adı çağırandan alınmaz. `internal/file` rotası yalnızca iç ağdan erişilebilir tutulmalıdır.
+- Yalnızca **Orchestration** host'unda çalışan betiklerde kullanılabilir. Okuyucu yoksa veya okuma başarısız olursa `InvalidOperationException` fırlatılır.
+- Baytlar bellekte döner: onları task isteğine/yanıtına koyan bir mapping, baytları **task kaydına** yazar (bkz. [Dosya Alanları → Bilinen kısıtlar](/docs/how-to/file-fields#bilinen-kısıtlar)). Mapping'ler arasında içeriği değil handle'ı taşıyın.
 
 ## Implementasyon Örnekleri
 

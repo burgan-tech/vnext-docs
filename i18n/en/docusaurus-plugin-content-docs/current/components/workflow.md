@@ -42,7 +42,7 @@ Every workflow definition must include the following top-level fields (per `vnex
 - `startTransition` — start transition definition
 - `labels` — multi-language labels
 
-Optional fields include `executionType` (v0.0.99, see [Execution mode](#execution-mode-executiontype)), `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, `output` (sync response mapping — see [Output Mapping](#output-mapping)), `event` (workflow-level event definition — see [Event-Driven Transitions](#event-event-driven-workflows)), and `config` (flow-level configuration — currently built-in function cache tuning, `config.functionCache.ttlSeconds`; host default 60s; the State Function is managed separately by the platform).
+Optional fields include `executionType` (v0.0.99, see [Execution mode](#execution-mode-executiontype)), `history` (<sup>New</sup> v0.0.100: `full` — the default — or `none`; see [History mode](#history-mode)), `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, `output` (sync response mapping — see [Output Mapping](#output-mapping)), `event` (workflow-level event definition — see [Event-Driven Transitions](#event-event-driven-workflows)), and `config` (flow-level configuration — currently built-in function cache tuning, `config.functionCache.ttlSeconds`; host default 60s; the State Function is managed separately by the platform).
 
 ## Capability Matrix
 
@@ -303,6 +303,84 @@ Autos are evaluated after **every** `updateData`, so "accumulate data, advance w
 :::
 
 > **Reference:** [vnext #877](https://github.com/burgan-tech/vnext/pull/877) — Busy-as-mutex locking, status-neutral updateData, and immediate InstanceData persistence.
+
+### SubFlow transition proxy
+
+<sup>New</sup> v0.0.100 A forwardable transition that arrives at a parent with an active `S` SubFlow is **no longer queued on the parent**; it is forwarded straight to the active child (behavior change):
+
+- **Nothing is written on the parent.** The parent does not reserve the chain, flip Busy or schedule a job; it forwards the request **unchanged** to the active child. Intermediate levels repeat the check, so the request reaches the deepest active SubFlow (the **leaf**).
+- **The mode is resolved once, on the parent** (transition `executionType` → flow `executionType` → `?sync`) and the child is called in that mode — async stays async. See [Execution mode](#execution-mode-executiontype).
+- **The leaf runs in its own scope:** it validates with its own schema, writes `x-storage` files with its own binding, and takes its own Busy and job.
+- **The response** carries the parent's id and the child's status (async `202`, sync `200`).
+- **Leaf rejections are now synchronous.** The leaf's `403` / `400` / `409` reaches the client directly; previously the parent answered `202`.
+- **Completion window:** if the child has completed while the parent's correlation is still open, or the child does not exist yet, the parent answers **`409` `InstanceBusy`** — retry after a short wait. (A correlation pointing at a never-created child is a data defect; then the `409` is permanent.)
+- **Never forwarded:** `updateData`, `cancel`, `exit`, the timeout, and parent shared transitions **available in the current state** are handled on the parent. A parent shared transition not available in the current state is forwarded (the leaf normally answers `400`).
+- Added cost is about **5 ms** at p50.
+
+:::info Deprecation: `subflow-chain-reserve-claim`
+The old accept-time chain reserve (the `ChainReserved` claim, the `…/busy` and `internal/busy-release` routes) is **deprecated** since v0.0.100 and will be removed no earlier than v0.0.103. This runtime keeps the receiving side: a reserved relay from an older parent is still admitted at the leaf as before. **Mixed-version domains need no action.**
+:::
+
+## History mode
+
+<sup>New</sup> v0.0.100 A flow that runs very often and is never looked at afterwards (a lookup, an introspection, a quote) paid the same storage cost as a long-lived business process: an `InstancesData` row per append, an `InstanceTransitions` row per transition and `InstanceTasks` journal rows. `attributes.history: "none"` marks such a flow as **one-shot**: it stays a state machine (states, transitions, correlation, a queryable instance), but writes no transition or task history and a single data row.
+
+```json
+{
+  "key": "payments-quote",
+  "attributes": {
+    "type": "F",
+    "history": "none",
+    "states": []
+  }
+}
+```
+
+| Value | Meaning |
+|-------|---------|
+| `full` | Default (also when omitted). Full history is written |
+| `none` | One-shot flow: no transition or task history, data flushed as a single row |
+
+`history` sits at the root of `attributes` (beside `type` and `executionType`), **not under `config`**. An unknown value is a publish error. An older runtime or schema **silently ignores** the field — upgrade the schema package (`@burgan-tech/vnext-schema` 0.0.56) and the runtime together. **Rollback:** remove the field; no migration.
+
+**What is stored and when.** `InstanceTransitions` and `InstanceTasks` are never written (the transition record stays in memory, so scripts still read `CurrentTransition`). `InstancesData` is buffered in memory and written as one row at **Finish** (in the same transaction as completion — Completed never commits without its data), at a **SubFlow handoff** (with the correlation, before the child starts), or on an **in-pipeline fault** (best effort). One row without SubFlow; at most `1 + 2·N` with N SubFlow states visited. The instance row, incidents, jobs and correlations are written as for any flow. A stage that comes to rest at a non-Finish state is faulted with incident `Instance:100046` (`HistoryNoneNotTerminal`).
+
+**Publish rules** (errors, flow-local):
+
+| Rule | Also in vnext-schema |
+|------|----------------------|
+| At least one Finish state | Yes |
+| Every state transition is Automatic (`triggerType: 1`) | Yes |
+| Every non-Finish state, SubFlow states included, has at least one transition | Yes |
+| No `sharedTransitions`, `cancel`, `exit`, `updateData` | Yes |
+| No workflow `timeout`, no `subFlow.overrides.timeout` | Yes |
+| No `interaction.longPoll`, no Wizard state, no Suspended / Busy / Human subtype | Yes |
+| Every state can reach a Finish state (no cycle, no `$self`-only loop, no dead end) | **No — runtime only** |
+
+Allowed: a manual `startTransition`, a workflow-level `event` start, SubFlow states and SubProcess tasks.
+
+**SubFlow rule.** A `none` parent requires a `none` **SubFlow (`S`)** child: the child checks right after loading its definition, before anything is persisted, and refuses with `Instance:100044` (`HistoryNoneSubFlowChildNotEligible`, `400`); the parent then faults with an incident. The rule holds across domains. **SubProcess (`P`)** children are exempt, and a `none` child under a `full` parent is fine.
+
+**HTTP behavior** for a `none` instance:
+
+| Endpoint | Behavior |
+|----------|----------|
+| `POST …/instances/{instance}/retry` | `409` `Instance:100045` (`HistoryNoneRetryNotSupported`) |
+| `GET …/instances/{instance}/transitions` | `200`, empty list |
+| `GET …/functions/tasks` | `200`, empty list |
+| `GET …/functions/actions?taskId=` | `200`, empty list (not `404`) |
+| Transition / state metrics | Empty |
+
+While a `none` instance runs it has **no data row**: instance / data / state reads return null data, and attribute filters do not find it.
+
+**Error codes:** `Instance:100044` (`400`, SubFlow child not `none`), `Instance:100045` (`409`, retry), `Instance:100046` (incident, stage rested at a non-Finish state).
+
+**Accepted limits:**
+
+- Post-commit faults, job timeouts and process crashes run after the in-memory data is gone: the instance faults with an incident but **without the data since the last flush**.
+- **No retry** (`409`): the open transition record and task journal that retry relies on are not written.
+- `$PreviousUser` / `$PreviousBehalfOfUser` grants never resolve (no transition history).
+- `x-encryption` fields are sealed **at flush**; during the run scripts see newly written values in plaintext and `DecryptAsync` returns `null` for them.
 
 ## What's New in v0.0.79
 

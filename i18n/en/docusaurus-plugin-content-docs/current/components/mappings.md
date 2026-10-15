@@ -112,7 +112,7 @@ Used for input binding for sub flows and output binding to transfer data to the 
 **Usage Areas:**
 - Approval workflows
 - Data processing workflows
-- Validation processes
+- Validation sub-flows (the child flow's states and conditions decide; `InputHandler` only prepares the child's start data and cannot reject it)
 - Computed value generation
 - Parent-child workflow integration
 
@@ -132,7 +132,7 @@ Task<ScriptResponse> OutputHandler(ScriptContext context);
 Used for decision parts like auto transitions. Provides condition checking in automatic transitions.
 
 **Usage Areas:**
-- Data validation checks
+- Data validation checks — a condition is the right place to decide whether a transition (and its tasks) runs, unlike `InputHandler`
 - Business rule validation
 - Time-based conditions
 - External system status checks
@@ -251,6 +251,8 @@ var userInfo = context.Instance.Data.userInfo;
 var paymentSchedule = context.Instance.Data.paymentSchedule;
 var currentLogin = context.Instance.Data.login.currentLogin;
 ```
+
+<sup>New</sup> v0.0.100 — A field marked `x-encryption.source: "client"` holds the **ciphertext the client produced**: the runtime does not encrypt, decrypt or mask it — the value is stored as sent and scripts see it as sent. The plaintext never exists in the runtime; decryption belongs to the recipient that holds the private key. (Fields with `source: "runtime"`, the default, are the at-rest encrypted ones; see [Schema Definition](/docs/how-to/view-consept/schema-tanimi).)
 
 #### TaskResponse
 Contains the results of completed tasks. Used to process task results in output handlers.
@@ -582,10 +584,8 @@ public class PaymentProcessingMapping : ScriptBase, IMapping
             if (amount == null || amount <= 0)
             {
                 LogWarning("Invalid payment amount received: {0}", args: new object?[] { amount });
-                return Task.FromResult(new ScriptResponse
-                {
-                    Data = new { error = "Invalid amount" }
-                });
+                // Returning an error does not stop the task; throwing prevents the invocation.
+                throw new ArgumentException("Invalid amount");
             }
             
             LogDebug("Processing payment amount: {0}", args: new object?[] { amount });
@@ -706,6 +706,57 @@ public class ConfigAwareMapping : ScriptBase, IMapping
 ```
 
 Access nested keys using `:` separator: `ExternalApi:BaseUrl`, `Features:EnableDetailedLogging`
+
+### Reading a file (`GetFileAsync`)
+
+<sup>New</sup> v0.0.100 The file of a master-schema field marked `x-storage` is held in instance data only as a **handle** (see [File Fields](/docs/how-to/file-fields)). A script that needs the bytes reads the file by the handle's coordinates:
+
+```csharp
+public abstract class ScriptBase
+{
+    protected Task<ScriptFile> GetFileAsync(string domain, string flow, string instance, string file);
+}
+
+public sealed record ScriptFile(byte[] Content, string? Name, string? MimeType, long Size, string ETag);
+```
+
+| Parameter | Source |
+|-----------|--------|
+| `domain`, `flow`, `instance` | The handle's `owner.domain`, `owner.flow`, `owner.instance` |
+| `file` | The handle's `file` GUID |
+
+`ScriptFile.ETag` is the SHA-256 of the bytes (lower-case hex, unquoted). The sandbox bans `System.IO`, so the content is a `byte[]`, not a stream.
+
+```csharp
+public class SendDocumentMapping : ScriptBase, IMapping
+{
+    public async Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext context)
+    {
+        var doc = context.Instance.Data.identityDocument; // persisted handle
+        var file = await GetFileAsync(
+            (string)doc.owner.domain, (string)doc.owner.flow,
+            (string)doc.owner.instance, (string)doc.file);
+
+        // The bytes go into this task's request only; they are written to the task record too.
+        var httpTask = task as HttpTask;
+        httpTask.SetBody(new
+        {
+            fileName = file.Name,
+            contentType = file.MimeType,
+            content = Convert.ToBase64String(file.Content)
+        });
+        return new ScriptResponse();
+    }
+
+    public Task<ScriptResponse> OutputHandler(ScriptContext context) =>
+        Task.FromResult(new ScriptResponse());
+}
+```
+
+- **Same domain:** read in process. **Another domain:** the owning domain's internal `GET …/instances/{instance}/internal/file?file=` route is called.
+- **No authorization** (no caller identity, `queryRoles` or `x-roles`) — this is a service-to-service read. The handle must still be in that instance's **latest** data and be valid; the binding never comes from the caller. Keep the `internal/file` route reachable from the internal network only.
+- Available only to scripts running in the **Orchestration** host. When no reader is available or the read fails, an `InvalidOperationException` is thrown.
+- The bytes are returned in memory: a mapping that puts them into a task request/response writes them into the **task record** (see [File Fields → Known issues](/docs/how-to/file-fields#known-issues)). Pass the handle, not the content, between mappings.
 
 ## ITransitionMapping Implementation
 
