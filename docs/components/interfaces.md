@@ -30,7 +30,7 @@ namespace BBT.Workflow.Scripting;
 
 ## IMapping
 
-Workflow task yürütmesinde **giriş ve çıkış verisi bağlama** (input/output binding) için ana arabirimdir. Görev çalıştırılmadan önce ve sonra dönüşüm, doğrulama ve audit imkânı sağlar.
+Workflow task yürütmesinde **giriş ve çıkış verisi bağlama** (input/output binding) için ana arabirimdir. Görev çalıştırılmadan önce ve sonra dönüşüm ve audit imkânı sağlar.
 
 ### Tanım
 
@@ -59,7 +59,13 @@ Task çalıştırılmadan **önce** çağrılır; girdi verisini hazırlar veya 
 
 **Dönüş:** `Task<ScriptResponse>` — `ScriptResponse.Data` bu bağlamda **task audit verisi** olarak kullanılır. Bkz. [`Data` alanı tablosu](#data-alanının-bağlama-göre-anlamı).
 
-**Tipik kullanım:** dinamik endpoint üretimi, girdi doğrulama, kimlik doğrulama token'ı hazırlama, özelleştirilmiş header yapılandırması.
+**Tipik kullanım:** dinamik endpoint üretimi, kimlik doğrulama token'ı hazırlama, özelleştirilmiş header yapılandırması.
+
+:::warning InputHandler task'ı durduramaz
+`InputHandler`'ın dönüş değeri yalnızca task'ın audit kaydına yazılır; runtime onu hiçbir karar için okumaz. Ne döndürürseniz döndürün — `Data["error"]`, `StatusCode` veya boş bir yanıt — task ardından yapılandırıldığı haliyle **çalıştırılır**. Yazan task'larda (StartTrigger, DirectTrigger, SubProcess, HTTP POST, publish) yazma, handler girdiyi geçersiz bulmuş olsa bile gerçekleşir; `OutputHandler` sonucu sonradan görür ve geri alamaz.
+
+Doğrulamayı task'tan **önce** yapın: transition kuralı/koşulu, hata state'ine giden otomatik transition veya öncesinde çalışan bir doğrulama adımı task'ın hiç çalışıp çalışmayacağına karar verir. Son çare olarak `InputHandler` içinden exception fırlatmak çağrıyı engeller: task bir task yürütme hatası olarak başarısız olur, `OutputHandler` çalışmaz ve bu hata bir iş yanıtı olmadığı için `AcceptedStatusCodes` ona uygulanmaz.
+:::
 
 ### `OutputHandler(ScriptContext context)`
 

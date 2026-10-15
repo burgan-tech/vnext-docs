@@ -46,7 +46,12 @@ Göreve iletilecek verileri hazırlamak için kullanılır. Task çalıştırıl
 - Input verilerini dönüştürme
 - Task yapılandırmasını ayarlama
 - Başlık ve kimlik doğrulama bilgisi ekleme
-- Doğrulama
+
+:::warning InputHandler task'ı durduramaz
+`InputHandler`'ın dönüş değeri yalnızca task'ın audit kaydına yazılır; runtime onu hiçbir karar için okumaz. Ne döndürürseniz döndürün — `Data["error"]`, `StatusCode` veya boş bir yanıt — task ardından yapılandırıldığı haliyle **çalıştırılır**. Yazan task'larda (StartTrigger, DirectTrigger, SubProcess, HTTP POST, publish) yazma, handler girdiyi geçersiz bulmuş olsa bile gerçekleşir; `OutputHandler` sonucu sonradan görür ve geri alamaz.
+
+Doğrulamayı task'tan **önce** yapın: transition kuralı/koşulu, hata state'ine giden otomatik transition veya öncesinde çalışan bir doğrulama adımı task'ın hiç çalışıp çalışmayacağına karar verir. Son çare olarak `InputHandler` içinden exception fırlatmak çağrıyı engeller: task bir task yürütme hatası olarak başarısız olur, `OutputHandler` çalışmaz ve bu hata bir iş yanıtı olmadığı için `AcceptedStatusCodes` ona uygulanmaz.
+:::
 
 ### OutputMapping
 
@@ -1156,15 +1161,13 @@ public Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext contex
     }
     catch (Exception ex)
     {
-        return Task.FromResult(new ScriptResponse
-        {
-            Key = "error",
-            Data = new { error = ex.Message, timestamp = DateTime.UtcNow },
-            Tags = new[] { "error", "exception" }
-        });
+        LogError("Input preparation failed: {0}", args: new object?[] { ex.Message });
+        throw; // yutmayın: hata döndürmek task'ı durdurmaz
     }
 }
 ```
+
+`InputHandler` içinde exception'ı yakalayıp hata bilgisini `ScriptResponse` olarak döndürmek task'ı **durdurmaz**; task eksik/yanlış yapılandırmayla çalışmaya devam eder. Loglayıp yeniden fırlatın. Bkz. [InputHandler task'ı durduramaz](./interfaces#inputhandlerworkflowtask-task-scriptcontext-context).
 
 ### Null ve tip güvenliği
 
@@ -1255,6 +1258,8 @@ if (retryCount < maxRetries)
 
 ### Toplu doğrulama
 
+Girdinin geçerli olup olmadığına task'tan **önce** karar verin (transition kuralı/koşulu, hata state'ine otomatik transition veya ayrı bir doğrulama adımı). `InputHandler` içinde yapılan doğrulama task'ı ancak exception fırlatarak durdurabilir; hata bilgisini `ScriptResponse` ile döndürmek task'ın çalışmasını engellemez.
+
 ```csharp
 public Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext context)
 {
@@ -1268,12 +1273,8 @@ public Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext contex
 
     if (errors.Any())
     {
-        return Task.FromResult(new ScriptResponse
-        {
-            Key = "validation-error",
-            Data = new { errors },
-            Tags = new[] { "validation", "error" }
-        });
+        // Döndürmek yetmez — task yine çalışır. Fırlatmak çağrıyı engeller.
+        throw new ArgumentException(string.Join("; ", errors));
     }
 
     return Task.FromResult(new ScriptResponse());
