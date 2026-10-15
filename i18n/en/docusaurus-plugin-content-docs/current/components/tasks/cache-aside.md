@@ -15,7 +15,7 @@ Behavior:
 3. On a **miss** (or `forceRefresh: true`) → `sourceTask` runs **as a task** (`sourceMapping` is its mapping: `InputHandler` → call → `OutputHandler`), the shaped output is written to the cache with `ttlInSeconds` + `consistency`, and returned.
 4. In both cases the task-level mapping's (`onExecutionTasks[].mapping`) `OutputHandler` runs on the result.
 
-:::warning v0.0.99 breaking
+:::warning[v0.0.99 breaking]
 The Cache-Aside contract changed in v0.0.99:
 
 - The `keyExpression` field is **removed**; a dynamic key is now a ScriptCode object in `key`.

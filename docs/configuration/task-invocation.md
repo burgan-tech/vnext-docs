@@ -67,7 +67,7 @@ Yetenek kapısı sayesinde yanlış bir yapılandırma (local invoker'ı olmayan
 | `soap` | SOAP (tip `16`) | `LocalSoapTaskInvoker` | `http` ile aynı adlandırılmış HTTP client'ları ve bağlantı sınırını paylaşır |
 | `statestore` | State Store (tip `17`) | `LocalStateStoreTaskInvoker` | Paylaşımlı `IStateStoreClient` üzerinden çalışır; function response cache'ini de besler |
 
-:::warning v0.0.99 — `cacheaside` modu kaldırıldı
+:::warning[v0.0.99 — `cacheaside` modu kaldırıldı]
 `cacheaside` wire tipi, `LocalCacheAsideTaskInvoker` ve Execution tarafındaki `CacheAsideTaskInvoker` v0.0.99'da kaldırıldı. Cache-Aside task'ı (tip `18`) tamamen Orchestration'daki executor'da çalışır: **cache get/set `statestore` modunu izler** (State Store task'ı ve function response cache ile aynı gateway), `sourceTask` ise kendi tipinin yönlendirmesiyle çalışır (ör. bir `http` kaynak `Modes:http`'e tabidir). Ortam konfigürasyonunuzdan `Workflow:TaskInvocation:Modes:cacheaside` (veya `Workflow__TaskInvocation__Modes__cacheaside`) girişini **kaldırın**. Bkz. [Cache-Aside Task](/docs/components/tasks/cache-aside) ve [v0.0.99 Breaking Changes](/blog/breaking-changes/breaking-changes-v0-0-99).
 :::
 
@@ -125,6 +125,15 @@ Değişiklik **bir sonraki Orchestration host başlangıcında** etkili olur, bi
 :::
 
 `http`/`soap`'ı yük altında Remote'a geri almak, hedef başına bağlantı tavanını `MaxConnectionsPerServer` (50) değerinden Execution host'un sabit `10`'una düşürür; tek hedefe yoğun trafik gönderen bir tipi geri alırken bu düşüşü hesaba katın.
+
+## Remote yolun transport'u: yalnız Dapr HTTP
+
+<sup>New</sup> v0.0.100 — Remote çözülen bir task için Orchestration → Execution çağrısı **her zaman Dapr HTTP service invocation**'dır (`POST api/v1/execution/invoke/{type}/{key}`). Opt-in gRPC transport'u kaldırıldı:
+
+- `ExecutionApi:Transport` artık okunmaz; kalmış bir `grpc` değeri yok sayılır. `Kestrel:GrpcPort` kaldırıldı.
+- Yalnız `ExecutionApi__Transport=grpc`, Execution sidecar'ında `app-protocol: grpc` ve app-port'u gRPC portuna çevirmenin üçünü birden yapmış ortamlar etkilenir: Execution sidecar'ı `app-protocol: http`'ye döndürülmelidir.
+- Helm chart 1.0.123'ten `execution.grpcPort`, `Kestrel__GrpcPort` ve `ExecutionApi__Transport` çıkarıldı; `execution.dapr.protocol` `"http"` kalmalıdır (bkz. [Helm Chart](/docs/deployment/helm-chart)).
+- Kaldırılan yalnız uygulama seviyesindeki Orchestration → Execution gRPC servisidir. Sidecar'lar arası trafik, uygulamaların sidecar'ın gRPC API'siyle (state, lock, pub/sub) konuşması ve OTLP gRPC export'u etkilenmez.
 
 ## Gözlemlenebilirlik
 

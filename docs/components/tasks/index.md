@@ -53,7 +53,7 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 
 ## Görev Türleri
 
-Runtime toplamda **23 task türü** çalıştırır. `@burgan-tech/vnext-schema@0.0.55` paketindeki `task-definition.schema.json` bunların ilk **22**'sini tanımlar; type `23` (Python) şema enum'unda yer almaz (bkz. aşağıdaki not):
+Runtime toplamda **23 task türü** çalıştırır. `@burgan-tech/vnext-schema@0.0.56` paketindeki `task-definition.schema.json` bunların ilk **22**'sini tanımlar; type `23` (Python) şema enum'unda yer almaz (bkz. aşağıdaki not):
 
 | # | Görev Türü | Açıklama | Detay |
 |---|---|---|---|
@@ -82,7 +82,7 @@ Runtime toplamda **23 task türü** çalıştırır. `@burgan-tech/vnext-schema@
 | 23 | **PythonTask** <sup>New</sup> | `main(input)` kontratlı, Execution'da çalışan built-in Python task (experimental) | [Python](./python) |
 
 :::warning[Type `23` şema paketinde yok]
-`@burgan-tech/vnext-schema@0.0.55` paketindeki `task-definition.schema.json`, `attributes.type` enum'ında `1`–`22` değerlerini içerir; `23` (Python) enum'da yoktur. Bu nedenle domain paketlerinde `npm run validate` Python task tanımını reddeder; runtime tarafında `publish` ve çalıştırma sorunsuzdur. Type `22` (External HTTP) 0.0.55 ile şemaya eklendi, ancak v0.0.94'ten beri **deprecated**'dır — yeni tanımlarda type `6` HTTP task kullanın. 0.0.54 ve öncesi şemalar yalnızca `1`–`21` değerlerini içerir. Ayrıntı: [External HTTP Task](./external-http), [Python Task](./python).
+`@burgan-tech/vnext-schema@0.0.56` paketindeki `task-definition.schema.json`, `attributes.type` enum'ında `1`–`22` değerlerini içerir (0.0.55'ten beri aynı); `23` (Python) enum'da yoktur. Bu nedenle domain paketlerinde `npm run validate` Python task tanımını reddeder; runtime tarafında `publish` ve çalıştırma sorunsuzdur. Type `22` (External HTTP) 0.0.55 ile şemaya eklendi, ancak v0.0.94'ten beri **deprecated**'dır — yeni tanımlarda type `6` HTTP task kullanın. 0.0.54 ve öncesi şemalar yalnızca `1`–`21` değerlerini içerir. Ayrıntı: [External HTTP Task](./external-http), [Python Task](./python).
 :::
 
 :::info[Orchestrator-local çalışan task türleri — v0.0.94]

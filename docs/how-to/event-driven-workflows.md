@@ -192,6 +192,10 @@ Kurallar:
 - Lokalde YAML'lar orchestration sidecar'ına mount edilen klasöre konur; Kubernetes'te namespace'inizdeki `Subscription` custom resource'larıdır ve orchestration app-id'sine scope'lanır.
 - Deklaratif subscription'lar sidecar açılışında okunur. **YAML ekledikten/değiştirdikten sonra Dapr sidecar'ını yeniden başlatın.**
 
+:::warning[Kafka altında domain topic'leri]
+Bu sayfadaki `my-domain.order-flow` gibi adlar Redis/RabbitMQ gibi ACL'siz broker'lar içindir. <sup>New</sup> v0.0.100 — Domain'in kendi yazdığı topic'ler (Subscription `topic`'i, [DaprPubSub Task](/docs/components/tasks/dapr-pubsub) `topic`'i) **olduğu gibi** kullanılır, runtime önek eklemez. Kafka'da broker her domain kullanıcısına yalnız `vnext.{domain}.*` yetkisi verdiği için bu topic'ler de o kalıba uymalı (ya da domain'e açıkça yetkilendirilmiş olmalı). Runtime topic'leriyle aynı biçim önerilir: örneğin `vnext.my-domain.production.order-flow` ve `vnext.my-domain.production.order-flow.abort`. Bkz. [Runtime topic adları](#runtime-topic-adları).
+:::
+
 ### Helm ile pub/sub ve subscription tanımlama
 
 [vnext helm chart'ı](https://github.com/burgan-tech/vnext-helm-charts/pull/25), `global.pubsubComponents` ve `global.subscriptionComponents` values listeleri ile Dapr `Component` ve `Subscription` (v2alpha1) kaynaklarını orchestrator (`vnext-<appDomain>-app`) sidecar'ına scope'lu olarak render eder:
@@ -260,6 +264,40 @@ Bazı event'ler ek olarak **post-commit relay** ile anında iletilir — outbox 
 - Parent'ın `effectiveState`'i, en derin aktif SubFlow halkasının state'idir — açık bir SubFlow korelasyonu varken parent'ın kendi state değişimi bu kanaldan **yayınlanmaz** (child'ın bildirimi zaten yukarı taşınır).
 
 Bu, bu sayfadaki event-driven workflow'ların doğrudan pub/sub akışını değiştirmez — yalnızca runtime'ın SubFlow/state-değişikliği bildirimlerini nasıl ilettiğini açıklar.
+
+### Runtime topic adları
+
+<sup>New</sup> v0.0.100 — Runtime'ın kendi iç event'leri (outbox, inbox, SubFlow bildirimleri) için kullandığı topic'lerin hepsi tek bir biçimdedir:
+
+```
+vnext.{APP_DOMAIN}.{environment}.{event}.v{n}
+```
+
+- `{APP_DOMAIN}`: host'un domain'i. `APP_DOMAIN` tanımlı değilse host açılışta hata verir.
+- `{environment}`: küçük harfe çevrilmiş `ASPNETCORE_ENVIRONMENT`; tanımsızsa `production` (.NET host'unun da varsayılanı).
+- Örnek: `vnext.core.production.instance.sub.completed.v1`, `vnext.core.development.aether.outbox.wakeup.v1`.
+
+| Event | Açıklama |
+|---|---|
+| `instance.canceled` | Instance iptal edildi |
+| `instance.canceled.child` | Parent iptal edildi; aktif SubFlow child'ının da iptali istenir |
+| `instance.completed.cleanup` | Instance tamamlandı; zamanlanmış job'ları iptal edilir |
+| `instance.faulted.child` | Parent hataya düştü; aktif SubFlow child'ının da hataya düşmesi istenir |
+| `instance.faulted.cleanup` | Instance hataya düştü; zamanlanmış job'ları iptal edilir |
+| `instance.sub.canceled` | SubFlow iptal edildi (parent'a bildirim) |
+| `instance.sub.completed` | SubFlow tamamlandı (parent'a bildirim) |
+| `instance.sub.faulted` | SubFlow hataya düştü (parent'a bildirim) |
+| `instance.sub.state.changed` | SubFlow state değişikliği (`sub:state-changed`) |
+| `transition.continuation.requested` | Zincirdeki sonraki transition'ın arka plan job'ı olarak kuyruğa alınması istenir |
+| `aether.outbox.wakeup` | Outbox worker'ı uyandıran sinyal (yükü boş) |
+
+Önek, Kafka ACL'si içindir: broker her domain kullanıcısına topic ve consumer group'larda `vnext.{domain}.*` yetkisi verir, dışındaki topic reddedilir. Consumer group'u runtime değil, Helm chart'ın Kafka component'i belirler (bkz. [Helm Chart](/docs/deployment/helm-chart)).
+
+:::warning[Topic adı değişikliği — rollout'tan önce outbox'ı boşaltın]
+v0.0.100 ile **tüm runtime topic adları değişir**. Eski adlı topic'lerde kalan mesajlar yeni sürümde tüketilmez. Outbox satırı topic adını yazıldığı anda saklar; güncellemeden önce yazılmış satırlar eski ada gönderilir. Bu yüzden yeni sürüme geçmeden önce outbox'ı boşaltın.
+:::
+
+Domain'in kendi yazdığı topic'ler (`DaprPubSubTask.topic`, domain'e ait `Subscription`'lar) bu kurala tabi değildir: olduğu gibi kullanılır, runtime önek eklemez. Kafka altında yine de `vnext.{domain}.*` kalıbına uymaları gerekir (yukarıdaki uyarıya bakın).
 
 ## Devreye alma checklist'i
 

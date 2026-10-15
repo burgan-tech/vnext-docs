@@ -15,7 +15,7 @@ Cache-Aside Task, **cache-aside (read-through)** desenini tek bir görev olarak 
 3. Cache'te **yoksa** (miss) veya `forceRefresh: true` ise → `sourceTask` **bir task olarak** çalıştırılır (`sourceMapping` onun mapping'idir: `InputHandler` → çağrı → `OutputHandler`), şekillendirilmiş çıktı `ttlInSeconds` + `consistency` ile cache'e yazılır ve döner.
 4. Her iki durumda da task-level mapping'in (`onExecutionTasks[].mapping`) `OutputHandler`'ı sonuç üzerinde çalışır.
 
-:::warning v0.0.99 breaking
+:::warning[v0.0.99 breaking]
 v0.0.99'da Cache-Aside kontratı değişti:
 
 - `keyExpression` alanı **kaldırıldı**; dinamik anahtar artık `key` alanına bir ScriptCode objesi olarak verilir.

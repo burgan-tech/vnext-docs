@@ -53,7 +53,7 @@ Rolleri `ICurrentUser.Roles`'tan okur, yoksa `role` header'ına düşer. Bu, pro
 
 ## `morph-idm` Davranışı
 
-:::note Fail-closed'dan fail-open'a
+:::note[Fail-closed'dan fail-open'a]
 Bu sayfanın v0.0.88 sürümündeki "provider hatası 403" davranışı v0.0.96 ile değişti; aşağıdaki liste güncel davranışı anlatır.
 :::
 
@@ -89,7 +89,7 @@ Provider, `authorize` fonksiyonunun `?role=` parametresinin nasıl bileşeceğin
 
 Ayrıntı: [Built-in Functions → Instance Authorize](../components/functions/built-in#instance-authorize).
 
-:::warning Custom function çağrılarında `function.roles` artık gate değil
+:::warning[Custom function çağrılarında `function.roles` artık gate değil]
 v0.0.88 itibarıyla custom function çağrılarını yetkilendirmek middle-tier'ın sorumluluğudur; vNext'in işi görünürlük (discovery yanıtlarında `roles`'un görünmesi) ve `authorize` fonksiyonudur. `function.roles`, artık **yalnızca `authorize` fonksiyonu tarafından** değerlendirilir — doğrudan function çağrısında bir gate olarak kullanılmaz. **Scope** kontrolü (Domain/Flow/Instance) değişmeden kalır; bu, yetkilendirme değil call-shape doğrulamasıdır. Ayrıntı için bkz. [Authorization → Çağıran rollerinin çözümlenmesi](../concepts/authorization#çağıran-rollerinin-çözümlenmesi-caller-role-provider).
 :::
 

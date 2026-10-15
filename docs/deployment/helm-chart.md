@@ -78,7 +78,7 @@ Minikube kurulumu, local geliştirme ve test senaryoları için uygundur. Üreti
 
 ## Chart ↔ Runtime Sürüm Eşlemesi
 
-Chart, `appVersion` alanında hedeflediği runtime imaj etiketini taşır. v0.0.93–v0.0.97 için:
+Chart, `appVersion` alanında hedeflediği runtime imaj etiketini taşır. v0.0.93–v0.0.100 için:
 
 | Chart | Runtime (`appVersion`) | Not |
 |---|---|---|
@@ -89,12 +89,15 @@ Chart, `appVersion` alanında hedeflediği runtime imaj etiketini taşır. v0.0.
 | `1.0.118` | `0.0.96` | — |
 | `1.0.119` | `0.0.97` | — |
 | `1.0.120` | `0.0.97` | `nameResolution` fix: CRD'nin zorunlu saydığı `version: v1` ve `configuration: {}` her zaman render edilir |
+| `1.0.121` | `0.0.98` | — |
+| `1.0.122` | `0.0.99` | — |
+| `1.0.123` | `0.0.100` | Kafka pub/sub seçeneği (`global.dapr.pubsub.type`), `global.blobStorageComponents` (x-storage), Execution gRPC values'ları kaldırıldı (bkz. [1.0.123'e geçiş](#chart-10123e-geçiş-runtime-00100)) |
 
-:::warning Dapr bileşen ayak izi — v0.0.93 (chart ≥ 1.0.111)
+:::warning[Dapr bileşen ayak izi — v0.0.93 (chart ≥ 1.0.111)]
 Runtime v0.0.93 ile Dapr bileşenleri **yalnızca tüketen host'a** yüklenir (`vnext/docs/runtime/dapr-component-footprint.md`): `state` → orchestrator + execution; `lock` → orchestrator + db-migrator; `pubsub` → orchestrator, execution, inbox, outbox; `pubsub-broadcast` → yalnız orchestrator. `lock` execution/inbox/outbox'tan, `state` inbox/outbox'tan kaldırıldı; `AddRedis()` / `Redis__Standalone__EndPoints__*` env'leri, `dapr-placement` bağımlılığı ve `DAPR_PLACEMENT_HOST` runtime'dan silindi (Redis **sunucusu** kalır — Dapr bileşenlerini besler). Monitor API host'u (`/api/v1/monitor`, port 4203) da bu sürümde kaldırıldı. Chart, `global.dapr.redis.scopes.<state|lock|pubsub|pubsubBroadcast>` ile bu politikayı **değiştirmenize** (liste birleşmez, yerine geçer) izin verir; 0.0.90 öncesi bir imaj sabitleyen domain `Redis__Standalone__EndPoints__0`'ı kendi values'ında yeniden eklemelidir.
 :::
 
-:::info Orchestrator'da `state` bileşeni zorunlu — v0.0.94 (chart ≥ 1.0.115)
+:::info[Orchestrator'da `state` bileşeni zorunlu — v0.0.94 (chart ≥ 1.0.115)]
 v0.0.94'ten itibaren `http`, `daprservice`, `soap`, `statestore` ve `cacheaside` task'ları varsayılan olarak **Orchestrator process'i içinde** çalışır (`Workflow:TaskInvocation`). `statestore` / `cacheaside` bu yüzden orchestrator sidecar'ından bir `state` bileşeni ister: chart'ın varsayılan scope'u bunu sağlar; özel bir `storeName` kullanan task/function cache tanımlarında ilgili bileşenin scope'una **orchestrator app-id'si** de eklenmelidir, aksi halde ilk kullanımda çözümlenemez. Bileşen taşınamıyorsa `"statestore": "Remote"` / `"cacheaside": "Remote"` ile eski yol korunur. Ayrıntı: [Task Invocation](/docs/configuration/task-invocation).
 :::
 
@@ -121,6 +124,105 @@ global:
 - `ServiceDiscovery:Provider=dapr` yine **ortam başına** açıkça ayarlanır; chart bunu değiştirmez. Bkz. [Service Discovery → dapr provider](/docs/configuration/service-discovery#dapr-provider).
 
 `_helpers.tpl`'deki `vnext.validateNameResolution`, `template` ve `clusterDomain`'in birlikte verilmesi ya da `component` boşken `template`/`clusterDomain` set edilmesi gibi yanlış kombinasyonlarda render'ı **durdurur**.
+
+---
+
+## Pub/Sub: Redis ↔ Kafka
+
+<sup>New</sup> chart 1.0.123 / v0.0.100 — Runtime'ın kendi pub/sub'ı (instance event'leri, outbox, inbox; `DAPR_PUBSUB_STORE_NAME`) varsayılan olarak Redis üzerinde çalışır. Kafka'ya geçmek için `global.dapr.pubsub.type: "kafka"` verilir:
+
+```yaml
+global:
+  dapr:
+    pubsub:
+      type: "kafka"                         # "redis" (varsayılan) veya "kafka"; başka değer render'ı durdurur
+  externalKafka:
+    endpoint: "kafka-1:9093,kafka-2:9093"   # -> brokers
+    auth:
+      useSecretEngine: true                 # saslUsername / saslPassword secret store'dan okunur
+      secret:
+        name: vnext-secret
+        usernameKey: kafka-username
+        passwordKey: kafka-password
+      # useSecretEngine: false iken auth.username / auth.password kullanılır
+    metadata:                               # host başına ek pubsub.kafka metadata'sı
+      orchestrator:
+        - { name: saslMechanism, value: "SHA-512" }
+      execution: []
+      inbox: []
+      outbox: []
+```
+
+- **Host başına bir component.** Chart dört `pubsub.kafka` component'i üretir: `<fullname>-pubsub-orchestrator`, `-pubsub-execution`, `-pubsub-worker-inbox` ve `-pubsub-worker-outbox`. Her biri yalnız kendi host'unun sidecar'ına scope'lanır ve o host'un `DAPR_PUBSUB_STORE_NAME` değeri bu component'i gösterir.
+- **Broadcast store Redis'te kalır.** Orchestrator'ın `<fullname>-pubsub-broadcast` store'u `type` ne olursa olsun Redis'tedir.
+- **Chart'ın yazdığı metadata.** `brokers` (`endpoint`'ten), `authType` (her zaman `password`, yani SASL; mTLS / OIDC / auth'suz seçilemez), `saslUsername` ve `saslPassword` (`auth`'tan) chart tarafından render edilir ve dört component'te ortaktır. Bunları `metadata.<host>` altında yazmak render'ı **durdurur**.
+- **Passthrough kuralları.** Diğer Dapr Kafka metadata'sı (`saslMechanism`, `disableTls`, `caCert`, `clientID` …) `metadata.<orchestrator|execution|inbox|outbox>` altında `{name, value}` veya `{name, secretKeyRef}` olarak verilir ve o host'un component'ine olduğu gibi eklenir. İsimler büyük-küçük harf duyarlıdır (`consumerID`, `consumerId` değil; yanlış yazılmış isim sessizce yok sayılır). Değeri `""` olan girdi atlanır, ayar Dapr varsayılanında kalır.
+
+### Topic'ler ve consumer group'lar
+
+Runtime 0.0.100'den itibaren tüm runtime topic'leri `vnext.{appDomain}.{environment}.{event}.v{n}` biçimindedir (`{environment}` = küçük harfli `ASPNETCORE_ENVIRONMENT`; ayrıntı: [Event-Driven Workflow'lar → Runtime topic adları](/docs/how-to/event-driven-workflows)). Broker her domain kullanıcısına topic **ve** consumer group'larda `vnext.{appDomain}.*` yetkisi verir.
+
+`consumerID` / `consumerGroup` değerlerini **chart set etmez**; deployment pipeline'ı her host için `metadata.<host>` altına verir. Kural:
+
+- Her host'un katıldığı group `vnext.{appDomain}.*` içinde olmalı ve **host'lar arasında farklı** olmalıdır (her host kendi topic'lerini tüketir).
+- `consumerGroup` verilirse önceliklidir; Dapr `consumerID`'yi yok sayar.
+- İkisi de verilmezse Dapr host'un app-id'sini (`vnext-core-app` …) group olarak kullanır; bu prefix dışında kaldığı için ACL reddeder.
+
+Örnek (yalnız biçimi göstermek için; gerçek değeri pipeline belirler):
+
+```yaml
+global:
+  externalKafka:
+    metadata:
+      orchestrator:
+        - { name: consumerID, value: "vnext.core.production.orchestrator" }
+```
+
+Domain'in kendi yazdığı topic'ler (`DaprPubSubTask.topic`, Subscription'lar) olduğu gibi kullanılır; Kafka altında onlar da `vnext.{domain}.*` kalıbına uymalıdır. Bkz. [DaprPubSub Task](/docs/components/tasks/dapr-pubsub).
+
+---
+
+## Blob storage (x-storage)
+
+<sup>New</sup> chart 1.0.123 / v0.0.100 — Master şemada `x-storage` ile işaretlenen dosya alanlarının içeriği bir Dapr output binding'i üzerinden nesne deposuna taşınır (sözleşme: [Dosya Alanları](/docs/how-to/file-fields)). Binding'ler `global.blobStorageComponents` altında tanımlanır (varsayılan `[]`; chart hazır bir component getirmez). Her kayıt `{name, spec: {type, version, metadata[]}, auth?}` biçimindedir ve yalnız **orchestrator (`vnext-<appDomain>-app`) sidecar'ına** scope'lanır, çünkü dosya nesnelerini yazan ve okuyan tek host odur. `name`, şemadaki `x-storage.binding` değeridir. Kimlik bilgilerini satır içi değil `secretKeyRef` ile verin.
+
+```yaml
+global:
+  blobStorageComponents:
+    - name: vnext-blob-s3
+      spec:
+        type: bindings.aws.s3
+        version: v1
+        metadata:
+          - { name: bucket, value: tts-bucket }
+          - { name: region, value: us-east-1 }
+          - { name: endpoint, value: https://s3.bank.local }   # kurum içi S3 / MinIO
+          - { name: forcePathStyle, value: "true" }             # kurum içi S3 / MinIO
+          - { name: accessKey, secretKeyRef: { name: vnext-secret, key: blob-s3-access-key } }
+          - { name: secretKey, secretKeyRef: { name: vnext-secret, key: blob-s3-secret-key } }
+      auth: { secretStore: vnext-secret }
+orchestrator:
+  appEnvConfig:
+    FileStorage__AllowedBindings__0: "vnext-blob-s3"
+    FileStorage__KeyPrefix: "vnext-runtime/"
+```
+
+| Ayar | Varsayılan | Açıklama |
+|---|---|---|
+| `FileStorage:KeyPrefix` | boş | Her nesne anahtarının öneki; paylaşılan bir bucket'ta runtime nesnelerini ayırır. **İlk yazımdan sonra asla değiştirilmemelidir** — mevcut handle'lar eski anahtarlarla yazılmıştır. |
+| `FileStorage:AllowedBindings` | boş liste | Handle'ı akışlar arasında taşınabilecek **ek** binding'ler (ör. farklı binding tanımlayan akışa handle kopyalayan SubFlow girdi/çıktı eşlemeleri). Boşken bir akış yalnız kendi master şemasının tanımladığı binding'lerin handle'larını kabul eder; başka binding'li bir handle yazmada `400` (`Instance:100048`), okumada `404` alır. |
+
+Boyut sınırları: base64 gövdeyi yaklaşık 4/3 büyütür. Orchestration host'unun Kestrel gövde sınırı **10 MiB**'dır (≈ **7,5 MiB** dosya; aşılırsa `413`); Dapr sidecar'ının sınırı `global.dapr.maxBodySize` (`--max-body-size`, varsayılan **64Mi**). Binding'in `get` yanıtı bellekte tamponlanır.
+
+---
+
+## Chart 1.0.123'e geçiş (runtime 0.0.100)
+
+:::warning[Güncellemeden önce]
+- **Outbox'ı boşaltın.** Tüm runtime topic adları `vnext.{appDomain}.{environment}.*` olarak değişir. Eski topic'lerde kalan mesajlar tüketilmez; güncellemeden önce yazılmış outbox satırları eski topic adını taşır. Rollout'tan önce outbox'ın boşaldığından emin olun.
+- **Kaldırılan gRPC values'ları.** Orchestration → Execution gRPC transport'u runtime'dan kaldırıldı; çağrı her zaman Dapr HTTP service invocation'dır (bkz. [Task Invocation](/docs/configuration/task-invocation)). `execution.grpcPort`, `Kestrel__GrpcPort` ve `orchestrator.appEnvConfig.ExecutionApi__Transport` chart'tan çıkarıldı; bunları set eden bir override etkisizdir.
+- **`execution.dapr.protocol` `"http"` kalmalıdır.** Execution sidecar'ını `grpc`'ye çevirmiş bir ortam `http`'ye döndürülmelidir. Dapr sidecar'ının kendi gRPC portları ve OTLP gRPC bundan etkilenmez.
+:::
 
 ---
 

@@ -17,7 +17,7 @@ Hedeflenen deneyim — tek bir instance, iki farklı kanal:
 
 Onay ayrı bir akış değil, **ana akışın kendi state'idir**. İki kanal da aynı `domain + workflow + instanceId` üçlüsünü dinler; ne göreceklerini **rule** belirler.
 
-:::note Ön koşul
+:::note[Ön koşul]
 Mobil ve web client'ları isteklerinde kanal bilgisi taşımalıdır. Bu rehber `x-channel` başlığını (`web` / `mobile`) varsayar; başlığın adı platforma değil sizin sözleşmenize aittir.
 :::
 
@@ -57,7 +57,7 @@ Listenin runtime tarafı (tek tarama, leaf çözümü, cache, sınırlar) için 
 
 `terminate: false` bu state'te **hiçbir client'ın dinlemeyi bırakmaması** gerektiğini açıkça söyler: mobil kullanıcının kararını, web ise sonucu bekliyor. Bu bildirim pipeline'a dokunmaz; duraklatma yalnızca `terminate: true` iken armlanır. `terminate: false` olan bir state'in state yanıtında `interaction` bloğu da bulunmaz (v0.0.95'ten itibaren blok yalnızca bir ack beklenirken üretilir).
 
-:::warning Onay state'ine `rule` koymayın
+:::warning[Onay state'ine `rule` koymayın]
 Etkileşimi `rule` ile bildiren bir state'in gövdesi **paylaşımlı body cache'e yazılmaz** (kuralın girdileri — header, query, instance verisi — cache anahtarının parçası değildir). Onay state'i akışın en uzun ve en sık poll edilen state'idir; buraya konan bir kural gövdeyi her iki kanal için de cache dışına çıkarır. Kuralsız bildirim default-allow'dur: aynı direktif herkese gider ve cache korunur. Kural yalnızca karar sonrası state'te gereklidir (bkz. [§5](#5-karar-sonrası-sonuç-sayfası--dinlemeyi-durdurma)), çünkü verdict orada gerçekten kanala göre değişir.
 :::
 

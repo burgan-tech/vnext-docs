@@ -21,10 +21,11 @@ Function API'leri, workflow instance'ları için sistem seviyesi operasyonlar sa
 9. [Actions Fonksiyonu](#actions-fonksiyonu)
 10. [Human Task Fonksiyonu](#human-task-fonksiyonu)
 11. [Instance Correlation Fonksiyonu](#instance-correlation-fonksiyonu)
-12. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
-13. [Fonksiyon Metrikleri](#fonksiyon-metrikleri)
-14. [En iyi Uygulamalar](#en-iyi-uygulamalar)
-15. [Ilgili Dökümanlar](#ilgili-dökümanlar)
+12. [File Fonksiyonu](#file-fonksiyonu)
+13. [Yetkilendirme (Authorization)](#yetkilendirme-authorization)
+14. [Fonksiyon Metrikleri](#fonksiyon-metrikleri)
+15. [En iyi Uygulamalar](#en-iyi-uygulamalar)
+16. [Ilgili Dökümanlar](#ilgili-dökümanlar)
 
 ## Genel Bakış
 
@@ -42,15 +43,18 @@ vNext Runtime platformu, her workflow instance'ı için otomatik olarak kullanı
 | **Actions** <sup>New</sup> v0.0.93 | Bir task kaydının yürütme alt adımları | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/actions?taskId=` |
 | **Human Task** | Çağıranın sorumlu olduğu human task listesi (domain seviyesi) | `GET /{domain}/functions/human-task` |
 | **Instance Correlation** <sup>New</sup> v0.0.99 | Instance'ın başlattığı subflow/subprocess ağacı (aşağı yönlü, recursive) | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/instance-correlation` |
+| **File** <sup>New</sup> v0.0.100 | Instance verisindeki bir `x-storage` dosyasının baytları | `GET\|HEAD /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file=` |
 
-:::warning `hierarchy` fonksiyonu kaldırıldı (v0.0.99)
+:::warning[`hierarchy` fonksiyonu kaldırıldı (v0.0.99)]
 Eski `…/functions/hierarchy` rotası v0.0.99 ile **kaldırıldı** ve yerini [`instance-correlation`](#instance-correlation-fonksiyonu) aldı. **Alias yoktur**: eski yol custom function çözümlemesine düşer ve `404` döner. Client'ları ve kayıtlı dashboard sorgularını (`Instance.Read/hierarchy` span'i → `Instance.Read/instanceCorrelation`) güncelleyin.
 :::
 
-> **Not:** Kullanıcı tanımlı fonksiyonlar için bkz. [Custom Functions](/docs/components/functions/custom). Sistem fonksiyon key'leri (`state`, `data`, `tasks`, `actions`, …) aynı adlı bir custom function'ı **gölgeler**.
+> **Not:** Kullanıcı tanımlı fonksiyonlar için bkz. [Custom Functions](/docs/components/functions/custom). Sistem fonksiyon key'leri (`state`, `data`, `tasks`, `actions`, …) aynı adlı bir custom function'ı **gölgeler**. <sup>New</sup> v0.0.100 `file` da artık rezerve bir sistem adıdır: key'i `file` olan bir custom function instance rotasında çağrılamaz.
 
 :::caution[QueryRoles yetkilendirmesi — karar noktası gateway'dedir]
 Read fonksiyonlarının tamamı (**state**, **data**, **view**, **schema**, **master**, **tasks**, **actions**, **instance-correlation**, incident rotaları) tek bir `queryRoles` cevabını paylaşır: `state`'i okuyamayan çağıran `data`'yı da okuyamaz. <sup>New</sup> v0.0.95 itibarıyla bu karar fonksiyonların **içinde** verilmez; Internal Gateway isteği iletmeden önce [`authorize?queryRoles=true`](#instance-authorize) fonksiyonunu çağırır ve `403`'ü gateway üretir. Ayrıntı için bkz. [Read fonksiyonlarında queryRoles authorize](#read-fonksiyonlarında-queryroles-authorize).
+
+**İstisna:** <sup>New</sup> v0.0.100 [File Fonksiyonu](#file-fonksiyonu) ham dosya (ör. kimlik belgesi) döndürebildiği için `queryRoles`'u **kendi içinde** de denetler ve `403` üretir.
 :::
 
 Bu fonksiyonlar şunları sağlar:
@@ -225,11 +229,11 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 }
 ```
 
-:::note ResponseShapeVersion v14 <sup>New</sup> v0.0.99
+:::note[ResponseShapeVersion v14 <sup>New</sup> v0.0.99]
 State gövdesinin `ResponseShapeVersion` geçmişi: **v12** (v0.0.95 — `timeout` bloğu, scheduled girişlerde `annotations`, `interaction` yayın kuralı), **v13** (v0.0.98 — `terminate: false` etkileşim bloğunun yeniden yayınlanması), **v14** (v0.0.99 — `stateSubType`, `stateLabels`, `transitions[].labels`, `transitions[].target` ve nesneye dönüşen `timeout.target`). Her yükseltme mevcut tüm state ETag'lerini **bir kez** geçersiz kılar — 304 arkasında park etmiş client'lar bir sonraki poll'da 200 alır. Bu geçişlerde `StateFunctionCache`'i **kapatmayın**; versiyon değişimi cache tarafından yönetilir.
 :::
 
-:::warning `timeout.target` artık bir nesne (v0.0.99, breaking)
+:::warning[`timeout.target` artık bir nesne (v0.0.99, breaking)]
 v0.0.99 öncesinde `timeout.target` düz bir **string** (hedef state key'i) idi; artık `transitions[].target` ile aynı şekilde bir **nesnedir** (`{ key, stateType, stateSubType, labels, subFlow }`). Değişiklik yerinde yapıldı, yeni bir alan eklenmedi — hedef key'i okuyan client'lar `timeout.target` yerine **`timeout.target.key`** okumalıdır.
 :::
 
@@ -299,7 +303,7 @@ v0.0.99 öncesinde `timeout.target` düz bir **string** (hedef state key'i) idi;
 }
 ```
 
-:::info v0.0.98 düzeltmesi
+:::info[v0.0.98 düzeltmesi]
 v0.0.95–v0.0.97 arasında `terminate: false` bir state için blok **hiç yayınlanmıyordu** (regresyon); client'lar bildirilen pencereyi öğrenemiyordu. v0.0.98 ile blok yeniden yayınlanır ve `ResponseShapeVersion` v13'e yükseldi. Aktif subflow zincirinde child'ın bloğu yukarı taşınır; `ack.href` poll edilen (en üst) instance'a yeniden yazılır.
 :::
 
@@ -507,7 +511,7 @@ GetInstance ve GetInstances yanıtları, **instance zarfı** bilgisini içerebil
 | `effectiveStatus` <sup>New</sup> v0.0.94 | Client'ın gözlemlediği durum: aktif bir SubFlow çalışıyorsa **en derin aktif child'ın** durumu, yoksa instance'ın kendi `status`'u — `effectiveState`'in durum karşılığı ve State Function'ın `status` alanıyla aynı değer. Servis edilen değer: instance'ın kendi status'u ya da effectiveStatus terminal ise `status`, aksi halde `effectiveStatus`. GetInstance, liste sorguları, GetInstances task'ı ve sync start/transition yanıtlarında bulunur; liste sorgularında `effectiveStatus` ile **filtrelenebilir ve sıralanabilir** |
 | `type` <sup>New</sup> v0.0.94 | Instance'ın **nasıl başlatıldığı** — `R` root, `S` SubFlow child, `P` SubProcess child. Oluşturulurken damgalanır ve **değişmez** (canlı ilişkiyi değil başlangıç kökenini söyler). Liste sorgularında `instanceType` adıyla filtrelenir/sıralanır |
 
-:::info Sync start/transition yanıtlarında `extensions` <sup>New</sup> v0.0.93
+:::info[Sync start/transition yanıtlarında `extensions` <sup>New</sup> v0.0.93]
 `sync=true` start ve transition yanıtları artık Extensions **değerlendirmez** (performans); zarftaki `extensions` anahtarı korunur ve **her zaman `{}`** döner. Bu iki endpoint'te `?extensions=` query parametresi yok sayılır (reddedilmez). Read yüzeyleri (Data Function, GetInstance) değişmemiştir.
 :::
 
@@ -623,7 +627,7 @@ Filtreler şu formatı kullanır: `filter=attributes={alan}={operatör}:{değer}
 | `nin` | Liste dışında değer | `filter=attributes=type=nin:test,debug` |
 | `isnull` | Null veya null değil | `filter=attributes=resolvedAt=isnull:true` |
 
-:::info Fail-closed doğrulama
+:::info[Fail-closed doğrulama]
 v0.0.84'ten itibaren geçersiz bir operatör veya filtrelenemez bir alan kullanıldığında istek artık sessizce yok sayılmaz — **`400 Bad Request`** (`SchemaFilterValidationException`) döner. Filtrelenebilirlik alanın şemasındaki `x-filterOperators` listesine bağlıdır. Tam operatör listesi ve şema tabanlı filtreleme kuralları için bkz. [Instance Filtreleme Kılavuzu](/docs/how-to/instance-filtering).
 :::
 
@@ -908,7 +912,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/schema
 | `schema` | `object` | JSON Schema içeriği (JSON Schema 2020-12 formatında) |
 | `labels` <sup>New</sup> v0.0.99 | `array` | Schema bileşeninin `attributes.labels` listesi (tüm diller). Tanımlı değilse alan yoktur |
 
-:::note Etiketler ve cache (v0.0.99)
+:::note[Etiketler ve cache (v0.0.99)]
 Schema/fonksiyon bileşenlerinin `attributes.labels` değeri v0.0.99 öncesinde yükleme sırasında **düşürülüyordu**; artık okunur. Bileşen cache'inde önceki bir build'den kalan bir bileşen, yeniden publish edilene veya cache girdisi dolana kadar `labels` taşımaz. Schema ve master fonksiyon cache'inin yanıt şekli versiyonu **v2**'ye yükseldi (cache key'i ve ETag bir kez değişir).
 :::
 
@@ -1057,6 +1061,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/tasks
 - Subflow'a **inmez**: incident geçmişi gibi her zaman adreslenen instance için cevap verir.
 - State gövdesine task linki eklenmez; `ResponseShapeVersion` ve fingerprint ETag'i bu fonksiyondan etkilenmez.
 - <sup>New</sup> v0.0.99 `hook` ve `order`, `InstanceTasks` tablosunda gerçek kolonlara taşındı (migration `AddInstanceTaskTriggerAndOrderColumns`). Transition/state bazlı deneme (attempt) görünümü için bkz. [Fonksiyon Metrikleri](#fonksiyon-metrikleri).
+- <sup>New</sup> v0.0.100 Workflow'u `attributes.history: "none"` olan bir instance için task journal hiç yazılmaz; fonksiyon `200` ile **boş liste** döner. Bkz. [Workflow → History Modu](/docs/components/workflow#history-modu).
 
 ## Actions Fonksiyonu
 
@@ -1081,12 +1086,13 @@ Yanıt sahip `taskId`/`taskKey`'i yansıtır ve `{ id, status, startedAt, finish
 - Fonksiyon, adreslenen task'ın rotadaki instance'a ait olduğunu doğrular; değilse **`404`** (`Instance:100038`) döner — bir task asla başka bir instance'ın rol gate'i üzerinden okunamaz.
 - Yetkilendirme ve subflow davranışı Tasks Fonksiyonu ile aynıdır.
 - **Bilinen boşluk:** runtime bugün `InstanceAction` satırı **yazmamaktadır**; okuma sözleşmesi hazırdır ve yazıcı gelene kadar fonksiyon her task için boş liste döner.
+- <sup>New</sup> v0.0.100 `attributes.history: "none"` olan bir instance'ta fonksiyon `404` yerine `200` ile **boş liste** döner (task kaydı yoktur). Bkz. [Workflow → History Modu](/docs/components/workflow#history-modu).
 
 ## Human Task Fonksiyonu
 
 `GET /api/v1/{domain}/functions/human-task` tek bir soruya cevap verir: **bu çağıranın üzerine düşen human task'lar hangileri?** Instance seviyesi değil **domain seviyesi** bir fonksiyondur; tüketicisi (ör. morph-idm-api) discovery `domain-list` fonksiyonunu okur, kayıtlı her domain için bu rotayı bir kez çağırır ve cevapları client için birleştirir. Yanıt gövdesi düz bir JSON dizisidir; her satır **root** instance'ın `id`/`key`'ini ve **leaf** state'in `humanTask.title` / `description` metnini taşır.
 
-:::tip Akış tasarımı ve client tarafı
+:::tip[Akış tasarımı ve client tarafı]
 Bir onay adımını bu listeye düşürmek (`subType: 6`, `queryRoles`, `humanTask` veri bloğu, kanal bazlı view ve `interaction.longPoll` yapısı, client çağrı sırası) için bkz. [Human Task ve "Bekleyen Onaylarım"](/docs/how-to/human-task-approval).
 :::
 
@@ -1134,7 +1140,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/instance-corre
 
 `{instance}` instance id veya business key olabilir. Diğer sistem fonksiyonları gibi `instance-correlation` adlı bir custom function'ı gölgeler. Yön **yalnızca aşağıdır**: çağıran her zaman kendini kök, torunlarını altında görür — atalarını asla görmez. Hem SubFlow (`S`) hem SubProcess (`P`) correlation'ları, **tamamlanmış olanlar dahil**, ağaçta yer alır.
 
-:::warning `hierarchy` kaldırıldı — alias yok
+:::warning[`hierarchy` kaldırıldı — alias yok]
 `…/functions/hierarchy` v0.0.99 ile kaldırıldı; eski yol custom function çözümlemesine düşer ve **`404`** döner. MCP aracı `get_instance_hierarchy` da `get_instance_correlation` oldu. Span adı `Instance.Read/hierarchy` → `Instance.Read/instanceCorrelation`; bu değere filtre uygulayan kayıtlı dashboard sorgularını güncelleyin.
 :::
 
@@ -1238,6 +1244,40 @@ Tüm node'ları `resolved: true` olan ağaç tamdır. Çözümlenmemiş bir node
 
 Değerler başlangıçta doğrulanır.
 
+## File Fonksiyonu
+
+<sup>New</sup> v0.0.100 Master schema'da `x-storage` ile işaretli bir alanın dosyasını döndürür. Instance verisinde dosyanın yerinde yalnızca bir **handle** (`component`, `file`, `name`, `mimeType`, `size`, `eTag`, `owner`) durur; baytlar bu fonksiyonla okunur. Client tarafı gidiş-dönüş (yazma şekli, echo kuralı) için bkz. [Dosya Alanları (x-storage)](/docs/how-to/file-fields).
+
+### Endpoint
+
+```http
+GET  /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file={guid}
+HEAD /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file={guid}
+```
+
+| Parametre | Konum | Gerekli | Açıklama |
+|-----------|-------|---------|----------|
+| `workflow` / `instance` | Path | Evet | Handle'daki `owner.flow` / `owner.instance` |
+| `file` | Query | Evet | Handle'daki `file` GUID'i. Eksik veya boşsa **`400`** (`Instance:100048`) |
+| `If-None-Match` | Header | Hayır | `"<eTag>"`; eşleşirse depoya gidilmeden **`304`** |
+| `Range` / `If-Range` | Header | Hayır | Kısmi okuma: **`206`**, karşılanamayan aralık **`416`** |
+
+### Davranış
+
+- **Yalnızca bu instance'ın güncel verisi.** Handle, instance'ın **en son** verisinde (`LatestData`) `x-storage` yollarında aranır: SubFlow'a inilmez, geçmiş satırlara bakılmaz. Binding adı ve nesne anahtarı kayıttan gelir, çağırandan asla alınmaz; kayıttaki handle geçerli değilse depo hiç çağrılmaz. Bulunamazsa **`404`** (`Instance:100049`).
+- **Yetki motorun içinde, bu sırayla:**
+  1. State'in `queryRoles`'u (state override → state → workflow). Reddedilirse **`403`** — dosya aranmadan önce karar verilir; reddedilen çağıran hangi dosyaların var olduğunu öğrenemez.
+  2. Dosyanın yolunun ve tüm üst yollarının `x-roles` grant'leri. Yol gizliyse **`404`** — varlık açığa çıkmaz.
+
+  Bu, `queryRoles` kararının gateway'de verildiği [genel kuralın](#read-fonksiyonlarında-queryroles-authorize) bilinçli bir istisnasıdır: dosya endpoint'i ham kimlik belgesi döndürebilir.
+- **Yanıt başlıkları** (`200`): `Content-Type` = kayıtlı `mimeType` (ayrıştırılamazsa `application/octet-stream`), `ETag: "<eTag>"`, `Accept-Ranges: bytes`, `Cache-Control: private, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'`.
+- **`Content-Disposition`:** varsayılan `inline`; etkin içerik türlerinde (`text/html`, `application/xhtml+xml`, `image/svg+xml`, `text/xml`, `application/xml`, `text/javascript`, `application/javascript` ve her `+xml`) **`attachment`**.
+- `HEAD` yalnızca başlıkları döner. `Range` dilimi bellekte alınır (binding nesneyi tamamen okur).
+- Depo ulaşılamazsa **`503`** (`Instance:100047`); master schema yüklenemezse **`503`** (`Instance:100050`).
+- `file` rezerve bir sistem adıdır; aynı key'li custom function instance rotasında gölgelenir.
+
+Betik içinden (yetkilendirmesiz, servisler arası) okuma için bkz. [Mappings → Dosya okuma (`GetFileAsync`)](/docs/components/mappings#dosya-okuma-getfileasync).
+
 ## Yetkilendirme (Authorization)
 
 Workflow'larda fonksiyon, flow, state ve transition seviyesinde **roles** ve **queryRoles** tanımlanabilir. Aşağıdaki sistem fonksiyon endpoint'leri yetki bilgilerini ve yetkilendirme kontrolünü sunar.
@@ -1252,7 +1292,7 @@ State Function'ın döndürdüğü `transitions` dizisi de bu grant'lara göre f
 
 ### Read fonksiyonlarında queryRoles authorize
 
-:::warning Tek karar noktası: `authorize` <sup>New</sup> v0.0.95
+:::warning[Tek karar noktası: `authorize` <sup>New</sup> v0.0.95]
 Read fonksiyonları (**state**, **data**, **view**, **schema**, **master**, **tasks**, **actions**, `incidents`, `incidents/active`) ve `POST …/longpoll/ack` endpoint'i `queryRoles`'u / etkileşim gate'ini artık **in-process denetlemez** ve kendileri `403` üretmez. Hedef dağıtım, çağıranı tanıyıp isteği iletmeden önce **`authorize`** fonksiyonuna danışan bir **Internal Gateway**'dir; aynı soruya iki karar noktası zamanla ayrışır (bu repoda iki kez yaşandı) — bir soru, bir cevap, bir yer. **Önünde bu gateway olmayan bir runtime bu okumaları reddetmez**; `queryRoles` çağırana ne gösterileceğini tarif eder ve gateway'in kabul ettiği cevaptır, tek başına bu process'in savunduğu bir sınır değildir. Rol **çözümü** değişmemiştir: `availableTransitions` filtreleme, state alias, `x-roles` alan filtreleme, human-task listesi ve `CallerScopeHash` cache anahtarı çağıranın rollerini değerlendirmeye devam eder — görünürlük kaldı, enforcement gateway'e taşındı.
 :::
 
@@ -1264,7 +1304,7 @@ Read fonksiyonları (**state**, **data**, **view**, **schema**, **master**, **ta
 
 Formül: **parent damgası ?? leaf state `queryRoles` ?? leaf workflow `queryRoles`**. Çağıranın **tüm rol kümesi** `allow`/`deny` olarak tek seferde değerlendirilir (**DENY her zaman ALLOW'u geçersiz kılar**; rolsüz çağıran rol-bağlı bir DENY'ı geçemez — bkz. [Yetkilendirme → Grant Değerlendirme](/docs/concepts/authorization#grant-değerlendirme-allow-listesi-vs-yalnızca-deny-blacklist)). Grant'lar `allOf` / `anyOf` bileşiklerini de içerebilir (v0.0.99).
 
-:::warning Erişimi gevşetebilir (v0.0.99)
+:::warning[Erişimi gevşetebilir (v0.0.99)]
 v0.0.99 öncesinde root/ara seviyelerin kararı yaprağın kararıyla AND'leniyordu (conjunction). Bu kaldırıldı: root `queryRoles` bildirip leaf hiçbir `queryRoles` bildirmiyorsa, instance subflow'dayken root'un kısıtı artık **uygulanmaz** ve boş leaf grant kümesi izin verir. Kısıtı korumak için parent'ta `subFlow.overrides.states.<state>.queryRoles` damgalayın veya leaf workflow/state'e `queryRoles` ekleyin — bkz. [Subflow Override'ları](/docs/how-to/subflow-overrides).
 :::
 

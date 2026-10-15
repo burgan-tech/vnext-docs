@@ -22,6 +22,7 @@ vNext script motoru (mapping, rule, timer, vb.), helper bileşenlerini ve sandbo
       "Enabled": true,
       "AllowUnsafe": false,
       "PluginDirectory": "/app/assemblies",
+      "PluginRescanIntervalSeconds": 30,
       "AllowedAssemblies": [
         "System.Private.CoreLib",
         "System.Runtime",
@@ -48,7 +49,8 @@ vNext script motoru (mapping, rule, timer, vb.), helper bileşenlerini ve sandbo
 | `SecretCache.TtlSeconds` | integer | Cache'lenmiş secret bundle'ının ömrü, saniye (varsayılan `30`) |
 | `Sandbox.Enabled` | boolean | Sandbox güvenlik kısıtlamalarını etkinleştirir |
 | `Sandbox.AllowUnsafe` | boolean | `unsafe` kod bloklarına izin (varsayılan `false`) |
-| `Sandbox.PluginDirectory` | string | Plugin/3. parti assembly'lerin yüklendiği dizin (varsayılan `/app/assemblies`) |
+| `Sandbox.PluginDirectory` | string | Plugin/3. parti assembly'lerin yüklendiği dizin (varsayılan `/app/assemblies`; Helm: `orchestrator.plugins`). Bkz. [Plugin'ler](#pluginler) |
+| `Sandbox.PluginRescanIntervalSeconds` | integer | <sup>New</sup> v0.0.100 — Listede bulunamayan bir ad yüzünden `PluginDirectory`'nin iki yeniden okunması arasındaki en kısa süre, saniye (varsayılan `30`; `0` = her ıskalamada yeniden oku). Bir kez bulunan ad bir daha okunmaz |
 | `Sandbox.AllowedAssemblies` | string[] | Script bağlamına izinli .NET assembly'leri (taban allow-list). v0.0.99'da tabana `System.ObjectModel` eklendi — `ExpandoObject` üzerinde `foreach` önceden `CS0012` ile derlenemiyordu |
 | `Sandbox.BannedNamespaces` | string[] | Ek olarak yasaklanan namespace'ler (varsayılan ban listesine eklenir) |
 
@@ -70,7 +72,34 @@ v0.0.99'dan itibaren `scripts.allowedAssemblies` bildiren bileşenler (flow sevi
   `member` hatanın yerini gösterir, ör. `sys-flows.states[0].onEntries[1].mapping.scripts.allowedAssemblies[0]`.
 - Kontrol **`Sandbox.Enabled=false` olsa bile** çalışır: önceden zararsız olan eski/yanlış adlar bir sonraki publish'te `400` üretir — domain paketlerinizi yükseltmeden önce bildirilen adları temizleyin.
 - Hiçbir script derlenmez; helper/`REF` referansları çözülmez. Bildirilmemiş bir assembly ihtiyacı hâlâ çalışma anında hata verir.
-- Plugin dizini process başına bir kez okunur; yeni bir DLL mount edildiğinde host'u yeniden başlatın.
+- Listede olmayan bir ad plugin dizinini yeniden okutur (en fazla `PluginRescanIntervalSeconds`'ta bir). <sup>New</sup> v0.0.100 — Açılıştan sonra mount edilen bir DLL restart gerekmeden bulunur. DLL gelmeden önce reddedilmiş bir bileşen **yeniden publish edilmelidir**. (v0.0.99'da dizin process başına bir kez okunuyordu ve yeni DLL için restart gerekiyordu.)
+
+## Plugin'ler
+
+Bileşen başına DLL yükleme ya da nupkg indirme yoktur. Platform ekibi onaylı DLL'leri `Sandbox.PluginDirectory`'ye (Docker volume; Helm `orchestrator.plugins`) mount eder; script'ler bunları `AllowedAssemblies` ya da bileşenin `scripts.allowedAssemblies` alanıyla kullanır. Yasak namespace analizörü script kaynağına uygulanır, plugin'in kendisine uygulanmaz: bir veritabanı sürücüsü mount etmek, onu listeleyen her mapping'e veritabanı (ağ) erişimi verir.
+
+<sup>New</sup> v0.0.100 — Plugin yükleme davranışı:
+
+- **Process başına bir kez.** Plugin DLL'leri plugin dizini başına tek, unload edilmeyen bir yükleme bağlamında tutulur. Tüm script'ler ve helper set'leri her plugin'in **tek kopyasını** paylaşır: tek static state, veritabanı sürücüsü için tek connection pool. Helper'ı yeniden publish etmek eski kopyanın yanına yeni bir kopya yüklemez.
+- **Helper'lı ya da helper'sız.** Bir mapping plugin tipini doğrudan kullanabilir; arada bir `sys-mappings` helper'ı gerekmez. (Önceden yalnız helper set'leri plugin'leri önceden yüklüyordu; helper'sız mapping derleniyor ama çalışma anında `FileNotFoundException` veriyordu.)
+- **DLL eklemek ve değiştirmek.** Açılıştan sonra dizine eklenen DLL restart gerekmeden bulunur (bkz. `PluginRescanIntervalSeconds`). Yüklenmiş bir DLL'i yeni sürümle **değiştirmek ya da kaldırmak restart gerektirir**: process yüklediği kopyayı tutar. DLL gelmeden önce publish'te reddedilmiş bir bileşen yeniden publish edilmelidir.
+- **İptal.** Sürücü çağıran bir script `context.CancellationToken`'ı (istek / job / event token'ı; yoksa `CancellationToken.None`) sürücüye geçirmelidir; aksi halde iptal edilen bir işlemin sorgusu yalnız sürücünün kendi komut timeout'uyla sınırlanır. Bkz. [Interface'ler → ScriptContext](/docs/components/interfaces).
+- **Yükleme hataları** `Warning` seviyesinde loglanır (EventId `60017`–`60018`); yüklenemeyen DLL atlanır.
+
+```csharp
+// Helper'sız mapping, plugin sürücüsünü doğrudan kullanır
+await using var conn = new NpgsqlConnection(connectionString);
+await conn.OpenAsync(context.CancellationToken);
+```
+
+:::warning[Sürücü bağımlılıkları]
+- Runtime'ın zaten taşımadığı **tüm bağımlılık zincirini** mount edin.
+- Platforma özgü build taşıyan paketlerde (ör. `Microsoft.Data.SqlClient`) NuGet paketinin `runtimes/unix/lib/<tfm>/` kopyasını ya da `dotnet publish -r linux-x64` çıktısını kullanın; `lib/` altındaki kopya `PlatformNotSupportedException` fırlatan bir stub'tır.
+- SqlClient bazı sürümlerde `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` ile çalışmaz; Alpine imajlarda ICU gerekir.
+- Runtime'ın kendi taşıdığı bir ad (framework veya host bağımlılığı — Npgsql, `Microsoft.Extensions.*` …) host'un kopyasına karşı derlenir.
+:::
+
+Çalışan örnek ve uçtan uca test: vnext-example [`plugins/ScriptPluginLab.Sql`](https://github.com/burgan-tech/vnext-example/tree/master/plugins/ScriptPluginLab.Sql) (Npgsql + Dapper, PostgreSQL) ve [`tests/Core.IntegrationTests/Tests/ScriptPluginLab`](https://github.com/burgan-tech/vnext-example/tree/master/tests/Core.IntegrationTests/Tests/ScriptPluginLab).
 
 ## Secret Cache
 

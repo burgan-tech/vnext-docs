@@ -1,12 +1,14 @@
 ---
 sidebar_position: 7
 title: Schema
-description: vNext Schema component — workflow ve transition data validation, master-data
+description: vNext Schema component — şema rolleri (master, transition, function, component), veri doğrulama ve x-* vocabulary
 ---
 
 # Schema
 
-**Schema** bileşeni, **transition**, **flow** ve **master-data** için JSON şema tanımıdır. Hem ön uçta hem arka uçta istekler doğrulanır ve **instance data tutarlılığı** korunur.
+**Schema** bileşeni, bir flow'un **master (data) şeması**, bir **transition** body'si, bir **function** `inputSchema`'sı ya da gömülü bir view'ın **component** veri sözleşmesi için JSON şema tanımıdır. Hem ön uçta hem arka uçta istekler doğrulanır ve **instance data tutarlılığı** korunur.
+
+Bir şema tek bir **rol** oynar ve `x-*` keyword'lerinin anlamı bu role göre değişir. Rol, `attributes.type` ile bildirilir <sup>New</sup> v0.0.100 / vnext-schema 0.0.56; hangi keyword'ün hangi rolde geçerli olduğu için bkz. [Şema Rolleri](/docs/concepts/schema-roles).
 
 > **Schema kaynağı:** [`vnext-schema/schema-definition.schema.json`](https://github.com/burgan-tech/vnext-schema)
 
@@ -24,7 +26,7 @@ description: vNext Schema component — workflow ve transition data validation, 
   "tags": ["banking", "account", "selection"],
   "_comment": "Hesap türü seçimi için transition schema",
   "attributes": {
-    "type": "workflow",
+    "type": "transition",
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "$id": "https://schemas.vnext.com/banking/account-type-selection.json",
@@ -58,10 +60,13 @@ description: vNext Schema component — workflow ve transition data validation, 
 
 ## Kullanım Türleri
 
-| Tür | Atandığı Yer | Amacı |
-|---|---|---|
-| **Master Schema** | Workflow root (`attributes.schema`) | Instance data ana yapısı; her değişimde tutarlılık kontrolü |
-| **Transition Schema** | Transition tanımı | Transition request body validation |
+| Tür | `attributes.type` | Atandığı Yer | Amacı |
+|---|---|---|---|
+| **Master Schema** | `master` | Workflow root (`attributes.schema`) | Instance data ana yapısı; her değişimde tutarlılık kontrolü |
+| **Transition Schema** | `transition` | Transition tanımı | Transition request body validation |
+| **Function Input Schema** | `function` | Function `inputSchema` | Function request body validation |
+| **Component Schema** | `component` | Gömülü view'ın `dataSchema`'sı | Component'in input kontratı (`x-binding`) |
+| Birden fazla rolde kullanılan şema | yok / `""` | — | Rol kapısı uygulanmaz; bkz. [Şema Rolleri](/docs/concepts/schema-roles) |
 
 ---
 
@@ -111,9 +116,9 @@ Alan bazlı görünürlük, master şema property'lerinde **`x-roles`** keyword'
 
 v0.0.99 ile bir `x-roles` girdisi tek `role` yerine `allOf` / `anyOf` kombinatörü de olabilir (`{ "allOf": [ { "role": "..." }, ... ], "grant": "allow" }`); bkz. [Yetkilendirme → Kombinatörler](/docs/concepts/authorization#kombinatörler-allof--anyof). Hatalı `x-roles` girdileri artık publish'te reddedilir.
 
-`x-masking` (v0.0.99) değeri düz saklar ve okuma sırasında dönüştürür: `operator: "mask"` (`keepFirst`, `keepLast`, `maskingChar`; çıktı girdiyle aynı uzunlukta) veya `operator: "replace"` (`params.value`). `roles` yalnızca `allow` kabul eden muafiyet listesidir (kombinatör kabul edilmez); eşleşen çağıran ham değeri görür. Okuma sırası `x-roles` → `x-masking` → `x-encryption`'dır; `x-masking` / `x-encryption` yalnızca iç içe `properties` altındaki `type: "string"` alanlarda, alan başına tek dönüşüm olarak ve `x-filterOperators` / `x-sortable` / `x-indexed` olmadan kullanılabilir.
+`x-masking` (v0.0.99) değeri düz saklar ve okuma sırasında dönüştürür: `operator: "mask"` (`keepFirst`, `keepLast`, `maskingChar`; çıktı girdiyle aynı uzunlukta) veya `operator: "replace"` (`params.value`). `roles` yalnızca `allow` kabul eden muafiyet listesidir (kombinatör kabul edilmez); eşleşen çağıran ham değeri görür. Okuma sırası `x-roles` → `x-masking` → `x-encryption` (yalnız `source: runtime`) → `x-computed` (`evaluatedBy: runtime`, <sup>New</sup> v0.0.100)'dır; `x-masking` / `x-encryption` yalnızca iç içe `properties` altındaki `type: "string"` alanlarda, alan başına tek dönüşüm olarak ve `x-filterOperators` / `x-sortable` / `x-indexed` olmadan kullanılabilir.
 
-`x-encryption` de aynı alan-yönetişim kapsamındadır: `hash` değeri yazarken instance'a özgü tuzla özetler (veritabanında özet saklanır), `encrypt` değeri instance data'da AES-256-GCM ile şifreli saklar ve okuma yüzeylerinde (instance GET, liste, data function, senkron yanıt, Get* task'leri — task'ler sundukları başlık setiyle) yalnızca `allow` muafiyet rolleri için çözer (`persisted` / `transport` kaldırıldı). Script'ler encrypt alanı jeton olarak görür ve `context.Instance.DecryptAsync(path)` ile açar. Tüm property seviyesi `x-*` uzantılarının ayrıntısı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
+`x-encryption` de aynı alan-yönetişim kapsamındadır. <sup>New</sup> v0.0.100 — `source` alanı şifrelemeyi kimin yaptığını seçer: `runtime` (varsayılan; at rest, aşağıdaki davranış) veya `client` (in transit; client değeri alıcının public key'iyle mühürleyip gönderir, runtime bu kurala **hiç dokunmaz**). `source: runtime` için: `hash` değeri yazarken instance'a özgü tuzla özetler (veritabanında özet saklanır), `encrypt` değeri instance data'da AES-256-GCM ile şifreli saklar ve okuma yüzeylerinde (instance GET, liste, data function, senkron yanıt, Get* task'leri — task'ler sundukları başlık setiyle) yalnızca `allow` muafiyet rolleri için çözer (`persisted` / `transport` kaldırıldı). Script'ler encrypt alanı jeton olarak görür ve `context.Instance.DecryptAsync(path)` ile açar. Tüm property seviyesi `x-*` uzantılarının ayrıntısı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 
 ### Filtreleme & Sıralama Vocabulary'si
 
@@ -126,13 +131,13 @@ Bir JSON (`attributes.*`) alanının **filtrelenip sıralanabilirliği** master 
 | `x-displayFormat` | string | Hayır | UI'a yönelik format ipucu (örn. `yyyy-MM-dd'T'HH:mm:ssXXX`) |
 | `x-indexed` <sup>New</sup> v0.0.94 | boolean | Hayır | **Yalnızca master şemada** (`attributes.type: "master"`). `true` ise alan, `wf indexes generate` ile üretilen SQL'de stored generated column + index adayı olur. Sadece sabit `properties` yolları altındaki skaler `string` / `number` / `integer` / `boolean` alanlarda; dizi, obje, `$ref` ve koşullu/birleşik düğümlerde reddedilir. **İzin değildir** — filtre/sıralama yetkisini değiştirmez. Bkz. [Attribute Index'leri](/docs/how-to/attribute-indexes) |
 
-**`x-filterOperators` değerleri:** `eq`, `ne`, `gt`, `ge`, `lt`, `le`, `between`, `match`, `like`, `startswith`, `endswith`, `in`, `nin` (`uniqueItems`).
+**`x-filterOperators` değerleri (beyan adları):** `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `between`, `contains`, `startsWith`, `endsWith`, `in`, `nin`, `isNull`, `includes` (`uniqueItems`). <sup>New</sup> v0.0.100 — sorgu token'ları (`ne`, `ge`, `le`, `like`, `match`, `startswith`, `endswith`, `isnull`) ve büyük/küçük harf varyantları beyan olarak **publish'te reddedilir**; hata mesajı doğru adı söyler. Sorgu sözdizimi değişmedi; eşleme tablosu için bkz. [Instance Filtering → Şema beyanı ve sorgu token'ı](/docs/how-to/instance-filtering#şema-beyanı-ve-sorgu-tokenı).
 
 ```json
 "startDateTime": {
   "type": "string",
   "format": "date-time",
-  "x-filterOperators": ["eq", "gt", "ge", "lt", "le", "between"],
+  "x-filterOperators": ["eq", "gt", "gte", "lt", "lte", "between"],
   "x-sortable": true,
   "x-displayFormat": "yyyy-MM-dd'T'HH:mm:ssXXX"
 }
@@ -185,7 +190,7 @@ Operatörlerin alan tipine göre (numeric / tarih / metin / boolean / dizi) davr
 
 **`{instance}` şablonu:** Aynı mantıksal alan farklı instance'larda gelebilir (örn. cihaz başına bir device-manager instance'ı). Key'e `{instance}` (instance id) eklemek her instance'ın değerini ayrı bir konuma yazar. Akışlar arası **singleton** değerler için `{instance}` kullanmayın — sabit bir key'de kalsın ki sonraki akışın `x-context-source`'u bulabilsin. Kullanılabilir şablon değişkenleri: `{instance}`, `{subject}`.
 
-:::note Geriye dönük uyumluluk
+:::note[Geriye dönük uyumluluk]
 JSON Schema (draft 2020-12) bilinmeyen keyword'lere izin verir: standart validator'lar `x-context-*` anotasyonlarını yok sayar. Anotasyonsuz bir şema bugünkü gibi davranır — benimseme şema başına ve kademelidir.
 :::
 
@@ -218,18 +223,48 @@ vNext vocabulary'sinin (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-enc
 
 | Alan | Tip | Zorunlu | Açıklama |
 |------|-----|---------|----------|
-| `type` | string | **Evet** | Schema tipi — serbest metin (schema 0.0.54'ten itibaren enum yok). Tam olarak `master` değeri şemayı **master şema** olarak işaretler ve `x-indexed`'i etkinleştirir; aşağıya bakın |
+| `type` | string | Hayır | Şemanın **rolü**: `master`, `transition`, `component`, `function` veya boş/yok (rol yok). Rol, şemanın hangi rol sözlüğüyle doğrulanacağını seçer; yalnız `master` `x-indexed`'e izin verir. Aşağıya bakın |
 | `schema` | object | **Evet** | JSON Schema tanımı (Draft 2020-12). Aşağıdaki iç yapı tablosuna bakın |
 | `labels` | array | Hayır | Çoklu dil etiketleri. Her öğe: `label` (string) + `language` (pattern: `^[a-z]{2}-[A-Z]{2}$`). v0.0.99 ile schema ve master function yanıtlarında `labels` olarak döner (tüm diller; tanımlı değilse alan yazılmaz). Önceden yükleme sırasında atılıyordu; önbellekteki bileşenler republish ya da süre dolana kadar etiketsiz görünebilir |
 
 ### `attributes.type` Değerleri
 
-<sup>New</sup> v0.0.94 — `attributes.type` **serbest metin** bir string'dir; schema paketi 0.0.54 ile önceki enum kaldırılmıştır. Eski ve özel değerler (`workflow`, `task`, `function`, `view`, `schema`, `extension`, `headers`, …) doğrulamadan geçer ve yalnızca sınıflandırma amaçlıdır. Tek özel değer **`master`**'dır:
+<sup>New</sup> v0.0.100 / vnext-schema 0.0.56 — `attributes.type` artık **opsiyonel bir enum**'dur ve şemanın **rolünü** bildirir: `""` (rol yok), `master`, `transition`, `component`, `function`. Değer, `attributes.schema`'nın hangi **rol sözlüğüyle** (role vocabulary) doğrulanacağını seçer. Alan yazılmayabilir ya da `""` olabilir; v0.0.100 öncesinde runtime type'sız bir şemayı `Schema type is required.` hatasıyla reddediyordu, artık temiz publish eder.
 
-| Değer | Anlamı |
-|-------|--------|
-| `master` | Şema **master şema** olarak işaretlenir; property'lerde `x-indexed` kullanımına izin verilir ([Attribute Index'leri](/docs/how-to/attribute-indexes)). Karşılaştırma tam eşleşmedir: `Master`, boş, `null` veya başka bir değer master anlamına gelmez |
-| diğer | Serbest sınıflandırma etiketi. `x-indexed` (değeri `false` olsa bile) bu şemalarda publish sırasında reddedilir |
+| `attributes.type` | Rol sözlüğü | Ne için | `x-indexed` |
+|---|---|---|---|
+| `master` | `record-vocab.json` | Bir flow'un master (data) şeması, yani saklanan kayıt | İzinli |
+| `transition` | `input-vocab.json` | Bir transition'ın body şeması | Reddedilir |
+| `function` | `input-vocab.json` | Bir function'ın `inputSchema`'sı | Reddedilir |
+| `component` | `component-vocab.json` | Gömülü bir view'ın kendi `dataSchema`'sı (input kontratı) | Reddedilir |
+| yok / `""` | rol kapısı yok | Birden fazla rolde kullanılan şema | Reddedilir |
+
+Karşılaştırma tam eşleşmedir: `Master` ya da `MASTER` master anlamına gelmez. Hangi `x-*` keyword'ünün hangi rolde kabul edildiği (annotation × rol matrisi) ve her rolün kural seti için bkz. [Şema Rolleri](/docs/concepts/schema-roles).
+
+#### Eski değerlerden geçiş
+
+Önceki serbest değerler (`workflow`, `schema`, `view`, `headers`, `task`, `extension`, `SchemaDefinition`, …) bir rol değildir. Değeri, şemanın **gerçekte nerede kullanıldığına** göre seçin:
+
+| Şemanın kullanıldığı yer | Tipik eski değer | Yeni `attributes.type` |
+|---|---|---|
+| Workflow'un `attributes.schema` referansı (flow'un data şeması) | `workflow`, `schema`, `SchemaDefinition` | `master` |
+| Transition body | `workflow`, `schema` | `transition` |
+| Function `inputSchema` | `function`, `schema` | `function` |
+| Gömülü (component) view'ın `dataSchema`'sı | `view` | `component` |
+| Birden fazla rolde kullanılan şema ya da yukarıdakilerin hiçbiri (`headers` vb.) | `headers`, `task`, `extension`, … | Alanı kaldırın (veya `""`) — ya da şemayı rol başına ikiye bölün |
+
+Eski bir değerle karşılaşıldığında davranış katmana göre farklıdır:
+
+- **Schema paketi 0.0.56, CLI (`npm run validate`) ve Forge** eski değeri **reddeder**.
+- **Runtime v0.0.100** şemayı **uyarıyla** publish eder; bu kabul geçicidir:
+
+```
+attributes.type 'workflow' is not a schema role (master, transition, component, function) and will be refused in a future release; use 'master' for a flow's data schema, 'transition' / 'function' for a request body, 'component' for an embedded view's dataSchema, or omit it.
+```
+
+:::warning[Diğer bileşenlerin `attributes.type` alanıyla karıştırmayın]
+Buradaki rol enum'u yalnız **schema bileşeninin** (`flow: sys-schemas`) `attributes.type` alanı içindir. Workflow (`C` / `F` / `S` / `P`), task (sayısal task türü), view (içerik türü) ve extension (sayısal extension türü) bileşenlerinin `attributes.type` alanları kendi enum'larını taşır ve bu değişiklikten etkilenmez.
+:::
 
 Bileşen kökünde (`key`/`version`/`domain` seviyesinde) bir `type` alanı **yoktur**; JSON Schema içindeki `type` keyword'ü (`object`, `string`, …) ise standart anlamını korur.
 
@@ -259,7 +294,9 @@ Bileşen kökünde (`key`/`version`/`domain` seviyesinde) bir `type` alanı **yo
 | `const` | any | Hayır | Sabit değer |
 | `default` | any | Hayır | Varsayılan değer |
 
-Standart JSON Schema alanlarına ek olarak, property seviyesinde vNext **`x-*` vocabulary uzantıları** desteklenir — alan bazlı yetkilendirme (`x-roles`), maskeleme (`x-masking`), şifreleme (`x-encryption`), filtreleme (`x-filterOperators`), sıralama (`x-sortable`), görüntü formatı (`x-displayFormat`), etiketleme (`x-labels`), LOV (`x-lov`), lookup (`x-lookup`), koşullu görünürlük (`x-conditional`), client context bağlama (`x-context-source`, `x-context-target`) vb. Tam liste ve örnekler için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) ve [Data Context Vocabulary](#data-context-vocabulary-data-vocab).
+Standart JSON Schema alanlarına ek olarak, property seviyesinde vNext **`x-*` vocabulary uzantıları** desteklenir — alan bazlı yetkilendirme (`x-roles`), maskeleme (`x-masking`), şifreleme (`x-encryption`, `source: runtime | client`), dosya alanı (`x-storage`), filtreleme (`x-filterOperators`), sıralama (`x-sortable`), index hazırlığı (`x-indexed`), hesaplanan alan (`x-computed`), görüntü formatı (`x-displayFormat`), form alan sırası (`x-order`), etiketleme (`x-labels`), LOV (`x-lov`), lookup (`x-lookup`), koşullu görünürlük (`x-conditional`), component bağlama (`x-binding`), client context bağlama (`x-context-source`, `x-context-target`) vb. Tam liste ve örnekler için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) ve [Data Context Vocabulary](#data-context-vocabulary-data-vocab).
+
+<sup>New</sup> v0.0.100 / vnext-schema 0.0.56 — Bu keyword'ler **rol sözlüklerinde** gruplanır: ortak (base) ve view hint keyword'leri her rolde geçerlidir; `record-vocab.json` (master) kayıt keyword'lerini (`x-roles`, `x-masking`, `x-encryption`, `x-storage`, `x-indexed`, `x-filterOperators`, `x-sortable`, `x-computed`, `x-context-target`), `input-vocab.json` (transition / function) `x-context-source` ve `x-encryption` `source: client`'ı, `component-vocab.json` ise `x-binding`'i ekler. Rolünün dışında yazılan bir keyword paket doğrulamasında reddedilir. Matris: [Şema Rolleri](/docs/concepts/schema-roles).
 
 ---
 
@@ -278,9 +315,10 @@ Schema'lar **Ajv2019** ile doğrulanır. Front-end'de form validation için anno
 
 ## İlgili
 
+- [Şema Rolleri](/docs/concepts/schema-roles) — `attributes.type` rolleri, annotation × rol matrisi ve kural setleri
 - [Instance Data](/docs/concepts/instance-data) — instance veri yapısı
 - [Workflow component](/docs/components/workflow) — `attributes.schema` master schema referansı
-- [Pseudo UI → Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) — vNext vocabulary (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-encryption`)
+- [Pseudo UI → Schema Tanımı](/docs/how-to/view-consept/schema-tanimi) — vNext vocabulary (`x-labels`, `x-lov`, `x-lookup`, `x-conditional`, `x-encryption`, `x-computed`, `x-order`)
 - [Yetkilendirme](/docs/concepts/authorization) — master şema alan bazlı görünürlük
 - [Instance Filtering](/docs/how-to/instance-filtering) — master schema ile tip-duyarlı filtreleme
 - [Mappings](/docs/components/mappings) — transition ve mapping kullanımı

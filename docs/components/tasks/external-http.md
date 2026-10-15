@@ -6,7 +6,7 @@ description: HTTP çağrısını Execution servisine gitmeden doğrudan Orchestr
 
 # External HTTP Task (Type: `22`)
 
-:::warning Deprecated — v0.0.94
+:::warning[Deprecated — v0.0.94]
 Type `22`, v0.0.94 ile **deprecated** edilmiştir. Aynı sürümden itibaren standart [HTTP Task](./http) (type `6`) varsayılan olarak zaten Orchestrator içinde çalışır (`Workflow:TaskInvocation:Modes:http = "Local"`), yani type `22`'nin tek farkı olan "hop'suz çağrı" artık type `6`'nın da davranışıdır. Yeni tanımlarda type `6` kullanın; mevcut type `22` tanımları çalışmaya devam eder ancak `@burgan-tech/vnext-schema` enum'una eklenmeyecektir. Ayrıntı: [Task Invocation Yapılandırması](../../configuration/task-invocation).
 :::
 

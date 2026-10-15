@@ -15,7 +15,7 @@ A workflow named `tasks` is created in each domain deployment. All tasks used wi
 
 ## Task Types
 
-The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.0.54`'s `task-definition.schema.json` defines the first **21** of them; types `22` (External HTTP — **deprecated** since v0.0.94) and `23` (Python) are not in the published schema enum (see the note below). Each is listed below with its number, name, and detail page.
+The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.0.56`'s `task-definition.schema.json` defines the first **22** of them; type `23` (Python) is not in the published schema enum (see the note below). Each is listed below with its number, name, and detail page.
 
 | # | Task Type | Description | Detail |
 |---|---|---|---|
@@ -45,8 +45,8 @@ The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.
 
 > **Note:** Only these task types exist. Task types not on this list are **not supported** by the system.
 
-:::warning[Types `22` and `23` are not in the schema package]
-The `task-definition.schema.json` shipped in `@burgan-tech/vnext-schema@0.0.54` still enumerates `1`–`21`; `22` (External HTTP) and `23` (Python) are not in the `attributes.type` enum. As a result, `npm run validate` in a domain package rejects a task definition using either type, while `publish` and runtime execution work fine. Type `22` is deprecated since v0.0.94, so it is not planned for the schema. Details: [External HTTP Task](./external-http), [Python Task](./python).
+:::warning[Type `23` is not in the schema package]
+The `task-definition.schema.json` shipped in `@burgan-tech/vnext-schema@0.0.56` enumerates `1`–`22` (unchanged since 0.0.55); `23` (Python) is not in the `attributes.type` enum. As a result, `npm run validate` in a domain package rejects a Python task definition, while `publish` and runtime execution work fine. Type `22` (External HTTP) was added to the schema in 0.0.55 but is **deprecated** since v0.0.94 — use type `6` HTTP task for new definitions. Schemas 0.0.54 and earlier enumerate only `1`–`21`. Details: [External HTTP Task](./external-http), [Python Task](./python).
 :::
 
 :::info[Orchestrator-local task types — v0.0.94]

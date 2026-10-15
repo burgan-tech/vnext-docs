@@ -92,6 +92,8 @@ Flow **master şeması**, şema property'lerinde **`x-roles`** keyword'ü tanım
 
 <sup>New</sup> v0.0.99 `x-roles`, `x-masking` ve `x-encryption` (sırasıyla) tek bir okuma servisinden geçen tüm yüzeylerde uygulanır: **instance GET, instance liste, data function, senkron start/transition yanıtı** ve **GetInstance / GetInstances / GetInstanceData task'leri**. Önceden instance GET / liste veriyi filtresiz dönüyor, Get* task'leri sistem görünürlüğüyle (`SystemRead`) okuyordu; bu ayrıcalık kaldırıldı. Task okumaları çağıranın sunduğu credential ile değerlendirilir.
 
+<sup>New</sup> v0.0.100 — Okuma sırası: **`x-roles` → `x-masking` → `x-encryption` (yalnız `source: runtime`) → `x-computed` (`evaluatedBy: runtime`)**. Şifreleme adımı yalnız at-rest (`source: runtime`, varsayılan) kurallarını uygular; `source: client` kuralları runtime tarafından hiç işlenmez (değer client'ın gönderdiği haliyle saklanır ve döner). Runtime computed alanlar en son, çağıranın zaten görebildiği (budanmış, maskelenmiş, şifrelenmiş) görünüm üzerinden hesaplanır; bu yüzden computed bir alan, çağıranın göremediği bir alanı açığa çıkaramaz ve kendi `x-roles` / `x-masking` kuralını almaz. Ayrıntı: [Schema Tanımı → `x-computed`](/docs/how-to/view-consept/schema-tanimi#x-computed--hesaplanan-alan).
+
 **Credential iletimi:** her dışa giden task türü, task mapping'inin boş ya da hiç vermediği `sub`, `act_sub`, `position`, `client_id`, `role` request başlıklarını iletir; mapping'deki dolu değer kazanır. 1024 karakteri aşan ya da kontrol karakteri içeren değerler iletilmez; morph-idm'in çözdüğü roller hiçbir zaman iletilmez (`role` yalnız çağıranın gönderdiği haliyle taşınır). Başka bir kimlikle okumak için credential'ı input mapping'de verin.
 
 > **Not:** `roles` ve `queryRoles`, transition ve state yetkilendirmesi içindir. Schema property'lerinde **field görünürlüğü** ise `x-roles` keyword'ü ile yapılır (yapı aynıdır: `role` + `grant`).
@@ -146,7 +148,7 @@ Kural 5, rolsüz çağıranın nadir olmamasından doğar: anonim/cihaz token'ı
 
 6. <sup>New</sup> v0.0.99 **Rolsüz çağıran, `""` olarak çözülen bir `$role.` ALLOW'u ile kabul edilmez.** Önceden yol boş string'e çözüldüğünde rolsüz çağıranın boş rol adıyla "eşleşip" geçebildiği durum kapatıldı: rol-bağlı bir yaprak rolsüz çağıran için **Unknown**'dur ve allow yalnızca **Yes**'te kabul eder (bkz. [Kombinatörler](#kombinatörler-allof--anyof)). Deny'lar (kural 5) ve düz statik / sistem rolü grant'ları değişmedi.
 
-:::warning Geriye dönük etki
+:::warning[Geriye dönük etki]
 Yalnızca `deny` grant'ı içeren mevcut bir set artık **blacklist** olarak değerlendirilir (listelenenler dışındaki herkese açık). Niyetiniz "herkesi engelle" idiyse en az bir `allow` grant'ı ekleyerek allow-list'e çevirin.
 :::
 
@@ -200,7 +202,7 @@ Set kararı kanonik kuralla aynıdır, yalnızca "eşleşme" üç değerli hale 
 
 **Publish kuralları:** dinamik yollar her yaprak için ayrı denetlenir (`$.context.` ile başlamalı — büyük/küçük harf duyarlı — ve boş navigasyon yolu içermemeli). Hatalı şema `x-roles` girdileri ve hatalı dinamik yol taşıyan function `roles` girdileri artık publish'te reddedilir (önceden runtime sessizce atlıyordu). `permissions` (yetki matrisi) yanıtında kombinatör grant'ları `allOf` / `anyOf` ile ve **`role` olmadan** gösterilir; matrisi okuyan istemci `role`'süz grant'a tolerans göstermelidir.
 
-:::warning Rollout tabanı
+:::warning[Rollout tabanı]
 İlk `allOf` / `anyOf` grant'ını ancak **tüm pod'lar** — ve bu domain'e override damgalayan **tüm domain'ler** — v0.0.99 çalıştırdıktan sonra yazın; eski bir pod kombinatör grant'ını okuyamaz. Kombinatör içeren tanımlar publish edildikten sonra runtime'ı ikili (binary) olarak eski sürüme düşürmeyin.
 :::
 

@@ -89,7 +89,7 @@ API bağlantısı, veritabanı durumu ve component klasörlerini kontrol eder.
 
 Veritabanında olmayan component'leri publish eder, mevcut olanları atlar. İlk kurulum ve yeni component ekleme senaryoları için idealdir.
 
-:::info `publish/completed` sinyali — CLI ≥ 1.0.14 / runtime v0.0.95
+:::info[`publish/completed` sinyali — CLI ≥ 1.0.14 / runtime v0.0.95]
 `sync`, `update` ve `reset`, en az bir component publish ettikten sonra **bir kez** `POST /api/v1/definitions/publish/completed` çağırır ve dönen hook sonuçlarını satır satır yazar (`discovery-cache: Refreshed` | `SkippedNotOwner` | `Disabled` | `Failed`). Bu çağrı runtime'ın discovery endpoint cache'inin **tek otomatik geçersiz kılma** yoludur; atlanırsa cross-domain çağrılar bir sonraki deployment'a kadar eski adreslerle çözülür. Eski `GET definitions/re-initialize` çağrısı kaldırılmıştır; v0.0.95 öncesi bir runtime'a karşı çalışan yeni CLI `404` alır ve bunu yalnızca **uyarı** olarak gösterir (exit code değişmez). Bkz. [Service Discovery → Cache](/docs/configuration/service-discovery#cache).
 :::
 

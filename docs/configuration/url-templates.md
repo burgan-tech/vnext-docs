@@ -101,6 +101,6 @@ Override şablonları çalışma zamanında değiştirilen konumsal parametreler
 
 `UrlTemplates` yalnızca **client'a dönen href'leri** etkiler. Servisler arası (internal) çağrıların kullandığı `InstanceUrlTemplates` bu yapılandırmanın kapsamı dışındadır ve versiyonunu `vNextApi:ApiVersion` ayarından alır.
 
-:::warning v0.0.79 davranış değişikliği
+:::warning[v0.0.79 davranış değişikliği]
 Orchestration host önceden `/api/{domain}/…` şablonlarıyla geliyordu — route'ların gerektirdiği `v1` segmenti eksikti ve üretilen href'ler uygulamanın kendisinin 404 verdiği bir yolu gösteriyordu. v0.0.79'da bölüm kaldırıldı ve href'ler `/api/v1/…` üretir. Gateway'iniz gerçekten `/api/{domain}/…` servis ediyorsa `"BasePath": "/api"` ayarlayın. Bkz. [Breaking Changes: v0.0.79](/blog/breaking-changes/breaking-changes-v0-0-79).
 :::

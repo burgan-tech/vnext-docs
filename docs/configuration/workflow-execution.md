@@ -76,7 +76,7 @@ Varsayılan `false`, append sırasındaki sayısal biçimlendirmede üç bilinen
 
 `true` yapıldığında append, sayıları kayıpsız kanonikleştirir: `int64`'e sığan tamsayılar tam olarak round-trip eder, `decimal`'e sığan ondalıklar sondaki-sıfırsız düz biçimde yazılır. Çalışma zamanı maliyeti yoktur (aynı `JsonCanonicalizer` yolu kullanılır, yalnızca sayı biçimlendirme politikası değişir) — ancak açıldığı andan itibaren, bu üç sınıftan birine sahip bir instance'ın **content hash'i bir kez değişir**: bu, o instance için bir ekstra versiyon satırı ve Monitor'da bir "hayalet" diff anlamına gelir. Hiçbir veri kaybolmaz, hiçbir satır yeniden yazılmaz; bayrağı kapatmak eski hash'leri geri getirir.
 
-:::info Bilinen sorun
+:::info[Bilinen sorun]
 Bu davranış `instance-data-numeric-precision-loss` bilinen sorunu (`known-issues`) olarak kayıtlıdır.
 :::
 

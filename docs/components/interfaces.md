@@ -30,7 +30,7 @@ namespace BBT.Workflow.Scripting;
 
 ## IMapping
 
-Workflow task yürütmesinde **giriş ve çıkış verisi bağlama** (input/output binding) için ana arabirimdir. Görev çalıştırılmadan önce ve sonra dönüşüm, doğrulama ve audit imkânı sağlar.
+Workflow task yürütmesinde **giriş ve çıkış verisi bağlama** (input/output binding) için ana arabirimdir. Görev çalıştırılmadan önce ve sonra dönüşüm ve audit imkânı sağlar.
 
 ### Tanım
 
@@ -59,7 +59,13 @@ Task çalıştırılmadan **önce** çağrılır; girdi verisini hazırlar veya 
 
 **Dönüş:** `Task<ScriptResponse>` — `ScriptResponse.Data` bu bağlamda **task audit verisi** olarak kullanılır. Bkz. [`Data` alanı tablosu](#data-alanının-bağlama-göre-anlamı).
 
-**Tipik kullanım:** dinamik endpoint üretimi, girdi doğrulama, kimlik doğrulama token'ı hazırlama, özelleştirilmiş header yapılandırması.
+**Tipik kullanım:** dinamik endpoint üretimi, kimlik doğrulama token'ı hazırlama, özelleştirilmiş header yapılandırması.
+
+:::warning[InputHandler task'ı durduramaz]
+`InputHandler`'ın dönüş değeri yalnızca task'ın audit kaydına yazılır; runtime onu hiçbir karar için okumaz. Ne döndürürseniz döndürün — `Data["error"]`, `StatusCode` veya boş bir yanıt — task ardından yapılandırıldığı haliyle **çalıştırılır**. Yazan task'larda (StartTrigger, DirectTrigger, SubProcess, HTTP POST, publish) yazma, handler girdiyi geçersiz bulmuş olsa bile gerçekleşir; `OutputHandler` sonucu sonradan görür ve geri alamaz.
+
+Doğrulamayı task'tan **önce** yapın: transition kuralı/koşulu, hata state'ine giden otomatik transition veya öncesinde çalışan bir doğrulama adımı task'ın hiç çalışıp çalışmayacağına karar verir. Son çare olarak `InputHandler` içinden exception fırlatmak çağrıyı engeller: task bir task yürütme hatası olarak başarısız olur, `OutputHandler` çalışmaz ve bu hata bir iş yanıtı olmadığı için `AcceptedStatusCodes` ona uygulanmaz.
+:::
 
 ### `OutputHandler(ScriptContext context)`
 
@@ -576,6 +582,7 @@ public sealed class ScriptContext
     public Dictionary<string, dynamic> Definitions { get; private set; }
     public Dictionary<string, dynamic?> TaskResponse { get; private set; } = new();
     public Dictionary<string, dynamic> MetaData { get; private set; } = new();
+    public CancellationToken CancellationToken { get; }
 
     public void SetBody(object? body);
     public void SetStandardResponse(StandardTaskResponse response);
@@ -597,6 +604,7 @@ public sealed class ScriptContext
 | `Definitions` | Tekrar kullanılabilir bileşen tanımları (sözlük). |
 | `TaskResponse` | Tamamlanan task'ların sonuçları (**anahtar:** camelCase task tanımlayıcısı). |
 | `MetaData` | Süre/tanılama metrikleri ve özel audit datası. |
+| `CancellationToken` | <sup>New</sup> v0.0.100 — Bağlamın kurulduğu işlemin token'ı (istek, transition job'ı, event teslimi); token yoksa `CancellationToken.None`. Kendi I/O'sunu yapan script'ler (ör. plugin veritabanı sürücüsü) bunu sürücüye geçirir. Handler parametresi değil property'dir; mapping interface'leri değişmedi. Bkz. [Scripting → Plugin'ler](/docs/configuration/scripting). |
 | `OutputResponse` | Bazı akışlarda ([IOutputHandler](#ioutputhandler)) function çıktı eşlemesinde toplanmış veya seçilen task çıktısına alternatif bir erişim noktası olabilir; genelde tek tek task çıktıları için `TaskResponse` kullanılır. |
 
 #### Builder deseni

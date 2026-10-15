@@ -16,10 +16,11 @@ Function APIs provide system-level operations for workflow instances. These buil
 4. [View Function](#view-function)
 5. [Master Function](#master-function)
 6. [Instance Correlation Function](#instance-correlation-function)
-7. [Authorization](#authorization)
-8. [Function Metrics](#function-metrics)
-9. [Best Practices](#best-practices)
-10. [Related Documentation](#related-documentation)
+7. [File Function](#file-function)
+8. [Authorization](#authorization)
+9. [Function Metrics](#function-metrics)
+10. [Best Practices](#best-practices)
+11. [Related Documentation](#related-documentation)
 
 ## Overview
 
@@ -31,12 +32,15 @@ The vNext Runtime platform provides three core function APIs that are automatica
 | **Data** | Retrieve instance data | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/data` |
 | **View** | Get view content | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/view` |
 | **Instance Correlation** (v0.0.99) | Downward tree of the subflows/subprocesses an instance spawned | `GET /{domain}/workflows/{workflow}/instances/{instance}/functions/instance-correlation` |
+| **File** <sup>New</sup> v0.0.100 | Bytes of an `x-storage` file referenced by the instance data | `GET\|HEAD /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file=` |
 
-:::warning `hierarchy` removed (v0.0.99)
+:::warning[`hierarchy` removed (v0.0.99)]
 The old `…/functions/hierarchy` route was removed in v0.0.99 and replaced by [`instance-correlation`](#instance-correlation-function). There is **no alias** — the old path falls through to custom-function resolution and returns `404`.
 :::
 
-> **Note:** For Schema Function and custom user-defined functions, see [Custom Functions](/docs/components/functions/custom).
+> **Note:** For Schema Function and custom user-defined functions, see [Custom Functions](/docs/components/functions/custom). System function keys shadow a custom function of the same name; <sup>New</sup> v0.0.100 `file` is now a reserved system name too, so a custom function keyed `file` cannot be called on the instance route.
+
+> **Note (`history: "none"`):** <sup>New</sup> v0.0.100 For an instance whose workflow sets `attributes.history: "none"`, the task-history functions `functions/tasks` and `functions/actions?taskId=` answer `200` with an **empty list** (no task records are written; `actions` does not return `404`). See [Workflow → History mode](/docs/components/workflow#history-mode).
 
 :::caution[QueryRoles authorization]
 All read functions (**state**, **data**, **view**, **schema**) authorize the caller against the `queryRoles` defined on the instance's **current state** and the flow level. If the caller has no `allow` role, the function returns **`403`**. See [QueryRoles authorization in read functions](#queryroles-authorization-in-read-functions).
@@ -178,7 +182,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `transitions[].schema.href` | `string` | Schema function endpoint URL with transitionKey |
 | `eTag` | `string` | ETag for cache validation |
 
-:::note ResponseShapeVersion v14 (v0.0.99)
+:::note[ResponseShapeVersion v14 (v0.0.99)]
 v13 shipped in v0.0.98 (the `terminate: false` interaction fix); v14 in v0.0.99 (labels and targets). Each bump invalidates existing state ETags once. In v0.0.99 **`timeout.target` changed from a string to the same object as `transitions[].target`** (breaking, in place) — read `timeout.target.key`.
 :::
 
@@ -700,6 +704,35 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/instance-corre
 | `unresolvedReason` | `depth-exceeded` \| `hop-failed` (only that branch truncated; still `200`) \| `instance-missing` \| `hop-unsupported` (partner domain runs an older runtime without the batch route) |
 
 Null fields are omitted. The walk is batched per `(domain, flow, version)` hop and sibling hops run in parallel; a cross-domain branch costs one call to the internal `POST /{domain}/workflows/{workflow}/internal/correlations/batch` route (max 500 ids). Configuration `Workflow:InstanceCorrelation`: `MaxDescentDepth` 20 (1–100), `FanoutParallelism` 8 (1–256), `MaxConcurrentHops` 32 (1–1000). Authorization is the shared `queryRoles` verdict from `authorize?queryRoles=true`.
+
+## File Function
+
+<sup>New</sup> v0.0.100 Returns the file of a master-schema field marked `x-storage`. The instance data only holds a **handle** (`component`, `file`, `name`, `mimeType`, `size`, `eTag`, `owner`) in the file's place; the bytes are read through this function. For the client round trip (write shape, echo rule) see [File Fields (x-storage)](/docs/how-to/file-fields).
+
+```http
+GET  /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file={guid}
+HEAD /{domain}/workflows/{workflow}/instances/{instance}/functions/file?file={guid}
+```
+
+| Parameter | In | Required | Description |
+|-----------|----|----------|-------------|
+| `workflow` / `instance` | Path | Yes | The handle's `owner.flow` / `owner.instance` |
+| `file` | Query | Yes | The handle's `file` GUID. Missing or blank → **`400`** (`Instance:100048`) |
+| `If-None-Match` | Header | No | `"<eTag>"`; a match answers **`304`** without a store read |
+| `Range` / `If-Range` | Header | No | Partial read: **`206`**, unsatisfiable range **`416`** |
+
+- **This instance's latest data only.** The handle is looked up in the instance's **latest** data (`LatestData`) at its `x-storage` paths: no SubFlow descent, no history rows. The binding and object key come from the record, never from the caller; an invalid stored handle is never sent to the store. Not found → **`404`** (`Instance:100049`).
+- **Authorization runs in the engine, in this order:**
+  1. The state's `queryRoles` (state override → state → workflow). Denied → **`403`**, decided before the file is located, so a denied caller learns nothing about which files exist.
+  2. The `x-roles` grants of the file's path and every ancestor path. Hidden → **`404`**, so existence is not revealed.
+
+  This is a deliberate exception to the rule that the gateway owns the `queryRoles` decision ([see below](#queryroles-authorization-in-read-functions)): a file endpoint can return raw identity documents.
+- **Response headers** (`200`): `Content-Type` = the stored `mimeType` (`application/octet-stream` when it does not parse), `ETag: "<eTag>"`, `Accept-Ranges: bytes`, `Cache-Control: private, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'`.
+- **`Content-Disposition`:** `inline` by default; **`attachment`** for active types (`text/html`, `application/xhtml+xml`, `image/svg+xml`, `text/xml`, `application/xml`, `text/javascript`, `application/javascript` and any `+xml`).
+- `HEAD` returns headers only. A `Range` slice is taken in memory (the binding reads the whole object).
+- Store unreachable → **`503`** (`Instance:100047`); master schema cannot be loaded → **`503`** (`Instance:100050`).
+
+To read a file from a script (service-to-service, no caller authorization) see [Mappings → Reading a file (`GetFileAsync`)](/docs/components/mappings#reading-a-file-getfileasync).
 
 ## Authorization
 

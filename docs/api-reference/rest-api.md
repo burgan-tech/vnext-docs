@@ -60,7 +60,7 @@ Component (workflow, task, function, schema, view, extension) **deploy** etmek i
 | `Disabled` | Yenilenecek bir şey yok: `ServiceDiscovery:Enabled=false`, `Provider=dapr` veya `Cache:Enabled=false` |
 | `Failed` | Registry okunamadı — **yeniden deneyin**; `success: false` döner |
 
-:::warning `GET /api/v1/definitions/re-initialize` kaldırıldı
+:::warning[`GET /api/v1/definitions/re-initialize` kaldırıldı]
 v0.0.95 itibarıyla bu endpoint **yoktur** (`404`). Zaten no-op'tu; eski CLI ve init host bu 404'ü yalnızca uyarı olarak loglar, exit code değişmez — ancak discovery cache yenilenmez. Bkz. [Service Discovery → Cache](/docs/configuration/service-discovery).
 :::
 
@@ -140,7 +140,7 @@ Dört seçiciden **tam olarak biri** verilmelidir; sıfır veya iki seçici `Aut
 
 **Responses:** `200` → `{"allowed": true}`, `403` → `{"allowed": false}` — karar **her iki durumda da gövdededir**. Yanıtlanamayan soru (instance yok, hatalı istek) hata zarfıyla `4xx`/`5xx` döner.
 
-:::warning In-process `queryRoles` denetimleri kaldırıldı — v0.0.95
+:::warning[In-process `queryRoles` denetimleri kaldırıldı — v0.0.95]
 `state`, `data`, `view`, `schema`, `master`, `tasks`, `actions`, `instance-correlation`, `incidents`, `incidents/active` fonksiyonları ve `POST …/longpoll/ack` artık kendi içlerinde `queryRoles` / interaction kapısını **değerlendirmez**. Karar yalnızca `authorize` üzerinden verilir; Internal Gateway'in bu fonksiyonu çağırmadığı bir deployment'ta bu yüzeylerde `queryRoles` **uygulanmaz**. Görünürlük çözümü (transition filtreleme, `x-roles`) değişmemiştir. Ayrıntı: [Yetkilendirme](/docs/concepts/authorization).
 :::
 
@@ -183,7 +183,7 @@ Workflow'un tanımlı function'larının **rol filtreli** listesini döner (`{ "
 - Yetkilendirme: in-process gate yok; gateway `authorize?queryRoles=true` ile karar verir.
 - Ayrıntı: [Built-in Functions → Instance Correlation](/docs/components/functions/built-in).
 
-:::warning `…/functions/hierarchy` kaldırıldı — v0.0.99
+:::warning[`…/functions/hierarchy` kaldırıldı — v0.0.99]
 Eski `GET …/instances/{instance}/functions/hierarchy` rotası kaldırıldı; **alias yoktur**, eski yol custom function çözümlemesine düşer ve `404` döner. `instance-correlation`'a geçin.
 :::
 
@@ -273,15 +273,17 @@ Kurallar:
 - Standart zarf alanları `key`, `stage` ve `tags` elemanları, JSON literal görünümlü olsalar bile **her zaman string** kalır.
 - Belirsiz şekiller — `items[][name]=A` (indekssiz obje dizisi), bozuk bracket, negatif/seyrek indeks, aynı path'te skaler/konteyner çakışması — **HTTP 400** ile reddedilir; kısmen normalize edilmiş payload asla işlenmez.
 - Payload mode çözümü değişmez: `x-vnext-payload-mode` header'ı otomatik algılamayı geçersiz kılar.
-- Multipart form data ve dosya yükleme desteklenmez.
+- Multipart form data desteklenmez. Dosya göndermek için <sup>New</sup> v0.0.100 master schema'da `x-storage` ile işaretli alana JSON gövdede base64 `content` koyun (`{ name, mimeType, size, content }`); runtime baytları blob deposuna yazar ve alana bir handle koyar — bkz. [Dosya Alanları (x-storage)](/docs/how-to/file-fields).
 :::
 
 **Responses:**
 - `200 OK` → `StartInstanceOutput` (id, key, status, attributes, eTag, extensions) — etkin mod senkron (`sync=true` veya tanımda `executionType: "S"`)
 - `202 Accepted` → etkin mod asenkron (`sync=false` varsayılan veya tanımda `executionType: "A"`): iş, durable arkaplan işlemesi için kuyruğa alındı
-- `400 Bad Request` → `ProblemDetails`
+- `400 Bad Request` → `ProblemDetails` (<sup>New</sup> v0.0.100 `x-storage` alanında geçersiz dosya gövdesi: `Instance:100048`)
 - `404 Not Found` → workflow bulunamadı
 - `409 Conflict` → key collision
+- `413 Payload Too Large` → gövde host sınırını aştı (varsayılan 10 MiB ≈ 7,5 MiB base64 dosya)
+- `503 Service Unavailable` → <sup>New</sup> v0.0.100 blob deposu ulaşılamıyor (`Instance:100047`) veya dosya taşıyan gövde için master schema yüklenemiyor (`Instance:100050`); instance oluşturulmaz
 
 > **Not:** Workflow tanımında [`output` mapping](/docs/components/workflow#output-mapping) varsa ve istek `sync=true` ise, yanıt standart `StartInstanceOutput` zarfı yerine **doğrudan output script'in ürettiği gövde** olur (script'in status code + header'ları ile). Subflow instance'ları bu davranışın dışındadır.
 
@@ -306,6 +308,9 @@ Gövde serbest (free-form) JSON da olabilir — bkz. yukarıdaki *Serbest payloa
 - `200 OK` → `TransitionOutput` — etkin mod senkron (`sync=true` veya `executionType: "S"`)
 - `202 Accepted` → etkin mod asenkron (`sync=false` varsayılan veya `executionType: "A"`): iş, durable arkaplan işlemesi için kuyruğa alındı
 - `400 Bad Request`, `403 Forbidden` (yetki yok), `404 Not Found`, `409 Conflict`, `503 Service Unavailable`
+- <sup>New</sup> v0.0.100 Dosya alanları için `400` (`Instance:100048`), `503` (`Instance:100047` / `Instance:100050`) — bkz. [Hata kodları](#instance-hata-kodları-v00100).
+
+> **Not (aktif SubFlow):** <sup>New</sup> v0.0.100 Instance'ın aktif bir SubFlow'u varsa transition parent'ta kuyruğa alınmaz, değiştirilmeden en derin aktif child'a (leaf) iletilir; yanıt parent'ın id'sini ve child'ın status'ünü taşır. Leaf'in reddi (`400`/`403`/`409`) artık senkron döner. Child tamamlanmış ya da henüz oluşmamışsa parent `409` `InstanceBusy` döner — yeniden deneyin. Ayrıntı: [Workflow → SubFlow State](/docs/components/workflow).
 
 > **Not:** Workflow tanımında [`output` mapping](/docs/components/workflow#output-mapping) varsa ve istek `sync=true` ise, yanıt standart `TransitionOutput` zarfı yerine doğrudan output script'in ürettiği gövde olur.
 
@@ -321,7 +326,7 @@ Gövde serbest (free-form) JSON da olabilir — bkz. yukarıdaki *Serbest payloa
 - `200 OK` → ack kabul edildi (pipeline devam etti veya zaten devam etmişti)
 - `404 Not Found` → instance/workflow yok
 
-:::note Yetkilendirme — v0.0.95
+:::note[Yetkilendirme — v0.0.95]
 Endpoint `interaction.longPoll.roles` / `rule` kolunu **kendi içinde değerlendirmez**; karar gateway'in çağırdığı `GET …/functions/authorize?ack=true` ile verilir (yukarıya bakın). Bu sayede gateway'in kendi başına değerlendiremeyeceği C# `rule` kolu da kapsanır.
 :::
 
@@ -336,6 +341,7 @@ Faulted instance'ı **yeniden çalıştırır**.
 **Responses:**
 - `200 OK` → `RetryInstanceOutput` (id, status, retriedTransitionId)
 - `400`, `404` → `ProblemDetails`
+- `409 Conflict` → <sup>New</sup> v0.0.100 workflow'u `attributes.history: "none"` olan instance'ta retry desteklenmez (`Instance:100045`) — bkz. [Workflow → History Modu](/docs/components/workflow)
 
 > **Not:** Yeniden yürütülen iş **tekrar fault** olursa yanıt yine `200` ile `"status": "F"` döner ve bu durum **kalıcıdır** — instance Faulted kalır ve **ikinci bir retry kabul edilir**. Başarılı bir retry (unfault) instance'ın **tüm** açık incident'larını kapatır ve `hasActiveIncident` bayrağını yeniden hesaplar. Ayrıntı: [Instance Incidents](/docs/concepts/incidents).
 
@@ -394,7 +400,28 @@ Instance'ın en yeni **çözülmemiş** incident'ını döner (`incident.active.
 - `404 Not Found` (`Instance:100037`) → açık incident yok — **normal bir sonuçtur**, hata değildir (bir retry arada çözmüş olabilir)
 - `403 Forbidden` → v0.0.95 itibarıyla in-process `queryRoles` denetimi **yoktur**; `403`, gateway'in `authorize?queryRoles=true` cevabına göre döner
 
-> **Not (`internal/*` endpoint'leri):** `internal/subflow-forward`, `internal/busy-release` ve `internal/related-data` gibi `internal/` önekli rotalar **public API değildir** — runtime içi (Dapr sidecar-to-sidecar) çağrılar için var olan, ağ izolasyonuna dayanan dahili endpoint'lerdir ve bu referansın kapsamı dışındadır.
+> **Not (`internal/*` endpoint'leri):** `internal/subflow-forward`, `internal/busy-release`, `internal/related-data` ve <sup>New</sup> v0.0.100 `internal/file` gibi `internal/` önekli rotalar **public API değildir** — runtime içi (Dapr sidecar-to-sidecar) çağrılar için var olan, ağ izolasyonuna dayanan dahili endpoint'lerdir ve bu referansın kapsamı dışındadır. `internal/file` hiçbir yetki denetimi yapmadan dosya baytlarını döndürür; mesh dışından erişilemez olmalıdır.
+
+### GET `…/instances/{instance}/functions/file` <sup>New</sup> v0.0.100
+
+`x-storage` alanındaki bir dosyanın baytlarını döner (`GET` / `HEAD`, `?file=<guid>`). Yalnızca bu instance'ın güncel verisindeki handle okunur. Diğer read fonksiyonlarının aksine `queryRoles` motorun içinde de denetlenir (`403`), ardından `x-roles` (gizli yol `404`).
+
+**Responses:** `200` (baytlar), `206` / `416` (Range), `304` (`If-None-Match`), `400` (`Instance:100048`, eksik `file`), `403`, `404` (`Instance:100049`), `503` (`Instance:100047` / `Instance:100050`). Ayrıntı: [Built-in Functions → File Fonksiyonu](/docs/components/functions/built-in).
+
+### Internal endpoint'ler: instance veri geçmişi <sup>New</sup> v0.0.100
+
+```http
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/data/history?page=1&pageSize=20&includeData=true
+GET /api/v1/{domain}/workflows/{workflow}/instances/{instance}/data/history/{rowId}
+```
+
+Instance verisinin her yazımı için bir satır döner, **en yeniden eskiye**. Tüketicisi geliştirme araçlarıdır (Forge Instance Monitor); **public API değildir**.
+
+- `pageSize` 1–100 arasına sıkıştırılır; toplam sayı (`COUNT`) hesaplanmaz. Yanıt: `{ items, page, pageSize, hasNext }`. Her öğe: `id`, `version`, `versionNo`, `enteredAt`, `eTag`, `isLatest`, `data`. `includeData=false` yalnızca metadata döner.
+- `…/data/history/{rowId}`: tek satır; satır bilinmiyorsa veya başka bir instance'a aitse `404` (`Instance:100013`).
+- Her satır, Data fonksiyonu ile **aynı exposure pass**'ten geçer (`x-roles`, `x-masking`, `x-encryption`, `x-computed`).
+- Runtime içinde `queryRoles` denetimi yoktur; karar gateway'in `authorize?queryRoles=true` çağrısındadır.
+- **Swagger'da gizlidir ama engellenmez.** Rotayı public edge'de açmayın: gateway / ingress katmanında kapatın.
 
 ---
 
@@ -528,6 +555,22 @@ Instance'ın en yeni **çözülmemiş** incident'ını döner (`incident.active.
 ```
 
 Instance sorgu doğrulama hataları (`Validation:900011` … `900014`) `error.validationErrors[]` içinde her red nedenini `members` (istek yolu, örn. `filter.attributes.amount.eq`) + `message` ile taşır. <sup>New</sup> v0.0.94 `filter.valueTooLong`: 1000 karakterden uzun bir skaler filtre operandı `400` / `Validation:900011` ile reddedilir (`in` / `nin` / `between` operandları tek tek ölçülür). Bkz. [Instance Filtering → Hata Yönetimi](/docs/how-to/instance-filtering).
+
+### Instance hata kodları (v0.0.100)
+
+<sup>New</sup> v0.0.100 ile eklenen `Instance` hata kodları (`ProblemDetails` içinde döner):
+
+| Kod | Ad | HTTP | Anlamı |
+|---|---|---|---|
+| `Instance:100044` | `HistoryNoneSubFlowChildNotEligible` | 400 | `history: "none"` bir parent'ın SubFlow child'ı `none` değil; child hiçbir şey yazmadan reddeder, parent incident ile fault olur |
+| `Instance:100045` | `HistoryNoneRetryNotSupported` | 409 | `history: "none"` instance'ta `POST …/retry` |
+| `Instance:100046` | `HistoryNoneNotTerminal` | — (incident) | `history: "none"` bir aşama Finish olmayan bir state'te durdu; instance fault edilir |
+| `Instance:100047` | `FileStoreUnavailable` | 503 | Blob deposu (binding) çağrısı başarısız; istek uygulanmadı, yeniden denenebilir |
+| `Instance:100048` | `FileReferenceInvalid` | 400 | `content` ile `file` birlikte, geçersiz base64, bilinmeyen/yabancı referans, `functions/file`'da eksik `file` |
+| `Instance:100049` | `FileNotFound` | 404 | `functions/file`: dosya bu instance'ın güncel verisinde yok ya da yolu `x-roles` ile gizli |
+| `Instance:100050` | `FileSchemaUnavailable` | 503 | Master schema yüklenemedi ve gövde `content`/`file` üyesi taşıyor (ya da dosya okunuyor); yeniden deneyin |
+
+Ayrıntı: [Dosya Alanları](/docs/how-to/file-fields), [Workflow → History Modu](/docs/components/workflow).
 
 ---
 

@@ -94,6 +94,8 @@ A flow's **master schema** can apply **field-level visibility** by defining the 
 
 <sup>New</sup> v0.0.99 `x-roles`, `x-masking` and `x-encryption` (in that order) apply on every read surface: **instance GET, instance list, data function, sync start/transition response** and the **GetInstance / GetInstances / GetInstanceData tasks**. Before, instance GET/list returned data unfiltered and the Get* tasks read with system visibility (`SystemRead`, removed); task reads are now evaluated with the caller's presented credential.
 
+<sup>New</sup> v0.0.100 — Read order: **`x-roles` → `x-masking` → `x-encryption` (`source: runtime` only) → `x-computed` (`evaluatedBy: runtime`)**. The encryption step applies only at-rest rules (`source: runtime`, the default); a `source: client` rule is never handled by the runtime (the value is stored and returned as the client sent it). Runtime computed fields come last and are evaluated over the view the caller can already see (pruned, masked, encrypted), so a computed field can never reveal a field the caller cannot see and takes no `x-roles` / `x-masking` of its own. See [Schema Definition](/docs/how-to/view-consept/schema-tanimi) and [Schema Roles](/docs/concepts/schema-roles).
+
 **Credential forwarding:** every outbound task type forwards the request headers `sub`, `act_sub`, `position`, `client_id`, `role` where the task mapping leaves them absent or empty; a mapping value wins. Values over 1024 characters or containing control characters are not forwarded, and a role resolved by morph-idm is never forwarded. To read as another identity, set the credential in the input mapping.
 
 > **Note:** `roles` and `queryRoles` are for transition and state authorization. Schema property **field visibility** uses the `x-roles` keyword (same shape: `role` + `grant`).
@@ -121,7 +123,7 @@ In both modes **DENY always overrides ALLOW.** A deny-only set lets you express 
 
 The canonical rule is evaluated over the whole grant set and the caller's **whole role set**, as two groups: `authorized = DenyGroupOk AND AllowGroupOk` — the deny group is an AND (evaluated first), the allow group is an OR, a set with no allow is a blacklist, an empty set allows. <sup>New</sup> v0.0.96 **Rule 5: a caller with no roles cannot clear a role-bound deny.** A static role (`blocked`) or a `$role.$.context…` reference is a statement about the caller's *roles*; with none to compare, "nothing matched" is not evidence the caller is not the denied one, so the deny refuses. Identity-bound denies (the four system roles, `$user.` / `$userBehalfOf.`) keep their normal evaluation. Example: `[deny: blocked]` with no roles → **refused**; `[deny: $InstanceStarter]` with no roles, caller not the starter → allowed. This applies to every surface and every provider and reverses the v0.0.79 behaviour for deny-only sets (more restrictive). <sup>New</sup> v0.0.99 **Rule 6:** a role-less caller is no longer admitted by an allow `$role.` grant whose path resolves to `""` — a role-bound leaf is Unknown for them and an allow admits only on Yes.
 
-:::warning Backward impact
+:::warning[Backward impact]
 An existing deny-only set is now treated as a **blacklist** (open to everyone except the listed roles). If your intent was "deny everyone," convert it to an allow-list by adding at least one `allow` grant.
 :::
 
@@ -150,7 +152,7 @@ An existing deny-only set is now treated as a **blacklist** (open to everyone ex
 
 A **deny fires on Yes or Unknown**; an **allow admits only on Yes**. Dynamic paths are checked per leaf at publish (must start with `$.context.`, case-sensitive, non-empty path); malformed schema `x-roles` entries and function `roles` with a malformed dynamic path are now rejected at publish. The `permissions` matrix shows combinator grants with `allOf` / `anyOf` and **without `role`**.
 
-:::warning Rollout floor
+:::warning[Rollout floor]
 Author the first combinator only after every pod — and every domain that stamps overrides onto this one — runs v0.0.99; an older pod cannot read it. Do not binary-downgrade once combinators are published.
 :::
 

@@ -49,7 +49,7 @@ Canlı değerler otomatik enjekte edilir: `traceparent` / `tracestate` .NET Http
 
 <sup>New</sup> v0.0.99 **`X-Request-Id` artık reserved değildir — mapping kazanır, vNext doldurur.** v0.0.80–v0.0.97 arasında reserved listesindeydi: mapping'deki değer sessizce atılıyor ve hiçbir şey gönderilmiyordu (ör. OHVPS/BKM `400 TR.OHVPS.Resource.InvalidFormat`). Şimdi kural fill-if-absent'tir: task'in `headers` bloğunda ya da input mapping'inde verilen boş olmayan değer olduğu gibi (tek sefer) gönderilir; verilmemiş ya da boşsa vNext'in kendi request id'si değiştirilmeden gönderilir; vNext'in request id'si yoksa (ör. request id yakalanmamış timer / event hop'u) hiçbir şey üretilmez. Kural Http, ExternalHttp, Soap, DaprService, DaprHttpEndpoint, DirectTrigger, GetInstance / GetInstances / GetInstanceData, StartTrigger ve SubProcess task'lerinde geçerlidir (StartTrigger ve SubProcess hâlâ başka workflow / kimlik header'ı damgalamaz).
 
-:::tip Çağrı başına benzersiz UUID
+:::tip[Çağrı başına benzersiz UUID]
 vNext'in request id'si **client isteği başınadır**; client bir id göndermediyse Aether `HttpContext.TraceIdentifier`'a düşer (UUID değildir). Her çağrıda benzersiz UUID isteyen API'ler için değeri mapping'de üretin:
 
 ```csharp
@@ -154,7 +154,7 @@ Transaction (async yolda), transition anahtarıyla adlandırılır: **`Transitio
 | `Discovery.Resolve/{domain}` | Cross-domain discovery çözümü (`vnext.discovery.domain`, `vnext.discovery.endpoint_kind`) |
 | `FanOut.Item` | Fan-out batch'inin her öğesi için bir span (`vnext.fanout.item.index`, `.key`, `.alias`, `.queue_wait_ms`) |
 
-:::tip Business vs Verbose
+:::tip[Business vs Verbose]
 `Telemetry:Tracing:DetailLevel`: **`Business`** (varsayılan) yukarıdaki tabloda listelenen tüm span'leri (`span.category=business`) üretim ortamında görünür kılar. **`Verbose`** bunlara ek olarak düşük seviye tanı span'leri ekler (ör. Aether'in kendi `BackgroundJob.Schedule*` span'leri gibi Verbose-gated olanlar). Bu değer başlangıçta okunur — değiştirmek restart gerektirir.
 :::
 
@@ -186,7 +186,7 @@ Yeni bir `ActivitySource` tanımlayan her değişiklik, **aynı commit'te** o ka
 | `workflow_fanout_batch_duration_seconds` | histogram | `task_key`, `workflow` |
 | `workflow_fanout_item_failures_total` | counter | `task_key`, `workflow` — batch başına **bir kez**, başarısız öğe sayısı kadar artar (öğe başına değil) |
 
-:::danger Deprecated: `script_executions_total`
+:::danger[Deprecated: `script_executions_total`]
 `script_executions_total` her zaman **compile** yolunda artırılmıştır (cache hit'ler dahil) — script'in gerçekten **çalıştırılmasında** değil. Geriye dönük uyumluluk için değişmeden emitlenmeye devam eder. Grafana panellerini şuna taşıyın:
 - Compile oranı → `rate(script_compilations_total[5m])`
 - Temiz compile latency'si → `script_compilation_duration_seconds{cache="miss"}`
@@ -287,7 +287,7 @@ Kayıt asenkron ve best-effort'tur: function yolu satırı yazmaz, sınırlı bi
 
 Telemetri konfigürasyon anahtarları (OTLP endpoint, `DetailLevel`, `AdditionalSources`, propagator) için bkz. [Telemetri Yapılandırması](../configuration/telemetry).
 
-:::warning WorkflowLogs EventId'leri yeniden numaralandı — v0.0.94 / v0.0.95
+:::warning[WorkflowLogs EventId'leri yeniden numaralandı — v0.0.94 / v0.0.95]
 `WorkflowLogs`'ta aynı `EventId`'yi paylaşan mesajlar ayrıştırıldı; eski numaraya bağlı Kibana sorguları / alarmlar **güncellenmelidir**:
 
 | Sürüm | Taşınan | Eski → Yeni |

@@ -22,6 +22,7 @@ Bu doküman, workflow betikleriyle **girdi/çıktı haritalaması** yapmayı ve 
    - [XML yardımcıları](#xml-yardımcıları)
    - [Loglama](#loglama)
    - [Konfigürasyon](#konfigürasyon)
+   - [Dosya okuma (`GetFileAsync`)](#dosya-okuma-getfileasync)
 7. [Implementasyon Örnekleri](#implementasyon-örnekleri)
 8. [Notification Mapping](#notification-mapping)
 9. [Best Practices](#best-practices)
@@ -46,7 +47,12 @@ Göreve iletilecek verileri hazırlamak için kullanılır. Task çalıştırıl
 - Input verilerini dönüştürme
 - Task yapılandırmasını ayarlama
 - Başlık ve kimlik doğrulama bilgisi ekleme
-- Doğrulama
+
+:::warning[InputHandler task'ı durduramaz]
+`InputHandler`'ın dönüş değeri yalnızca task'ın audit kaydına yazılır; runtime onu hiçbir karar için okumaz. Ne döndürürseniz döndürün — `Data["error"]`, `StatusCode` veya boş bir yanıt — task ardından yapılandırıldığı haliyle **çalıştırılır**. Yazan task'larda (StartTrigger, DirectTrigger, SubProcess, HTTP POST, publish) yazma, handler girdiyi geçersiz bulmuş olsa bile gerçekleşir; `OutputHandler` sonucu sonradan görür ve geri alamaz.
+
+Doğrulamayı task'tan **önce** yapın: transition kuralı/koşulu, hata state'ine giden otomatik transition veya öncesinde çalışan bir doğrulama adımı task'ın hiç çalışıp çalışmayacağına karar verir. Son çare olarak `InputHandler` içinden exception fırlatmak çağrıyı engeller: task bir task yürütme hatası olarak başarısız olur, `OutputHandler` çalışmaz ve bu hata bir iş yanıtı olmadığı için `AcceptedStatusCodes` ona uygulanmaz.
+:::
 
 ### OutputMapping
 
@@ -269,6 +275,8 @@ var tckn = await context.Instance.DecryptAsync("customer.tckn", cancellationToke
 
 Aynı jetonu aynı yola geri yazmak etkisizdir, düz metin yazmak yeniden şifreler; jetonu başka bir alana kopyalamak reddedilir. DynamicExpresso kuralları jetonu çözemez — encrypt alan üzerindeki koşulu C# script olarak yazın. Ayrıntı: [Schema Tanımı → `x-encryption`](/docs/how-to/view-consept/schema-tanimi).
 
+<sup>New</sup> v0.0.100 — Yukarıdaki jeton davranışı yalnızca `x-encryption.source: "runtime"` (varsayılan, at-rest) alanlar içindir. `source: "client"` ile işaretli bir alan, **client'ın kendi şifrelediği** ciphertext'i taşır: runtime bu alanı şifrelemez, çözmez, maskelemez — değer gönderildiği gibi saklanır ve script'lere de öyle görünür. Düz değer runtime'da hiçbir zaman bulunmaz; çözme, özel anahtarı tutan alıcı sisteme aittir.
+
 ### Related
 
 <sup>New</sup> `context.Related`, betiğin **ilişkili** bir workflow instance'ının verisini okumasını sağlar: bu instance'ı SubFlow/SubProcess olarak başlatan **parent** (bir üst seviye) veya bu instance'ın kendi **correlation'ları** (bir alt seviye). Bu API'den önce ilişkili veriye ulaşmanın tek yolu, veriyi output mapping'lerle parent/child sınırından kopyalamaktı — bu kopya hem bayatlıyor hem de instance payload'ını büyütüyordu.
@@ -302,7 +310,7 @@ Davranış ve tasarım notları:
 - Okuma, mevcut transition'ın **transaction'ı içinde** çalışır; aynı transition'da motorun kendi commit edilmemiş yazmalarını görür.
 - Cross-domain okuma internal endpoint'ler üzerinden, timeout / retry / circuit-breaker ile yapılır; aynı domain'de süreç dışına çıkılmaz.
 
-:::warning Alan koruması kopya ile taşınmaz
+:::warning[Alan koruması kopya ile taşınmaz]
 `Related` okumaları **filtresizdir** (query-role kontrolü ve `x-roles` / `x-masking` / `x-encryption` alan korumaları uygulanmaz; v0.0.99'da da korumalı okuma yüzeyleri arasında değildir). `x-masking` alanları ham gelir; `encrypt` alanları saklandığı gibi jeton olarak gelir ve `DecryptAsync` yalnızca instance'ın kendi verisini açtığından ilişkili instance'ın jetonu çözülemez — çağrı, motorun kendi correlation çerçevesi içindeki deterministik bir okumadır. Bu yüzden ilişkili instance'ın `x-roles` ile kısıtlı bir alanını output mapping'le **bu** instance'ın verisine kopyalamak, o alanı bu instance'ı okuyabilen herkese açar. Kısıtlı alanları kopyalamadan, karar vermek için okuyup bırakın.
 :::
 
@@ -478,7 +486,7 @@ public class MyMapping : ScriptBase, IMapping
 }
 ```
 
-:::tip Secret cache ve performans
+:::tip[Secret cache ve performans]
 `GetSecret`/`GetSecrets` çağrıları process-wide bir bundle cache'in arkasındadır (varsayılan TTL 30 sn, bkz. [Configuration → Scripting / Sandbox](../configuration/scripting#secret-cache)). Rotasyon sonrası bundle en fazla TTL kadar bayat kalabilir. `GetSecret` senkrondur ve cache miss'te **thread'i bloklar** — gecikmeye duyarlı yollarda `GetSecretAsync` tercih edin.
 :::
 
@@ -639,10 +647,8 @@ public class PaymentProcessingMapping : ScriptBase, IMapping
             if (amount == null || amount <= 0)
             {
                 LogWarning("Geçersiz ödeme tutarı alındı: {0}", args: new object?[] { amount });
-                return Task.FromResult(new ScriptResponse
-                {
-                    Data = new { error = "Geçersiz tutar" }
-                });
+                // Hata döndürmek task'ı durdurmaz; fırlatmak çağrıyı engeller.
+                throw new ArgumentException("Geçersiz tutar");
             }
 
             LogDebug("Ödeme tutarı işleniyor: {0}", args: new object?[] { amount });
@@ -733,6 +739,57 @@ public class ConfigAwareMapping : ScriptBase, IMapping
   }
 }
 ```
+
+### Dosya okuma (`GetFileAsync`)
+
+<sup>New</sup> v0.0.100 Master schema'da `x-storage` ile işaretli bir alanın dosyası instance verisinde yalnızca bir **handle** olarak durur (bkz. [Dosya Alanları](/docs/how-to/file-fields)). Baytlara ihtiyaç duyan bir betik, handle'ın koordinatlarıyla dosyayı okur:
+
+```csharp
+public abstract class ScriptBase
+{
+    protected Task<ScriptFile> GetFileAsync(string domain, string flow, string instance, string file);
+}
+
+public sealed record ScriptFile(byte[] Content, string? Name, string? MimeType, long Size, string ETag);
+```
+
+| Parametre | Kaynak |
+|-----------|--------|
+| `domain`, `flow`, `instance` | Handle'daki `owner.domain`, `owner.flow`, `owner.instance` |
+| `file` | Handle'daki `file` GUID'i |
+
+`ScriptFile.ETag`, baytların SHA-256'sıdır (küçük harf hex, tırnaksız). `System.IO` sandbox'ta yasak olduğundan içerik stream değil `byte[]` olarak döner.
+
+```csharp
+public class SendDocumentMapping : ScriptBase, IMapping
+{
+    public async Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext context)
+    {
+        var doc = context.Instance.Data.identityDocument; // kalıcı handle
+        var file = await GetFileAsync(
+            (string)doc.owner.domain, (string)doc.owner.flow,
+            (string)doc.owner.instance, (string)doc.file);
+
+        // Baytlar yalnızca bu task'ın isteğine konur; task kaydına da yazılırlar.
+        var httpTask = task as HttpTask;
+        httpTask.SetBody(new
+        {
+            fileName = file.Name,
+            contentType = file.MimeType,
+            content = Convert.ToBase64String(file.Content)
+        });
+        return new ScriptResponse();
+    }
+
+    public Task<ScriptResponse> OutputHandler(ScriptContext context) =>
+        Task.FromResult(new ScriptResponse());
+}
+```
+
+- **Aynı domain:** okuma process içinde yapılır. **Başka domain:** sahibi olan domain'in dahili `GET …/instances/{instance}/internal/file?file=` rotası çağrılır.
+- **Yetkilendirme yoktur** (çağıran kimliği, `queryRoles` veya `x-roles` değerlendirilmez) — servisler arası okumadır. Handle yine o instance'ın **güncel** verisinde bulunmalı ve geçerli olmalıdır; binding adı çağırandan alınmaz. `internal/file` rotası yalnızca iç ağdan erişilebilir tutulmalıdır.
+- Yalnızca **Orchestration** host'unda çalışan betiklerde kullanılabilir. Okuyucu yoksa veya okuma başarısız olursa `InvalidOperationException` fırlatılır.
+- Baytlar bellekte döner: onları task isteğine/yanıtına koyan bir mapping, baytları **task kaydına** yazar (bkz. [Dosya Alanları → Bilinen kısıtlar](/docs/how-to/file-fields#bilinen-kısıtlar)). Mapping'ler arasında içeriği değil handle'ı taşıyın.
 
 ## Implementasyon Örnekleri
 
@@ -1156,15 +1213,13 @@ public Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext contex
     }
     catch (Exception ex)
     {
-        return Task.FromResult(new ScriptResponse
-        {
-            Key = "error",
-            Data = new { error = ex.Message, timestamp = DateTime.UtcNow },
-            Tags = new[] { "error", "exception" }
-        });
+        LogError("Input preparation failed: {0}", args: new object?[] { ex.Message });
+        throw; // yutmayın: hata döndürmek task'ı durdurmaz
     }
 }
 ```
+
+`InputHandler` içinde exception'ı yakalayıp hata bilgisini `ScriptResponse` olarak döndürmek task'ı **durdurmaz**; task eksik/yanlış yapılandırmayla çalışmaya devam eder. Loglayıp yeniden fırlatın. Bkz. [InputHandler task'ı durduramaz](./interfaces#inputhandlerworkflowtask-task-scriptcontext-context).
 
 ### Null ve tip güvenliği
 
@@ -1255,6 +1310,8 @@ if (retryCount < maxRetries)
 
 ### Toplu doğrulama
 
+Girdinin geçerli olup olmadığına task'tan **önce** karar verin (transition kuralı/koşulu, hata state'ine otomatik transition veya ayrı bir doğrulama adımı). `InputHandler` içinde yapılan doğrulama task'ı ancak exception fırlatarak durdurabilir; hata bilgisini `ScriptResponse` ile döndürmek task'ın çalışmasını engellemez.
+
 ```csharp
 public Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext context)
 {
@@ -1268,12 +1325,8 @@ public Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext contex
 
     if (errors.Any())
     {
-        return Task.FromResult(new ScriptResponse
-        {
-            Key = "validation-error",
-            Data = new { errors },
-            Tags = new[] { "validation", "error" }
-        });
+        // Döndürmek yetmez — task yine çalışır. Fırlatmak çağrıyı engeller.
+        throw new ArgumentException(string.Join("; ", errors));
     }
 
     return Task.FromResult(new ScriptResponse());

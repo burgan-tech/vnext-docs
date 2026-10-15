@@ -51,14 +51,14 @@ SOAP Task, SOAP 1.1 veya 1.2 protokolüyle web servis endpoint'lerine istek gön
 | `validateSsl` | boolean | Hayır | `true` | Sunucu SSL sertifikası doğrulaması |
 | `acceptedStatusCodes` | string[] | Hayır | — | Başarılı kabul edilecek HTTP hata kodları. SOAP fault yanıtları genellikle HTTP 500 üzerinden gelir; `["500"]` tipik kullanımdır. Exact kod (`"500"`) ve wildcard (`"5xx"`, `"50x"`) destekler |
 
-:::info SOAP Versiyonları
+:::info[SOAP Versiyonları]
 | Versiyon | Content-Type | SOAPAction |
 |----------|-------------|------------|
 | `1.1` | `text/xml; charset=utf-8` | Ayrı HTTP header (`SOAPAction: "..."`) |
 | `1.2` | `application/soap+xml; charset=utf-8; action="..."` | Content-Type içine gömülür |
 :::
 
-:::note XML escaping (v0.0.62)
+:::note[XML escaping (v0.0.62)]
 SOAP mapping çalışma bağlamı `System.Security` assembly'sini varsayılan olarak referans eder ve envelope'a yerleştirilen değerlerde XML özel karakterleri (`<`, `>`, `&`, `"`, `'`) varsayılan olarak escape edilir. Bu, daha önce `CS0012` derleme hatasına yol açan ve escaping'in tutarsız uygulandığı senaryoları giderir.
 :::
 
@@ -177,7 +177,7 @@ public class GetCustomerSoapMapping : IMapping
 }
 ```
 
-:::tip SOAP Fault Yönetimi
+:::tip[SOAP Fault Yönetimi]
 SOAP servisler hata durumunda genellikle HTTP 500 üzerinden SOAP Fault döner. `acceptedStatusCodes: ["500"]` tanımlayarak bu durumların task'ı başarısız saymadan `OutputHandler`'a ulaşmasını sağlayın; fault kontrolünü mapping içinde yapın.
 :::
 

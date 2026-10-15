@@ -236,6 +236,7 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
 |------|-----|---------|----------|
 | `type` | string | **Evet** | Workflow türü: `C`, `F`, `S`, `P` (yukarıdaki tür tablosu) |
 | `executionType` | string | Hayır | Flow'un varsayılan çalıştırma modu (v0.0.99): `S` (sync) veya `A` (async). Kendi `executionType`'ını tanımlamayan transition'lara uygulanır — bkz. [Çalıştırma Modu (`executionType`)](#çalıştırma-modu-executiontype) |
+| `history` | string | Hayır | <sup>New</sup> v0.0.100 Geçmiş kaydı modu: `full` (varsayılan; alan yoksa) veya `none` (tek seferlik akış: transition/task geçmişi yazılmaz, tek data satırı). `attributes` kökünde durur, `config` altında değil — bkz. [History Modu](#history-modu) |
 | `scripts` <sup>New</sup> | object | Hayır | Flow seviyesi helper ve izinli assembly tanımı (aşağıda) |
 | `states` | array | **Evet** | State listesi. **En fazla bir** `Initial` state (`stateType: 1`) içerebilir (v0.0.99 öncesinde tam olarak bir tane zorunluydu). Hiç Initial yoksa instance runtime'ın örtük `$start` state'inde doğar — bkz. [Initial state olmadan başlangıç (`$start`)](#initial-state-olmadan-başlangıç-start) |
 | `startTransition` | object | **Evet** | Başlangıç transition tanımı (aşağıda) |
@@ -340,6 +341,24 @@ State Function yanıtında bu değer v0.0.99'dan itibaren üst seviye `stateSubT
 - **Başarısız subflow start'ı** <sup>New</sup> v0.0.95: child başlatılamazsa parent artık `Busy`'de asılı kalmaz; parent **fault** eder ve bir incident açılır, `retry` subflow start'ını yeniden dener — bkz. [Instance Incidents](/docs/concepts/incidents).
 - Override'lar child'a start anında damgalanır (start-time snapshot); zaten çalışan child'lar başladıkları override'larla devam eder. Kapsam **tek hop**tur: P → C → G zincirinde P'nin override'ları yalnızca C'nin state'lerine uygulanır.
 - Eski `overrides.views` / `viewOverrides` **deprecated**'dır; scoped view override'larıyla aynı `subFlow` içinde karıştırmak doğrulama hatasıdır.
+- `history: "none"` bir parent'ın SubFlow child'ı da `none` olmalıdır — bkz. [History Modu → SubFlow kuralı](#subflow-kuralı).
+
+#### Aktif SubFlow'a transition iletimi (proxy)
+
+<sup>New</sup> v0.0.100 Aktif bir `S` SubFlow'u olan parent'a gelen ve iletilebilir (forwardable) bir transition artık **parent'ta kuyruğa alınmaz**; doğrudan aktif child'a iletilir (davranış değişikliği):
+
+- **Parent'ta hiçbir şey yazılmaz.** Parent zinciri rezerve etmez, Busy bayrağını çevirmez, job kurmaz; isteği **değiştirmeden** aktif child'a iletir. Ara seviyeler aynı kontrolü tekrarlar, istek en derin aktif SubFlow'a (**leaf**) ulaşır.
+- **Mod parent'ta bir kez çözülür** (transition `executionType` → flow `executionType` → `?sync`) ve child aynı modda çağrılır — async istek async kalır. Bkz. [Çalıştırma Modu](#çalıştırma-modu-executiontype).
+- **Leaf kendi kapsamında çalışır:** isteği kendi şemasıyla doğrular, `x-storage` dosyalarını kendi binding'iyle depoya yazar, kendi Busy'sini ve job'unu alır.
+- **Yanıt** parent'ın id'sini ve child'ın status'ünü taşır (async `202`, sync `200`).
+- **Leaf'in reddi artık senkron döner.** Leaf'in `403` / `400` / `409` cevabı doğrudan client'a ulaşır; önceden parent isteği `202` ile kabul ediyordu.
+- **Tamamlanma penceresi:** child tamamlanmış ama parent'ın correlation'ı henüz açıksa ya da child henüz oluşmamışsa parent **`409` `InstanceBusy`** döner — kısa bir beklemeyle yeniden deneyin. (Hiç oluşturulmamış bir child'a işaret eden correlation bir veri hatasıdır; o durumda `409` kalıcıdır.)
+- **Hiç iletilmeyenler:** `updateData`, `cancel`, `exit`, timeout ve parent'ın **mevcut state'inde kullanılabilir** shared transition'ları parent'ta işlenir. Mevcut state'te kullanılabilir olmayan bir parent shared transition'ı iletilir (leaf genellikle `400` döner).
+- Ek maliyet p50'de yaklaşık **5 ms**.
+
+:::info[Deprecation: `subflow-chain-reserve-claim`]
+Eski accept-time zincir rezervi (`ChainReserved` talebi, `…/busy` ve `internal/busy-release` rotaları) v0.0.100'den itibaren **deprecated**'dır; en erken v0.0.103'te kaldırılacaktır. Bu runtime alıcı tarafı korur: eski sürümlü bir parent'tan gelen rezervli relay leaf'te eskisi gibi kabul edilir. **Karışık sürümlü domain'lerde aksiyon gerekmez.**
+:::
 
 ### State Alias (Rol Tabanlı State Maskeleme)
 
@@ -439,7 +458,7 @@ Dapr Binding yapılandırması [Notification Task](./tasks/notification) ile ayn
 
 State Function, client tarafında **long-polling** ile süreç durumunu döner. `interaction.longPoll` ile bu açık tutulan isteğin **ne zaman sonlandırılacağı** state tanımında **deklaratif** olarak belirtilir. Runtime, isteği bir transition gerçekleşene veya fallback timeout dolana kadar açık tutar. Böylece bir süreç tasarımında farklı client'lar süreci kendi **durak noktaları** ile belirleyebilir.
 
-:::tip Uçtan uca örnek
+:::tip[Uçtan uca örnek]
 Onay adımı + "Bekleyen Onaylarım" senaryosunda `terminate: false` / `terminate: true` + `rule` kullanımının tamamı için bkz. [Human Task ve "Bekleyen Onaylarım"](/docs/how-to/human-task-approval).
 :::
 
@@ -558,7 +577,7 @@ POST /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack
 
 Client hata alır veya talep gönderemezse `fallbackTimeoutSeconds` süresi dolduğunda platform pipeline'ı otomatik olarak devam ettirir. Bu sayede client çökmesi veya ağ hatası durumunda long-poll askıda kalmaz. Ack beklemeyen bir instance'a gelen ack idempotent olarak `200` döner (no-op). Aktif subflow zincirinde ack, parent'tan duraklamış (gerekirse cross-domain) child'a hop hop iletilir.
 
-:::warning Ack yetkisi artık in-process denetlenmiyor <sup>New</sup> v0.0.95
+:::warning[Ack yetkisi artık in-process denetlenmiyor <sup>New</sup> v0.0.95]
 Ack endpoint'i `roles`/`rule` kolunu artık **kendisi değerlendirmez**. Karar noktası tek: Internal Gateway isteği iletmeden önce [`authorize?ack=true`](/docs/components/functions/built-in#instance-authorize) fonksiyonunu çağırır; bu hedef, endpoint'in eskiden kullandığı aynı etkileşim gate'inden (`rule` → `roles` → izin) geçer — `rule` bir C# betiği olduğu için gateway'in kendisinin değerlendiremeyeceği tek kol budur. Önünde bu gateway olmayan bir runtime ack'i **reddetmez**. Bkz. [Yetkilendirme → Nerede Değerlendirilir?](/docs/concepts/authorization#nerede-değerlendirilir).
 :::
 
@@ -850,6 +869,8 @@ Her transition tipi bu modele farklı şekilde katılır ve **flow tasarımında
 | `cancel` / `exit` | Tutar | **Muaf** | Busy 409'dan muaftır ama **accept anında** Busy'yi set eder (pipeline'da değil, v0.0.80) — iptal/çıkış akışını başlatır |
 | `updateData` | **Tutmaz** | **Muaf** | **Lock yok, duplicate-job guard yok — hiçbir yolda** (v0.0.86). Status-neutral kabul edilir; Busy'yi ne set eder ne çözer; paralel istekler tümü kabul edilir |
 
+<sup>New</sup> v0.0.100 Aktif SubFlow'u olan bir parent'ta iletilebilir transition'lar parent'ta değil **leaf'te** kabul edilir (lock, Busy ve job leaf'indir) — bkz. [Aktif SubFlow'a transition iletimi](#aktif-subflowa-transition-iletimi-proxy).
+
 ### updateData: Reserve Transition
 
 `updateData` **reserve** bir transition'dır: tüm lock ve busy check'lerden muaf, **status-neutral** çalışır — Busy'yi asla set etmez ve asla çözmez, dolayısıyla instance'ı Busy'de bırakma riski yoktur. **Paralel isteklerin aynı instance üzerinde datayı güncellemesi ve instance'ı ilerletmesi için kullanılacak tek yöntemdir** — aynı senaryoda `stateTransition` basmak Busy çakışmasında 409 üretir. v0.0.86'dan itibaren bu, yalnızca lock'suz değil aynı zamanda **duplicate-job guard'sız**dır: N eşzamanlı `updateData` isteği aynı mantıksal job kimliğini paylaşsa da her biri kendi payload'ını taşıdığı için hepsi meşrudur ve dedupe uygulanmaz.
@@ -861,7 +882,7 @@ Davranış, instance'ın durumuna göre ikiye ayrılır:
 
 Otomatik transition'lar **her** `updateData` sonrasında değerlendirilir; böylece "veri biriktir, eşik sağlanınca ilerle" (fan-in) desenleri updateData fırtınası altında güvenle çalışır.
 
-:::info $self ile updateData karıştırılmamalı <sup>New</sup> v0.0.80 (breaking)
+:::info[$self ile updateData karıştırılmamalı <sup>New</sup> v0.0.80 (breaking)]
 `updateData`'nın hedefi her zaman `$self`'tir, ama `$self` **yalnızca `updateData` için** state lifecycle'ını atlar (OnEntry/OnExit çalışmaz, scheduled job'lar yeniden armlanmaz). `target: $self` yazan **başka herhangi bir transition** — tipik olarak bir **shared transition** — trigger'ının temel profilini korur ve state'in **tam** lifecycle'ını çalıştırır: OnExit/OnEntry ateşlenir, state'in timer'ları iptal edilip yeniden armlanır. Önceden `$self` hedefli her transition lifecycle'ı atlıyordu; domain tanımlarında `"target": "$self"` için grep yapıp bu davranışa dayanan mantığı `onExecutionTasks`'e taşımak gerekebilir. Ayrıntı: [Transition Pipeline → `+Self` Bileşimi](../concepts/transition-pipeline).
 :::
 
@@ -901,7 +922,7 @@ Cancel ile aynı yapıda. **Client implementasyonlarında** ekran çıkışları
 
 Cancel ile aynı yapıda, tek fark: `target` her zaman `$self` olmalıdır. Instance datasını instance'ı kilitlemeden güncellemek — ve paralel senaryolarda instance'ı ilerletmek — için kullanılır. Yürütme semantiği (lock/busy muafiyeti, subflow'da parent'ta karşılanma, auto değerlendirmesi) için bkz. [Transition Yürütme Modeli](#transition-yürütme-modeli-lock-ve-busy-check).
 
-:::info Well-known transition'ların keşfi ve yetkisi <sup>New</sup>
+:::info[Well-known transition'ların keşfi ve yetkisi <sup>New</sup>]
 `cancel`, `updateData` ve `exit` artık State fonksiyonunun `availableTransitions` listesinde — trigger tipine ve `availableIn` kapsamına göre — **configured key**'leriyle listelenir ve `roles` tanımları diğer transition'lar gibi listeyi **filtreler** (önceden `updateData`/`exit` üzerindeki `roles` hiç değerlendirilmiyordu). Roller execution'da enforce edilmez; `roles` client'a *ne sunulacağını* belirler. Execution tarafında ise `availableIn` **state gate** olarak uygulanır: kapsam dışı bir state'ten gelen istek `Transition:100024` ile reddedilir (önceden her state'ten çağrılabiliyordu). Bkz. [Built-in Functions → Well-known transition'lar listede](/docs/components/functions/built-in#well-known-transitionlar-listede).
 :::
 
@@ -991,11 +1012,11 @@ State Function yanıtında bu tanım, deadline bekliyorken şu şekilde görün�
 }
 ```
 
-:::warning v0.0.99 — `timeout.target` artık obje
+:::warning[v0.0.99 — `timeout.target` artık obje]
 State Function yanıtındaki `timeout.target` v0.0.99'da **string'den objeye** dönüştü (`{ key, stateType, stateSubType, labels, subFlow }`); hedef state key'ini `target.key` ile okuyun. Tanımdaki `timeout.target` (yukarıdaki tablo) string olarak kalır.
 :::
 
-:::info Subflow override'ı bloğu bütün olarak değiştirir
+:::info[Subflow override'ı bloğu bütün olarak değiştirir]
 Parent'ın `subFlow.overrides.timeout` tanımı child'ın `timeout` bloğunu **annotations dahil bütün olarak** değiştirir; alanlar merge edilmez. <sup>New</sup> v0.0.95 öncesinde bu override hiç uygulanmıyordu — override ile başlatılan child instance'lar artık gerçekten timeout'a düşer. Ayrıntı: [SubFlow Overrides](../how-to/subflow-overrides).
 :::
 
@@ -1045,6 +1066,95 @@ Workflow (global), state ve task seviyesinde tanımlanabilir. Öncelik sırası:
 | `backoffMultiplier` | number | Hayır | `2.0` | Exponential backoff çarpanı (`minimum: 1`) |
 | `maxDelay` | string | Hayır | — | Denemeler arası maksimum bekleme süresi (ISO 8601) |
 | `useJitter` | boolean | Hayır | `true` | Deneme gecikmesine rastgele jitter eklenip eklenmeyeceği |
+
+---
+
+## History Modu
+
+<sup>New</sup> v0.0.100 Çok sık çalışan ve sonradan bakılmayan bir akış (sorgu, introspection, teklif hesaplama) uzun ömürlü bir iş süreciyle aynı depolama maliyetini ödüyordu: her ekleme için bir `InstancesData` satırı, her transition için bir `InstanceTransitions` satırı ve `InstanceTasks` journal satırları. `attributes.history: "none"` böyle bir akışı **tek seferlik** (one-shot) olarak işaretler: akış yine bir state machine'dir (state'ler, transition'lar, correlation, sorgulanabilir instance), ama transition/task geçmişi yazmaz ve tek bir data satırı bırakır.
+
+```json
+{
+  "key": "payments-quote",
+  "attributes": {
+    "type": "F",
+    "history": "none",
+    "states": []
+  }
+}
+```
+
+| Değer | Anlamı |
+|-------|--------|
+| `full` | Varsayılan (alan yoksa da). Tam geçmiş yazılır |
+| `none` | Tek seferlik akış: transition ve task geçmişi yazılmaz, veri tek satır olarak flush edilir |
+
+`history`, `attributes` kökünde (`type` ve `executionType` ile aynı seviyede) durur, **`config` altında değil**. Bilinmeyen bir değer publish hatasıdır. Daha eski runtime veya şema alanı **sessizce yok sayar** — şema paketini (`@burgan-tech/vnext-schema` 0.0.56) ve runtime'ı birlikte yükseltin. **Geri alma:** alanı silmek yeterlidir; migration gerekmez.
+
+### Ne saklanır, ne zaman yazılır
+
+- **`InstanceTransitions` ve `InstanceTasks` hiç yazılmaz.** Transition kaydı yalnızca bellekte tutulur (betikler `CurrentTransition`'ı yine okur).
+- **`InstancesData` bellekte biriktirilir** ve tek satır olarak şu noktalarda yazılır (flush):
+
+| Flush noktası | Not |
+|---------------|-----|
+| Finish | Tamamlanma, flush ile **aynı transaction**'da kaydedilir — Completed asla verisi olmadan commit edilmez |
+| SubFlow devri | Correlation ile birlikte, child başlatılmadan önce yazılır (child'ın input mapping'i, output mapping ve devam okuması parent'ı veritabanından okur) |
+| Pipeline içi fault | En iyi gayretle (best effort), kendi unit of work'ünde; yazma başarısızsa loglanır ve fault devam eder |
+
+- **Satır sayısı:** SubFlow'suz bir instance için **1**; N SubFlow state'inden geçen bir instance için en fazla **1 + 2·N** (devir yazımı + SubFlow output mapping eklemesi).
+- Instance satırı, incident'lar, job'lar ve correlation'lar her akışta olduğu gibi yazılır.
+- Finish olmayan bir state'te duran bir aşama **fault** sayılır: instance `Instance:100046` (`HistoryNoneNotTerminal`) incident'ı ile fault edilir ve tamponu yazılır.
+
+### Publish kısıtları
+
+`history: "none"` olan akış başlamalı, yalnızca otomatik transition'larla ilerlemeli ve her zaman bitmelidir. Aşağıdaki kurallar **hata** olarak (uyarı değil) reddedilir ve yalnızca akışın **kendi** tanımına uygulanır:
+
+| Kural | vnext-schema'da da |
+|-------|--------------------|
+| En az bir Finish state | Evet |
+| Tüm state transition'ları otomatik (`triggerType: 1`) | Evet |
+| SubFlow state'leri dahil Finish olmayan her state'in en az bir transition'ı var | Evet |
+| `sharedTransitions`, `cancel`, `exit`, `updateData` yok | Evet |
+| Workflow `timeout` yok, `subFlow.overrides.timeout` yok | Evet |
+| `interaction.longPoll` yok, Wizard state yok, Suspended / Busy / Human subtype yok | Evet |
+| Her state bir Finish state'e ulaşabiliyor (döngü, yalnızca `$self` döngüsü, çıkmaz yok) | **Hayır — yalnızca runtime** |
+
+**İzin verilenler:** manuel `startTransition`, workflow seviyesi `event` ile başlatma, SubFlow state'leri ve SubProcess task'ları.
+
+### SubFlow kuralı
+
+- `none` bir parent'ın **SubFlow (`S`)** child'ı da `none` olmalıdır. Child, tanımını yükledikten hemen sonra ve **hiçbir şey yazmadan** bunu denetler; değilse `Instance:100044` (`HistoryNoneSubFlowChildNotEligible`, `400`) ile reddeder ve parent bir incident ile **fault** olur. Kural domain'ler arası da geçerlidir.
+- **SubProcess (`P`)** child'ları muaftır.
+- `full` bir parent altında `none` bir child sorunsuzdur.
+- Publish yalnızca akışın kendi tanımını doğrular; SubFlow child'ları başlarken denetlenir.
+
+### HTTP davranışı
+
+| Endpoint | `none` instance için |
+|----------|----------------------|
+| `POST …/instances/{instance}/retry` | `409` `Instance:100045` (`HistoryNoneRetryNotSupported`) |
+| `GET …/instances/{instance}/transitions` | `200`, boş liste |
+| `GET …/functions/tasks` | `200`, boş liste |
+| `GET …/functions/actions?taskId=` | `200`, boş liste (`404` değil) |
+| Transition / state metrikleri | Boş |
+
+Instance **çalışırken data satırı yoktur**: instance / data / state okumaları `null` veri döner ve attribute filtreleri instance'ı bulmaz.
+
+### Hata kodları
+
+| Kod | Ad | HTTP | Ne zaman |
+|-----|----|------|----------|
+| `Instance:100044` | `HistoryNoneSubFlowChildNotEligible` | 400 | `none` parent'ın SubFlow child'ı `none` değil |
+| `Instance:100045` | `HistoryNoneRetryNotSupported` | 409 | `none` instance'ta retry |
+| `Instance:100046` | `HistoryNoneNotTerminal` | — (incident) | Aşama Finish olmayan bir state'te durdu; instance fault edilir |
+
+### Kabul edilen kısıtlar
+
+- Commit sonrası fault'lar, job timeout'ları ve process çökmeleri bellekteki veri gittikten sonra yeni bir kapsamda işlenir: instance incident ile fault olur ama **son flush'tan sonraki veri kaybolur**.
+- **Retry yoktur** (`409`): retry'ın dayandığı açık transition kaydı ve task journal yazılmaz.
+- `$PreviousUser` / `$PreviousBehalfOfUser` grant'leri hiç çözülmez (transition geçmişi yok).
+- `x-encryption` alanları **flush anında** şifrelenir; çalışma sırasında betikler yeni yazılan değerleri düz metin görür ve `DecryptAsync` bunlar için `null` döner.
 
 ---
 
@@ -1110,7 +1220,7 @@ Instance data her state'de merge ile genişlediğinden master schema'da **`requi
 
 Aynı `scripts` yapısı her mapping objesinde (transition `mapping`, `rule`, `timer`, subflow `mapping`, task `onExecutionTasks[].mapping` vb.) de tanımlanabilir.
 
-:::warning Publish kontrolü (v0.0.99)
+:::warning[Publish kontrolü (v0.0.99)]
 `scripts.allowedAssemblies` (flow seviyesinde veya herhangi bir script slot'unda) bildiren her workflow publish'te denetlenir: her **basit assembly adı** ya bir framework (TPA) assembly'si olarak ya da `Scripting:Sandbox:PluginDirectory` içindeki bir DLL olarak çözülmelidir. Çözülemezse publish `400` döner:
 
 ```
