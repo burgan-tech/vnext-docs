@@ -106,6 +106,7 @@ const sidebars: SidebarsConfig = {
         'how-to/resource-lock',
         'how-to/subflow-overrides',
         'how-to/human-task-approval',
+        'how-to/file-fields',
         'how-to/view-selection',
         'how-to/async-sync',
         'how-to/observability',

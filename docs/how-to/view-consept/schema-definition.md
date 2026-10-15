@@ -445,6 +445,17 @@ Aynı versiyonla yeniden publish edilen bir şema ETag'i değiştirmez. `x-roles
 
 ---
 
+### `x-storage` — Dosya Alanı (Blob Deposuna Taşıma)
+
+Master schema'daki bir özelliğin (ya da bir dizi özelliğin `items` şemasının) baytlarını instance verisi yerine bir Dapr output binding'e (blob deposu) yazdırır; kayıtta yalnızca küçük bir handle kalır.
+
+```json
+"identityDocument": { "type": "object", "x-storage": { "binding": "vnext-blob-local" } },
+"files": { "type": "array", "items": { "type": "object", "x-storage": { "binding": "vnext-blob-s3" } } }
+```
+
+`binding` zorunlu, boş olmayan bir string'dir ve orchestration sidecar'ında yüklü bir binding bileşenini adlandırır. Yalnızca iç içe `properties` ile erişilen yollarda (ya da öyle erişilen bir dizinin `items` şemasında) izinlidir; `$defs`, birleştiriciler, koşullular ve iç içe dizilerde yoktur. Özellik şeması **kalıcı** şekli tanımlar: `properties`/`required` altında `content` bildirmek publish hatasıdır. Client tarafı gidiş-dönüş, handle şekli ve durum kodları için bkz. [Dosya Alanları](../file-fields).
+
 ### `x-filterOperators` — Filtrelenebilir Operatörler (Bilgi Amaçlı)
 
 Bir alanın hangi filtre operatörleriyle sorgulanabileceğini belirler. **Boş veya yok ise alan filtrelenemez.** Genellikle master şemada tanımlanır; instance listeleme/sorgulama davranışını besler.
