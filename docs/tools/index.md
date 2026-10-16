@@ -15,7 +15,7 @@ vNext platformu, geliştirme sürecini hızlandırmak için üç temel araç, bi
 | [vNext Forge Studio](./forge-studio) | Görsel workflow tasarımcısı (VS Code Extension + Desktop) | VS Code Marketplace / VSIX |
 | [vNext Workflow CLI](./workflow-cli) | Deploy, validation, CSX mapping işlemleri | `npm install -g @burgan-tech/vnext-workflow-cli` |
 | [vNext Template CLI](./template-cli) | Hazır workflow projesi oluşturma | `npx @burgan-tech/vnext-template <domain>` |
-| [vNext AI Toolkit](./ai-assisted-development) | AI destekli bileşen geliştirme (Claude Code plugin) | `claude plugin install vnext-ai-toolkit@burgan-tech` |
+| [vNext AI Toolkit](./ai-assisted-development) | AI destekli bileşen geliştirme, test ve denetim (Claude Code plugin) | `claude plugin install vnext-ai-toolkit@burgan-tech` |
 | [vnext-runtime MCP Server](./mcp-runtime) | MCP ajanları için bileşen / runtime / meta keşfi | `dotnet tool install -g BBT.Workflow.Mcp` |
 
 ## Araçlar Arası İlişki
