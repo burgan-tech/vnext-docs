@@ -116,3 +116,35 @@ spec:
 | `Operation` | Read-only | Binding operasyonu |
 | `Metadata` | Read-only | Binding metadata |
 | `Data` | Read-only | Binding verisi |
+
+<sup>New</sup> v0.0.102 — Input mapping çağrı başına şekli task üzerinde ayarlayabilir: `SetOperation(…)`, `SetData(…)` ve `SetMetadata(…)`. Tanım `operation`/`data`'yı sabitlemiyorsa veya her çağrıda farklı bir nesne adlandırılacaksa (ör. bir `x-storage` dosyasının nesne anahtarı) bunları kullanın:
+
+```csharp
+public Task<ScriptResponse> InputHandler(WorkflowTask task, ScriptContext context)
+{
+    var binding = task as DaprBindingTask;
+    var handle = context.Instance.Data.identityDocument;          // kalıcı x-storage handle'ı
+    binding.SetOperation("delete");
+    binding.SetMetadata(new() { ["key"] = FileObjectKey((string)handle.file) });   // bindings.aws.s3; bindings.localstorage için "fileName"
+    return Task.FromResult(new ScriptResponse());
+}
+```
+
+`FileObjectKey(file)`, `FileStorage:KeyPrefix` + file id'yi döner (GUID olmayan değer reddedilir); bkz. [Mappings](/docs/components/mappings).
+
+## Yanıt (output mapping)
+
+<sup>New</sup> v0.0.102 — Task'ın yanıtı binding'in cevabını output mapping'e taşır (önceden yanıtta veri yoktu, yalnızca `BindingName`/`Operation` metadata'sı vardı):
+
+| Alan | İçerik |
+|------|--------|
+| `Data` | Binding gövdesi: ayrıştırılabiliyorsa JSON (ör. `list`), değilse metin, değilse base64 (ikili bir nesnenin `get`'i) |
+| `Metadata["DataEncoding"]` | `Data`'nın biçimi: `json` \| `text` \| `base64` \| `none` |
+| `Headers` | Binding'in yanıt metadata'sı |
+
+Başarısız bir çağrı, genel Dapr client mesajı yerine sidecar'ın gerekçesini taşır (ör. `couldn't find output binding …`). Output mapping'i olmayan bir binding task'ı instance verisine yine hiçbir şey eklemez.
+
+## Local mod
+
+Binding task'ları varsayılan olarak Execution servisinde çalışır (Remote). <sup>New</sup> v0.0.102 — `Workflow:TaskInvocation:Modes:daprbinding = Local` ile task orchestration sidecar'ından, Orchestration host'un içinde çalışır (`LocalDaprBindingTaskInvoker`; Remote yolla aynı çekirdek). Bu ayar gönderilen yapılandırmada **yoktur**: yalnızca Execution app-id'sine scope'lu binding bileşenleri Local'de bulunamaz. Bileşenleri orchestration app-id'sine scope'lu olan `x-storage` depolarındaki nesneleri okuyan, listeleyen veya silen akışlar Local modu açmalı ya da bileşeni Execution app-id'sine de scope'lamalıdır. Bkz. [Task Çalıştırma Yönlendirmesi](/docs/configuration/task-invocation) ve [Dosya Alanları](/docs/how-to/file-fields).
+

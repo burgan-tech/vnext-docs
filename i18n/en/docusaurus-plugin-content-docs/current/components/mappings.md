@@ -201,6 +201,21 @@ var contentType = context.Headers?.["content-type"];
 var userAgent = context.Headers?.["user-agent"];
 ```
 
+**On the parent after a SubFlow.** <sup>New</sup> v0.0.102 — In a parent's SubFlow `OutputHandler` (completion and fault path), `context.Headers` now holds the headers of the request that settled the child (finish/exit, cancel, or a fault on a request); before, it was empty.
+
+- **Not carried:** any header whose name contains `authorization`, `cookie`, `token`, `secret` or `session` (a fixed floor), and framework headers (`x-subflow-depth`, parent/root/instance ids, `traceparent`, `content-*`, `dapr-*`, `grpc-*`, …). An operator can add exact names to the floor with `Workflow:SubFlow:CarriedHeaders:AdditionalDenied`.
+- **`role`** is always carried. Keys arrive **lower-cased**.
+- **Empty set:** a child finished by a timer or timeout, a job-timeout recovery or a downward cancel/fault cascade has no caller request; `context.Headers` is empty.
+
+```csharp
+// SubFlow OutputHandler on the parent
+var sub = context.Headers?["sub"];            // identity of the user who finished the child
+var lang = context.Headers?["accept-language"];
+// context.Headers never contains authorization / cookie / *token* / *secret* / *session*
+```
+
+For resume behaviour, the opt-out and the upgrade note see [Interfaces → ISubFlowMapping](./interfaces#isubflowmapping); for the settings see [Workflow Execution](/docs/configuration/workflow-execution).
+
 #### QueryParameters
 Contains query string parameters from Function tasks. This property is **only available when using Function tasks** and provides access to query parameters passed to the function endpoint.
 
@@ -725,7 +740,7 @@ public sealed record ScriptFile(byte[] Content, string? Name, string? MimeType, 
 | `domain`, `flow`, `instance` | The handle's `owner.domain`, `owner.flow`, `owner.instance` |
 | `file` | The handle's `file` GUID |
 
-`ScriptFile.ETag` is the SHA-256 of the bytes (lower-case hex, unquoted). The sandbox bans `System.IO`, so the content is a `byte[]`, not a stream.
+`ScriptFile.ETag` is the SHA-256 of the bytes (lower-case hex, unquoted). The content is a `byte[]`. <sup>New</sup> v0.0.102 — `ScriptFile.OpenRead()` wraps those bytes in a new read-only, seekable `MemoryStream` on every call; the sandbox allows the in-memory `System.IO` stream types, not the file system (see [Scripting / Sandbox](/docs/configuration/scripting)). The bytes read are verified against the handle's `size` and `eTag`; a mismatch fails the read (see [File Fields](/docs/how-to/file-fields)).
 
 ```csharp
 public class SendDocumentMapping : ScriptBase, IMapping
@@ -757,6 +772,26 @@ public class SendDocumentMapping : ScriptBase, IMapping
 - **No authorization** (no caller identity, `queryRoles` or `x-roles`) — this is a service-to-service read. The handle must still be in that instance's **latest** data and be valid; the binding never comes from the caller. Keep the `internal/file` route reachable from the internal network only.
 - Available only to scripts running in the **Orchestration** host. When no reader is available or the read fails, an `InvalidOperationException` is thrown.
 - The bytes are returned in memory: a mapping that puts them into a task request/response writes them into the **task record** (see [File Fields → Known issues](/docs/how-to/file-fields#known-issues)). Pass the handle, not the content, between mappings.
+
+### Writing a file (`PutFileAsync`) and the object key (`FileObjectKey`)
+
+<sup>New</sup> v0.0.102 — A script can write a processed file back and produce the object key for a Dapr Binding task:
+
+Call shape: `PutFileAsync(domain, flow, instance, component, byte[] | Stream, name?, mimeType?)` → `ScriptStoredFile`; `FileObjectKey(file)` → object key.
+
+```csharp
+var source = await GetFileAsync(context.Runtime.Domain, context.Instance.Flow, context.Instance.Id.ToString(), handle.file);
+using var input = source.OpenRead();                    // read-only, seekable MemoryStream over the verified bytes
+var output = new MemoryStream();
+// … hand input/output to a plugin library (PDF, TIFF, image) mounted in Scripting:Sandbox:PluginDirectory …
+output.Position = 0;
+var converted = await PutFileAsync(context.Runtime.Domain, context.Instance.Flow, context.Instance.Id.ToString(),
+    "vnext-blob-s3", output, "converted.pdf", "application/pdf");
+return new ScriptResponse { Data = new { convertedDocument = converted } };   // an x-storage path of the master schema
+```
+
+- **`PutFileAsync`** stores the bytes (`byte[]` or `Stream`) and returns a `ScriptStoredFile` in the persisted handle shape (`component`, `file`, `name`, `mimeType`, `size`, `eTag`, `owner`); `size` and `eTag` are computed from the bytes written. Placed at an `x-storage` path of the mapping or task output, it is kept as is as a valid handle. The domain must be served by this runtime; `component` must be an `x-storage` binding of that flow (latest version) or in `FileStorage:AllowedBindings`; the size is capped by `FileStorage:Upload:MaxBytes`. A refusal or a store failure throws. A stream that cannot report its length is buffered first. An object no output keeps is an orphan.
+- **`FileObjectKey(file)`** answers the object key of a stored file (`FileStorage:KeyPrefix` + file id; a non-GUID is refused). Use it in the metadata of a Dapr Binding task that reads, lists or deletes the object: `task.SetMetadata(new() { ["key"] = FileObjectKey(handle.file) })`. For the flow see [File Fields](/docs/how-to/file-fields) and [Dapr Binding Task](/docs/components/tasks/dapr-binding).
 
 ## ITransitionMapping Implementation
 

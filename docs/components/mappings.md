@@ -225,6 +225,21 @@ var contentType = context.Headers?.["content-type"];
 var userAgent = context.Headers?.["user-agent"];
 ```
 
+**SubFlow sonrası parent'ta.** <sup>New</sup> v0.0.102 — Bir parent'ın SubFlow `OutputHandler`'ında (tamamlanma ve hata yolu) `context.Headers` artık child'ı sonlandıran (finish/exit, iptal ya da bir istek üzerindeki hata) isteğin başlıklarını taşır; önceden boştu.
+
+- **Taşınmayanlar:** adında `authorization`, `cookie`, `token`, `secret` veya `session` geçen her başlık (sabit taban) ve framework başlıkları (`x-subflow-depth`, parent/root/instance id'leri, `traceparent`, `content-*`, `dapr-*`, `grpc-*`, …). Operatör `Workflow:SubFlow:CarriedHeaders:AdditionalDenied` ile tabana tam ad ekleyebilir.
+- **`role`** her zaman taşınır. Anahtarlar **küçük harfle** gelir.
+- **Boş küme:** timer veya timeout ile biten, job-timeout kurtarması ya da aşağı yönlü iptal/hata kaskadıyla sonlanan bir child'ın çağıran isteği yoktur; `context.Headers` boştur.
+
+```csharp
+// Parent'taki SubFlow OutputHandler
+var sub = context.Headers?["sub"];            // child'ı sonlandıran kullanıcının kimliği
+var lang = context.Headers?["accept-language"];
+// context.Headers asla authorization / cookie / *token* / *secret* / *session* içermez
+```
+
+Resume davranışı, opt-out ve yükseltme notu için bkz. [Interfaces → ISubFlowMapping](./interfaces#isubflowmapping); ayarlar için [Workflow Execution](/docs/configuration/workflow-execution).
+
 ### QueryParameters
 
 Yalnızca **Function** görevleri için anlamlıdır; dizin ile erişilir.
@@ -758,7 +773,7 @@ public sealed record ScriptFile(byte[] Content, string? Name, string? MimeType, 
 | `domain`, `flow`, `instance` | Handle'daki `owner.domain`, `owner.flow`, `owner.instance` |
 | `file` | Handle'daki `file` GUID'i |
 
-`ScriptFile.ETag`, baytların SHA-256'sıdır (küçük harf hex, tırnaksız). `System.IO` sandbox'ta yasak olduğundan içerik stream değil `byte[]` olarak döner.
+`ScriptFile.ETag`, baytların SHA-256'sıdır (küçük harf hex, tırnaksız). İçerik `byte[]` olarak döner. <sup>New</sup> v0.0.102 — `ScriptFile.OpenRead()` her çağrıda bu baytlar üzerinde yeni, salt okunur, konumlanabilir bir `MemoryStream` açar; sandbox `System.IO`'nun bellek içi stream türlerine izin verir, dosya sistemine izin vermez (bkz. [Scripting / Sandbox](/docs/configuration/scripting)). Okunan baytlar handle'ın `size` ve `eTag`'ine karşı doğrulanır; eşleşmezse okuma başarısız olur (bkz. [Dosya Alanları](/docs/how-to/file-fields)).
 
 ```csharp
 public class SendDocumentMapping : ScriptBase, IMapping
@@ -790,6 +805,26 @@ public class SendDocumentMapping : ScriptBase, IMapping
 - **Yetkilendirme yoktur** (çağıran kimliği, `queryRoles` veya `x-roles` değerlendirilmez) — servisler arası okumadır. Handle yine o instance'ın **güncel** verisinde bulunmalı ve geçerli olmalıdır; binding adı çağırandan alınmaz. `internal/file` rotası yalnızca iç ağdan erişilebilir tutulmalıdır.
 - Yalnızca **Orchestration** host'unda çalışan betiklerde kullanılabilir. Okuyucu yoksa veya okuma başarısız olursa `InvalidOperationException` fırlatılır.
 - Baytlar bellekte döner: onları task isteğine/yanıtına koyan bir mapping, baytları **task kaydına** yazar (bkz. [Dosya Alanları → Bilinen kısıtlar](/docs/how-to/file-fields#bilinen-kısıtlar)). Mapping'ler arasında içeriği değil handle'ı taşıyın.
+
+### Dosya yazma (`PutFileAsync`) ve nesne anahtarı (`FileObjectKey`)
+
+<sup>New</sup> v0.0.102 — Bir betik işlediği dosyayı geri yazabilir ve bir Dapr Binding task'ı için nesne anahtarını üretebilir:
+
+Çağrı şekli: `PutFileAsync(domain, flow, instance, component, byte[] | Stream, name?, mimeType?)` → `ScriptStoredFile`; `FileObjectKey(file)` → nesne anahtarı.
+
+```csharp
+var source = await GetFileAsync(context.Runtime.Domain, context.Instance.Flow, context.Instance.Id.ToString(), handle.file);
+using var input = source.OpenRead();                    // read-only, seekable MemoryStream over the verified bytes
+var output = new MemoryStream();
+// … hand input/output to a plugin library (PDF, TIFF, image) mounted in Scripting:Sandbox:PluginDirectory …
+output.Position = 0;
+var converted = await PutFileAsync(context.Runtime.Domain, context.Instance.Flow, context.Instance.Id.ToString(),
+    "vnext-blob-s3", output, "converted.pdf", "application/pdf");
+return new ScriptResponse { Data = new { convertedDocument = converted } };   // an x-storage path of the master schema
+```
+
+- **`PutFileAsync`** baytları (`byte[]` veya `Stream`) saklar ve kalıcı handle şeklinde bir `ScriptStoredFile` döner (`component`, `file`, `name`, `mimeType`, `size`, `eTag`, `owner`); `size` ve `eTag` yazılan baytlardan hesaplanır. Mapping veya task çıktısında bir `x-storage` yoluna konduğunda geçerli bir handle olarak olduğu gibi tutulur. Domain bu runtime'da servis ediliyor olmalı; `component` o akışın (son sürümünün) bir `x-storage` binding'i ya da `FileStorage:AllowedBindings` içinde olmalı; boyut `FileStorage:Upload:MaxBytes` ile sınırlıdır. Ret veya depo hatası exception fırlatır. Uzunluğunu bildiremeyen bir stream önce tamponlanır. Hiçbir çıktının tutmadığı bir nesne yetim kalır.
+- **`FileObjectKey(file)`** kayıtlı bir dosyanın nesne anahtarını döner (`FileStorage:KeyPrefix` + file id; GUID olmayan değer reddedilir). Nesneyi okuyan, listeleyen veya silen bir Dapr Binding task'ının metadata'sında kullanılır: `task.SetMetadata(new() { ["key"] = FileObjectKey(handle.file) })`. Akış için bkz. [Dosya Alanları](/docs/how-to/file-fields) ve [Dapr Binding Task](/docs/components/tasks/dapr-binding).
 
 ## Implementasyon Örnekleri
 

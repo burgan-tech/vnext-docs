@@ -252,6 +252,7 @@ description: vNext Workflow component — tanım, türler, capability matrix ve 
 | `exit` | object \| null | Hayır | Exit transition tanımı. Yalnızca `triggerType: 0` (manual) |
 | `updateData` | object \| null | Hayır | Update data transition. `target` her zaman `$self` |
 | `queryRoles` | array | Hayır | Root-level sorgu rolleri. DENY her zaman ALLOW'u geçersiz kılar. v0.0.99'dan itibaren `allOf` / `anyOf` kombinatörleri de kullanılabilir — bkz. [Query Roles](#query-roles) |
+| `rowSecurity` <sup>New</sup> v0.0.102 | object | Hayır | Satır güvenliği: rol anahtarlı satır filtreleri (`rules[]`: `roles` + opsiyonel `filter`). Instance listesine, tekil GET'e ve `GetInstances` / `GetInstance` task'lerine uygulanır; tanımlıysa **deny by default**. Yoksa flow filtrelenmez. Ayrıntı: [Satır Güvenliği](/docs/concepts/row-security) |
 | `output` <sup>New</sup> | object \| null | Hayır | Sync yanıt için opsiyonel output mapping (`scriptCode`, `IOutputHandler`). Ayrıntı: [Output Mapping](#output-mapping) |
 | `event` <sup>New</sup> | object \| null | Hayır | Workflow seviyesi event tanımı. Tanımlıysa harici bir event bu workflow'un **yeni bir instance'ını başlatabilir** (`action=start`). Transition seviyesi event'ten bağımsızdır. Ayrıntı: [Event Transition](#event-transition) |
 | `config` <sup>New</sup> | object \| null | Hayır | Flow seviyesi yapılandırma. Şu an built-in function cache ayarını (`functionCache`) içerir. `null` ise host varsayılanları geçerlidir. Ayrıntı: [Config (Built-in Function Cache)](#config-built-in-function-cache) |
@@ -342,6 +343,8 @@ State Function yanıtında bu değer v0.0.99'dan itibaren üst seviye `stateSubT
 - Override'lar child'a start anında damgalanır (start-time snapshot); zaten çalışan child'lar başladıkları override'larla devam eder. Kapsam **tek hop**tur: P → C → G zincirinde P'nin override'ları yalnızca C'nin state'lerine uygulanır.
 - Eski `overrides.views` / `viewOverrides` **deprecated**'dır; scoped view override'larıyla aynı `subFlow` içinde karıştırmak doğrulama hatasıdır.
 - `history: "none"` bir parent'ın SubFlow child'ı da `none` olmalıdır — bkz. [History Modu → SubFlow kuralı](#subflow-kuralı).
+- **Çözülmüş sürüm** <sup>New</sup> v0.0.102: parent, correlation'a child'ın **çözülmüş** sürümünü (child start yanıtındaki `flowVersion`) yazar — `process.version`'daki yazılmış referansı (`1.0`, `latest`) değil. Parent'ın sonraki okumaları (forward, descent, human task, retry) floating referansı yeniden çözmez; child'ın varsayılan sürümü sonradan değişse de çalışan child kendi sürümünde kalır. `flowVersion` döndürmeyen eski bir uzak runtime'da yazılmış referans korunur. Bkz. [Flow Varsayılan Sürümü](/docs/concepts/flow-default-version).
+- **Taşınan header'lar** <sup>New</sup> v0.0.102: child'ı sonlandıran isteğin (finish/exit, cancel ya da istek üzerinde fault) header'ları parent'a taşınır. Parent'ın output mapping'i bunları `context.Headers` olarak görür ve parent'ın resume hop'u varsayılan olarak bu header'larla çalışır (auto koşulları, onEntry task'leri, sonraki subflow'un input mapping'i). Timer / timeout ile biten child hiçbir header taşımaz. İçerik, hariç tutulan header'lar ve opt-out için bkz. [Interfaces](/docs/components/interfaces).
 
 #### Aktif SubFlow'a transition iletimi (proxy)
 
@@ -585,6 +588,15 @@ Ack endpoint'i `roles`/`rule` kolunu artık **kendisi değerlendirmez**. Karar n
 
 <sup>New</sup> v0.0.95 Bir state'i SubFlow olarak tüketen parent, child state'inin `fallbackTimeoutSeconds` (≥ 1) ve `roles` değerlerini `subFlow.overrides.states.<childState>.interaction.longPoll` altında alan bazında değiştirebilir; yazılmayan alan child değerini korur, `roles` listeyi bütün olarak değiştirir. `terminate` ve `rule` **override edilemez**; override, long-poll tanımlamayan bir state'e long-poll **eklemez** (log 20305) ve child `rule` kullanıyorsa `roles` override'ı yok sayılır (log 20306). Ayrıntı: [SubFlow Overrides](../how-to/subflow-overrides).
 
+#### Interaction wait (Busy subType + interaction)
+
+<sup>New</sup> v0.0.102 `subType: 5` (Busy) olan ve `interaction` tanımlayan bir state bir **interaction wait**'tir: instance burada bilerek **Busy** bekler ve dışarıdan bir tetikleyici (genellikle verisi state'in otomatik transition'ını açan bir `updateData`) bekler. Bu Busy'nin sahibi yoktur. İki çıkış yolu artık takılmaz:
+
+- **Tetikleyici gelir:** state'in kurulmuş (armed) ama vakti gelmemiş bir timer'ı artık Busy'nin canlı sahibi sayılmaz — yalnızca vakti gelmiş bir timer sahiptir. Önceden uzak bir timeout sahip sayılıyor ve `updateData`'nın sağladığı otomatik transition düşürülüyordu (`Instance:100031`).
+- **Tetikleyici hiç gelmez:** state'in zamanlanmış transition'ı ateşlendiğinde park edilmiş Busy'yi **devralır** ve çalışır (log EventId 10181). Busy'nin canlı bir sahibi varsa (başka bir transition'ın job'ı), bir long-poll ack'i bekleniyorsa ya da açık bir SubFlow instance'ı tutuyorsa yine reddedilir.
+
+Yalnızca timer bu istisnadan yararlanır: aynı state'teki **client isteği yine reddedilir**. `interaction` tanımlamayan bir Busy-subType state'te timer eskisi gibi busy olarak reddedilir. Örnek: [vnext-example `busy-subtype-armed-timer`](https://github.com/burgan-tech/vnext-example/tree/master/core/Workflows/busy-subtype-armed-timer).
+
 > İlgili doküman: [Async / Sync Yöntemi](/docs/how-to/async-sync)
 
 ---
@@ -653,6 +665,7 @@ Kanonik adım sırası (pipeline `LifecycleOrder` değerleri), her trigger tipin
 | `from` | string | Hayır | Kaynak state key'i |
 | `triggerType` | integer | **Evet** | Tetikleme tipi — aşağıdaki enum tablosuna bakın |
 | `triggerKind` | integer | Hayır | Otomatik transition alt tipi. Varsayılan: `0` |
+| `priority` <sup>New</sup> v0.0.102 | integer | Hayır | Otomatik transition'ların değerlendirme önceliği (`minimum: 1`, yoksa `100`). Düşük değer önce değerlendirilir. **Yalnızca state seviyesindeki, varsayılan olmayan otomatik** transition'larda (`triggerType: 1`, `triggerKind: 10` değil) geçerlidir; manuel, shared ya da start transition'da veya `triggerKind: 10`'da publish hatasıdır. Bir state'in otomatik transition'ları aynı etkin önceliği paylaşıyor ve en az biri açıkça `priority` yazmışsa publish uyarı loglar — bkz. [Otomatik Transition Sırası](#otomatik-transition-sırası) |
 | `versionStrategy` | string | **Evet** | `None`, `Patch`, `Minor`, `Major` |
 | `labels` | array | **Evet** | Çoklu dil etiketleri (`minItems: 1`) |
 | `schema` | object \| null | Hayır | Transition schema referansı (request body validation) |
@@ -787,6 +800,51 @@ Kurallar:
 - Event teslimatı `POST /api/v1/{domain}/workflows/{workflow}/instances/events?action=transition&transitionKey=<key>` endpoint'i üzerinden yapılır; topic ve Dapr Subscription tanımları domain'e aittir.
 
 > Uçtan uca akış (korelasyon kuralları, Dapr Subscription YAML'ları, runtime davranışları, test) için: [Event-Driven Workflow'lar](/docs/how-to/event-driven-workflows).
+
+---
+
+## Otomatik Transition Sırası
+
+v0.0.102 ile bir state'in otomatik transition'ları tanımlı bir sırayla değerlendirilir ve **ilk koşulu sağlanan kazanır**; geri kalanlar değerlendirilmez.
+
+1. Varsayılan olmayan otomatik transition'lar önce gelir, `priority`'ye göre **artan** sırada (`priority` yazılmamışsa `100` sayılır).
+2. Aynı etkin önceliğe sahip transition'lar **tanım sırasını** korur (stable sort). Hiç `priority` içermeyen bir state bu yüzden tanım sırasıyla değerlendirilir.
+3. Varsayılan otomatik transition (`triggerKind: 10`) **her zaman en sondadır** ve yalnızca başka hiçbir kural sağlanmadığında alınır.
+
+```json
+"transitions": [
+  {
+    "key": "to-low", "target": "low", "triggerType": 1, "priority": 30,
+    "versionStrategy": "Minor", "labels": [{ "language": "en-US", "label": "To Low" }],
+    "rule": { "location": "./src/LowRule.csx", "code": "<base64>" }
+  },
+  {
+    "key": "to-high", "target": "high", "triggerType": 1, "priority": 10,
+    "versionStrategy": "Minor", "labels": [{ "language": "en-US", "label": "To High" }],
+    "rule": { "location": "./src/HighRule.csx", "code": "<base64>" }
+  },
+  {
+    "key": "to-fallback", "target": "fallback", "triggerType": 1, "triggerKind": 10,
+    "versionStrategy": "Minor", "labels": [{ "language": "en-US", "label": "Fallback" }]
+  }
+]
+```
+
+`to-high` ikinci sırada tanımlanmış olsa da **önce** değerlendirilir; `to-fallback` yalnızca iki kural da sağlanmadığında alınır.
+
+- **Değerlendirme sıralıdır** (paralel değil): ucuz ve büyük olasılıkla eşleşen kuralları düşük `priority` numarasına koyun — pahalı bir kural yalnızca öncekilerin hiçbiri sağlanmadığında çalışır.
+- Bir kuralın script'i **exception fırlatırsa** adım başarısız olur ve sonraki kurallar değerlendirilmez; fırlatan kural atlanmaz. Hata, diğer adım hataları gibi error boundary'yi izler.
+- **Publish doğrulaması:** `priority < 1`; manuel, shared ya da start transition'da `priority`; varsayılan otomatik transition'da (`triggerKind: 10`) `priority` → publish hatası. Bir state'in otomatik transition'ları aynı etkin önceliği paylaşıyor ve en az biri `priority`'yi açıkça yazmışsa → publish uyarısı (log).
+
+:::warning[Davranış değişikliği: `triggerKind` yok ile `triggerKind: 0` arasındaki sıra]
+Bu sürümden önce runtime otomatik transition'ları nullable `triggerKind`'a göre sıralıyordu: `triggerKind` yazılmamış bir transition, açıkça `triggerKind: 0` yazılmış olandan dizideki yerinden bağımsız olarak **önce** değerlendiriliyordu. Artık ikisi de tanım sırasını korur. Bu ikisini karıştıran ve aynı anda birden fazla kuralı sağlanabilen state'lerde kazanan değişebilir. **Aksiyon:** böyle state'lerde transition'ları istenen sırada tanımlayın ya da kazanması gerekene daha düşük bir `priority` verin. İkisini karıştırmayan flow'lar birebir eskisi gibi çalışır.
+:::
+
+:::note[Rollback]
+Bu sürümden eski bir runtime `priority`'yi yok sayar ve dizi sırasıyla değerlendirir (yukarıdaki `triggerKind` istisnasıyla). `priority`'ye dayanan bir flow varken runtime'ı bu sürümün altına düşürmeyin.
+:::
+
+Çalışan örnek: [vnext-example `core/Workflows/auto-priority-lab/`](https://github.com/burgan-tech/vnext-example/tree/master/core/Workflows/auto-priority-lab). Pipeline içindeki yeri için bkz. [Transition Pipeline → Auto-Chain Yürütme](/docs/concepts/transition-pipeline#auto-chain-yürütme).
 
 ---
 

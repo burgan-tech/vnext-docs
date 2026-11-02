@@ -42,7 +42,7 @@ Every workflow definition must include the following top-level fields (per `vnex
 - `startTransition` — start transition definition
 - `labels` — multi-language labels
 
-Optional fields include `executionType` (v0.0.99, see [Execution mode](#execution-mode-executiontype)), `history` (<sup>New</sup> v0.0.100: `full` — the default — or `none`; see [History mode](#history-mode)), `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `scripts`, `output` (sync response mapping — see [Output Mapping](#output-mapping)), `event` (workflow-level event definition — see [Event-Driven Transitions](#event-event-driven-workflows)), and `config` (flow-level configuration — currently built-in function cache tuning, `config.functionCache.ttlSeconds`; host default 60s; the State Function is managed separately by the platform).
+Optional fields include `executionType` (v0.0.99, see [Execution mode](#execution-mode-executiontype)), `history` (<sup>New</sup> v0.0.100: `full` — the default — or `none`; see [History mode](#history-mode)), `schema`, `timeout`, `functions`, `extensions`, `sharedTransitions`, `errorBoundary`, `cancel`, `exit`, `updateData`, `queryRoles`, `rowSecurity` (<sup>New</sup> v0.0.102: role-keyed row filters for the instance list, the single GET and the `GetInstances` / `GetInstance` tasks; deny by default when declared — see [Row Security](/docs/concepts/row-security)), `scripts`, `output` (sync response mapping — see [Output Mapping](#output-mapping)), `event` (workflow-level event definition — see [Event-Driven Transitions](#event-event-driven-workflows)), and `config` (flow-level configuration — currently built-in function cache tuning, `config.functionCache.ttlSeconds`; host default 60s; the State Function is managed separately by the platform).
 
 ## Capability Matrix
 
@@ -266,11 +266,67 @@ POST /api/v1/{domain}/workflows/{workflow}/instances/{instance}/longpoll/ack
 
 If the client fails or cannot send the request, the platform automatically closes the long-poll after `fallbackTimeoutSeconds` elapses — preventing stuck connections on client crash or network failure.
 
+#### Interaction wait (Busy subType + interaction)
+
+<sup>New</sup> v0.0.102 A state with `subType: 5` (Busy) that declares an `interaction` is an **interaction wait**: the instance deliberately rests **Busy** there and waits for an outside trigger (usually an `updateData` whose data opens the state's automatic transition). Nobody owns that Busy. Both ways out no longer stall:
+
+- **The trigger arrives:** an armed timer of the state that is not yet due no longer counts as the Busy's live owner — only a timer whose time has come does. Before, a far-off timeout counted as the owner and the automatic transition satisfied by `updateData` was dropped (`Instance:100031`).
+- **The trigger never arrives:** when the state's scheduled transition fires, it **takes the parked Busy over** and runs (log EventId 10181). It is still refused when the Busy has a live owner (another transition's job), while a long-poll acknowledge is pending, or when an open SubFlow holds the instance.
+
+Only the timer qualifies: a **client request in the same state is still refused**. A Busy-subtype state without `interaction` keeps the old rule — its timer is refused as busy. Example: [vnext-example `busy-subtype-armed-timer`](https://github.com/burgan-tech/vnext-example/tree/master/core/Workflows/busy-subtype-armed-timer).
+
 See [Sync vs Async execution](/docs/how-to/async-sync).
 
 ### Error Boundary
 
 The **global error handling** definition at the workflow level. Applied if no boundary is defined at task or state level.
+
+## Automatic Transition Order
+
+Since v0.0.102 a state's automatic transitions are evaluated in a defined order and **the first satisfied rule wins**; the rest are not evaluated. An automatic transition may declare an optional `priority`:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `priority` | integer | no | Evaluation priority among the state's automatic transitions (`minimum: 1`, absent = `100`). Lower is evaluated first. Valid **only on state-level, non-default automatic** transitions (`triggerType: 1`, not `triggerKind: 10`) |
+
+1. Non-default automatic transitions come first, by `priority` **ascending** (a transition without `priority` counts as `100`).
+2. Transitions with the same effective priority keep their **declaration order** (stable sort). A state without any `priority` is therefore evaluated in declaration order.
+3. The default automatic transition (`triggerKind: 10`) is **always last** and is taken only when no other rule was satisfied.
+
+```json
+"transitions": [
+  {
+    "key": "to-low", "target": "low", "triggerType": 1, "priority": 30,
+    "versionStrategy": "Minor", "labels": [{ "language": "en-US", "label": "To Low" }],
+    "rule": { "location": "./src/LowRule.csx", "code": "<base64>" }
+  },
+  {
+    "key": "to-high", "target": "high", "triggerType": 1, "priority": 10,
+    "versionStrategy": "Minor", "labels": [{ "language": "en-US", "label": "To High" }],
+    "rule": { "location": "./src/HighRule.csx", "code": "<base64>" }
+  },
+  {
+    "key": "to-fallback", "target": "fallback", "triggerType": 1, "triggerKind": 10,
+    "versionStrategy": "Minor", "labels": [{ "language": "en-US", "label": "Fallback" }]
+  }
+]
+```
+
+`to-high` is evaluated **first** even though it is declared second; `to-fallback` is taken only when neither rule is satisfied.
+
+- **Evaluation is sequential** (not parallel): put cheap and likely rules at a low `priority` number — an expensive rule is only paid for when nothing before it was satisfied.
+- If a rule's script **throws**, the step fails and later rules are not evaluated; a throwing rule is not skipped. The failure follows the error boundary like any other step failure.
+- **Publish validation:** `priority < 1`; `priority` on a manual, shared or start transition; `priority` on the default automatic transition (`triggerKind: 10`) → publish error. Automatic transitions of one state sharing an effective priority while at least one declares it explicitly → publish warning (log).
+
+:::warning[Behaviour change: absent `triggerKind` vs `triggerKind: 0`]
+Before this release the runtime sorted automatic transitions by the nullable `triggerKind`: a transition with no `triggerKind` was evaluated **before** one with an explicit `triggerKind: 0`, regardless of its array position. Both now keep declaration order. In states that mix the two and have more than one satisfiable rule, the winner can change. **Action:** in such states declare the transitions in the intended order, or give the one that must win a lower `priority`. Flows that do not mix the two evaluate exactly as before.
+:::
+
+:::note[Rollback]
+A runtime older than this release ignores `priority` and evaluates in array order (with the `triggerKind` exception above). Do not roll the runtime back below this release while a flow depends on `priority`.
+:::
+
+Working example: [vnext-example `core/Workflows/auto-priority-lab/`](https://github.com/burgan-tech/vnext-example/tree/master/core/Workflows/auto-priority-lab). For its place in the pipeline see [Transition Pipeline](/docs/concepts/transition-pipeline).
 
 ## Transition Execution Model: Lock and Busy Check
 
@@ -320,6 +376,11 @@ Autos are evaluated after **every** `updateData`, so "accumulate data, advance w
 :::info[Deprecation: `subflow-chain-reserve-claim`]
 The old accept-time chain reserve (the `ChainReserved` claim, the `…/busy` and `internal/busy-release` routes) is **deprecated** since v0.0.100 and will be removed no earlier than v0.0.103. This runtime keeps the receiving side: a reserved relay from an older parent is still admitted at the leaf as before. **Mixed-version domains need no action.**
 :::
+
+### SubFlow: resolved version and carried headers
+
+- **Resolved version** <sup>New</sup> v0.0.102: the parent writes the child's **resolved** version (the `flowVersion` of the child's start response) to the correlation — not the authored reference in `process.version` (`1.0`, `latest`). Later parent reads (forward, descent, human task, retry) never re-resolve the floating reference; a running child stays on its version even if the child flow's default version moves. An older remote runtime that returns no `flowVersion` keeps the authored reference. See [Flow Default Version](/docs/concepts/flow-default-version).
+- **Carried headers** <sup>New</sup> v0.0.102: the headers of the request that settled the child (finish/exit, cancel, or a fault on a request) travel to the parent. The parent's output mapping sees them as `context.Headers`, and by default the parent's resumed hop runs with them (auto conditions, onEntry tasks, the next subflow's input mapping). A child finished by a timer or timeout carries nothing. For the contents, the excluded headers and the opt-out see [Interfaces](/docs/components/interfaces).
 
 ## History mode
 

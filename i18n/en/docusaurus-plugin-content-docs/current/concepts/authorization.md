@@ -170,6 +170,7 @@ Author the first combinator only after every pod — and every domain that stamp
 | State `alias` | `roles` | The role-masked view of a state |
 | Master schema property | `x-roles` | Column-level data visibility (combinators accepted since v0.0.99) |
 | Master schema property | `x-masking.roles` / `x-encryption.roles` <sup>New</sup> v0.0.99 | Who sees the raw value (allow-only exemption list; no combinators) |
+| Flow | `rowSecurity.rules[].roles` <sup>New</sup> v0.0.102 | Row-level visibility: the instance list, the single GET and the `GetInstances` / `GetInstance` tasks return only the instances the matched rules open — see [Row security](#row-security-rowsecurity) |
 
 ## One Evaluation Core <sup>New</sup>
 
@@ -183,9 +184,28 @@ The caller role set that feeds the grant evaluation above is resolved through a 
 
 ---
 
+## Row security (rowSecurity)
+
+<sup>New</sup> v0.0.102 The row counterpart of field-level visibility (`x-roles`, `x-masking`, `x-encryption`) is `attributes.rowSecurity`: a flow declares a filter per role, and the runtime ANDs it into the instance list, the single GET and the `GetInstances` / `GetInstance` tasks. In short:
+
+- **Deny by default:** in a flow that declares `rowSecurity`, a caller no rule matches sees no rows; "X sees everything" is an explicit unfiltered rule. A flow without `rowSecurity` is not filtered.
+- The filters of the matched rules are **ORed** and **ANDed** with the caller's own filter; role-resolution or parameter failures **never widen** visibility. Rule roles are static roles or `$InstanceStarter` / `$InstanceBehalfOfStarter`; `allOf` / `anyOf` and other reserved roles are not accepted.
+- An excluded instance answers the same `404` as a missing one on GET; list counts cover visible rows only.
+- **Not an access boundary:** `functions/state`, `functions/data`, `functions/view` etc., transitions and `GetInstanceData` are not filtered. Guard those surfaces with `authorize` at the gateway.
+- **Gateway precondition:** the gateway must write the `role` header and every header a rule reads from the token (strip/overwrite, never append); `QueryParameters` are client-controlled.
+
+:::warning[A lookup failure now fails the read]
+Since v0.0.102 the instance list, the single GET and the `GetInstances` / `GetInstance` tasks look the flow definition up; when the lookup fails, the read fails with the same error — with or without `rowSecurity`: `Instance:100052` (409, invalid default-version pointer), `Instance:100053` (503, version registry unavailable), `Instance:100051` (404, flow version not activated). Warning 20509 is logged.
+:::
+
+Details: [Row Security](/docs/concepts/row-security).
+
+---
+
 ## Related
 
 - [Workflow component](/docs/components/workflow) — `queryRoles`, transition `roles`, state `alias`
 - [Schema component](/docs/components/schema) — master schema and field-level visibility
 - [Built-in Functions](/docs/components/functions/built-in) — State/Data Function authorization behavior and authorize endpoints
 - [Instance Data](/docs/concepts/instance-data) — `Instance.Data` and ScriptContext
+- [Row Security](/docs/concepts/row-security) — row-level visibility with `attributes.rowSecurity`

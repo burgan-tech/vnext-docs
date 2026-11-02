@@ -35,5 +35,38 @@ Makes the runtime write the bytes of a master-schema property (or of an array pr
 "files": { "type": "array", "items": { "type": "object", "x-storage": { "binding": "vnext-blob-s3" } } }
 ```
 
-`binding` is a required, non-empty string naming a binding component loaded on the orchestration sidecar; `x-storage` takes no other member. It is valid in the master role only, and only on paths reachable through nested `properties` (or on the `items` schema of a **single-level** array reached that way) — not at the root, inside another file node, under `$defs`, combinators, conditionals or nested arrays. The property schema describes the **persisted** shape: declaring `content` under `properties`/`required` is a publish error. For the client round trip, the handle shape and status codes, see [File Fields](../file-fields).
+`binding` is a required, non-empty string naming a binding component loaded on the orchestration sidecar. <sup>New</sup> v0.0.102 / vnext-schema 0.0.58 — the optional `transport` chooses how a client may send the bytes: `inline` (default; base64 `content` in the JSON body), `stream` (a separate streamed upload request, referenced at the field by its `file` id; inline `content` from a client is refused) or `any` (both). `x-storage` takes no other member.
 
+```json
+"scan": { "type": "object", "x-storage": { "binding": "vnext-blob-s3", "transport": "stream" } }
+```
+
+It is valid in the master role only, and only on paths reachable through nested `properties` (or on the `items` schema of a **single-level** array reached that way) — not at the root, inside another file node, under `$defs`, combinators, conditionals or nested arrays. The property schema describes the **persisted** shape: declaring `content` under `properties`/`required` is a publish error. For the client round trip, the handle shape and status codes, see [File Fields](../file-fields).
+
+### `x-validation` — custom validation (informational)
+
+Defined by the backend team: `{ rule, parameters?, errorMessages? }`. <sup>New</sup> vnext-schema 0.0.57 — the reserved rule `remote` makes the client send the field value to a backend function and read the outcome from its response:
+
+| Member | Meaning |
+|--------|---------|
+| `source` | URN of the **function** the client calls to validate the value. Required when `rule` is `remote` |
+| `resultField` | Path in the response whose truthy value means the value is valid |
+| `messageField` | Path in the response holding the message shown when the value is invalid |
+| `trigger` | When the client calls the function — `change` \| `blur` |
+| `debounce` | Milliseconds to wait after the last change before calling the function (`0` or more) |
+
+```json
+"iban": {
+  "type": "string",
+  "x-validation": {
+    "rule": "remote",
+    "source": "urn:vnext:fn:shared:validate-iban",
+    "resultField": "isValid",
+    "messageField": "message",
+    "trigger": "blur",
+    "debounce": 300
+  }
+}
+```
+
+`x-validation` takes no other member; a `remote` rule without `source` is refused by schema validation.

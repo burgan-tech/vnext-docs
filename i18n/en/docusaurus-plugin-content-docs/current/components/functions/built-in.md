@@ -42,6 +42,13 @@ The old `…/functions/hierarchy` route was removed in v0.0.99 and replaced by [
 
 > **Note (`history: "none"`):** <sup>New</sup> v0.0.100 For an instance whose workflow sets `attributes.history: "none"`, the task-history functions `functions/tasks` and `functions/actions?taskId=` answer `200` with an **empty list** (no task records are written; `actions` does not return `404`). See [Workflow → History mode](/docs/components/workflow#history-mode).
 
+> **Note (running tasks):** <sup>New</sup> v0.0.102 `functions/tasks` no longer lists a task while it is running. The journal row is written once, at completion, with its final `status` (`completed` | `faulted`), `businessStatus`, payloads and timings; rows with `waiting` / `busy` exist only for tasks journaled by older runtimes. A row on a current runtime:
+>
+> ```json
+> { "id": "…", "taskKey": "send-otp", "status": "completed", "businessStatus": "success",
+>   "startedAt": "…", "finishedAt": "…", "durationMs": 184.2 }
+> ```
+
 :::caution[QueryRoles authorization]
 All read functions (**state**, **data**, **view**, **schema**) authorize the caller against the `queryRoles` defined on the instance's **current state** and the flow level. If the caller has no `allow` role, the function returns **`403`**. See [QueryRoles authorization in read functions](#queryroles-authorization-in-read-functions).
 :::

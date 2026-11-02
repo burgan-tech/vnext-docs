@@ -12,6 +12,12 @@ GetInstances Task, sayfalama, sıralama ve filtreleme desteğiyle diğer workflo
 Task veriyi **çağıranın sunduğu credential** ile okur ve hedef workflow'un master şemasındaki `x-roles` / `x-masking` / `x-encryption` korumalarını uygular — instance GET / liste endpoint'leriyle aynı okuma servisi. Önceden Get* task'leri sistem görünürlüğüyle (`SystemRead`) okuyordu; bu kaldırıldı. Sunulan başlık seti: input mapping'deki başlıklar + mapping'de verilmemiş ya da boş bırakılmış her credential başlığı (`sub`, `act_sub`, `position`, `client_id`, `role`; 1024 karakteri aşan / kontrol karakteri içeren değerler ve morph-idm'in çözdüğü roller iletilmez). Başka bir kimlikle (ör. servis rolü) okumak için credential'ı input mapping'de verin. `X-Request-Id` fill-if-absent iletilir. Ayrıntı: [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 :::
 
+:::note[Satır güvenliği (`rowSecurity`) — v0.0.102]
+Hedef workflow `attributes.rowSecurity` tanımlıyorsa task, instance listesiyle aynı satır kurallarıyla — aynı domain'de ve cross-domain — **task'in sunduğu credential ve header'larla** filtrelenir. Bir kuralın okuduğu header (ör. `x-branch-code`) otomatik iletilmez; task'in input mapping'inde verin, aksi halde o kural hiçbir şey katmaz. Sayfalar ve toplamlar yalnızca görünür satırları kapsar.
+
+v0.0.102 ile task hedef flow'un tanımını arar; arama başarısız olursa task de o hatayla başarısız olur — `rowSecurity` olsun ya da olmasın: `Instance:100052` (409, geçersiz varsayılan sürüm pointer'ı), `Instance:100053` (503, sürüm registry'si okunamıyor), `Instance:100051` (404, flow sürümü aktive edilmemiş). Ayrıntı: [Satır Güvenliği](/docs/concepts/row-security).
+:::
+
 ## Görev Tanımı
 
 > **Schema:** `task-definition.schema.json`

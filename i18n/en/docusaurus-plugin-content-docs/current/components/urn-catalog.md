@@ -128,6 +128,7 @@ Each `res-key` corresponds to the system flow where the related component is sto
 | `function` | `sys-functions` | [Function](/docs/components/functions/) |
 | `view` | `sys-views` | [View](/docs/components/view) |
 | `task` | `sys-tasks` | [Task](/docs/components/tasks/) |
+| — | `sys-version-registry` <sup>New</sup> v0.0.102 | [Flow default version](/docs/concepts/flow-default-version) — one instance per flow (key = flow key) holds the default-version pointer. It stores no component definition and has no documented `res-key` in this release |
 
 :::tip[View `dataSchema` usage]
 This structure is also used to address the schema a view is bound to in its `dataSchema` field — e.g. `urn:vnext:res:schema:customer:registration-form`. For details in the Pseudo UI context, see [Schema Definition](/docs/how-to/view-consept/schema-tanimi).

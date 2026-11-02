@@ -157,6 +157,26 @@ Subflow **tamamlandığında** çağrılır; sonuçları parent iş akışına a
 
 **Dönüş:** Parent'a merge edilecek işlenmiş veri (**Data** dahil); `ScriptResponse.Data` **otomatik olarak parent workflow instance'a merge** edilir.
 
+**Taşınan başlıklar (`context.Headers`).** <sup>New</sup> v0.0.102 — Child'ı sonlandıran isteğin (finish/exit ile tamamlanma, iptal ya da bir istek üzerindeki hata) başlıkları parent'a taşınır. Tamamlanma ve hata yolunda `OutputHandler` bunları `context.Headers` olarak okur; önceden `context.Headers` boştu.
+
+```csharp
+// SubFlow OutputHandler on the parent
+var sub = context.Headers?["sub"];            // identity of the user who finished the child
+var lang = context.Headers?["accept-language"];
+// context.Headers never contains authorization / cookie / *token* / *secret* / *session*
+```
+
+- **Taşınmayanlar:** adında `authorization`, `cookie`, `token`, `secret` veya `session` geçen her başlık (kodda sabit taban; yapılandırma yalnızca `AdditionalDenied` ile ekleme yapabilir) ve framework başlıkları (`x-subflow-depth`, parent/root/instance id'leri, `traceparent`, `content-*`, `dapr-*`, `grpc-*`, …).
+- **`role`** her zaman taşınır; anahtarlar **küçük harfle** gelir.
+- **Boş küme:** timer veya timeout ile biten, job-timeout kurtarması ya da aşağı yönlü bir iptal/hata kaskadıyla sonlanan child'ın çağıran isteği yoktur; hiçbir şey taşınmaz ve `context.Headers` boştur.
+- **Denylist modeli:** tabana takılmayan her başlık taşınır; `x-api-key` gibi olağandışı adlı bir kimlik bilgisi `AdditionalDenied`'a eklenmedikçe parent'a ulaşır.
+
+**Resume.** Tamamlanma, hata ve iptalde parent'ın devam eden hop'u varsayılan olarak bu başlıklarla çalışır (`Workflow:SubFlow:CarriedHeaders:ApplyToResume`, varsayılan `true`): auto koşullar, çağıran kimlik bilgisini ileten onEntry task'ları ve bir sonraki subflow'un `InputHandler`'ı child'ı sonlandıranın isteğini görür. `Actor` `System` olarak kalır; transition yetkilendirmesi değişmez. Eski davranışı isteyen domain `ApplyToResume=false` ile çıkar (env: `Workflow__SubFlow__CarriedHeaders__ApplyToResume=false`); `Emit=false` taşımayı tamamen kapatır. Ayarlar: [Workflow Execution](/docs/configuration/workflow-execution).
+
+:::warning[Yükseltme notu]
+v0.0.102'den önce parent'ın SubFlow `OutputHandler`'ı boş bir `context.Headers` görüyor ve devam eden hop boş başlıklarla çalışıyordu; bu yüzden ilk subflow'dan sonraki her subflow çağıranın kimliği olmadan başlıyordu. Subflow sonrasında başlıkların boş olduğunu varsayan betikler (ör. başlık yoksa varsayılan bir kimlik kullanan koşullar veya mapping'ler) artık farklı davranır. Bu betikleri gözden geçirin ya da domain için `ApplyToResume=false` ayarlayın.
+:::
+
 ### Subflow yürütme akışı
 
 1. Parent workflow subflow oluşturmayı tetikler.

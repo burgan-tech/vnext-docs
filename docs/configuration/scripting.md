@@ -127,6 +127,39 @@ Microsoft.Win32
 
 **Spesifik izin (allow):** `System.Reflection.MemberInfo.Name` — yasak `System.Reflection`'a rağmen bu üyeye erişime izin verilir.
 
+Bu namespace ban'i zorunlu platform tabanıdır; `BannedNamespaces` ona yalnızca ekleme yapabilir, girdi kaldıramaz. `System.Threading` ve `System.Threading.Tasks` izinlidir.
+
+### `System.IO` altında izinli stream türleri
+
+<sup>New</sup> v0.0.102 — Betikler bir dosyanın baytlarını bellekte işleyebilsin diye (`GetFileAsync` ile oku, dönüştür, `PutFileAsync` ile geri yaz; bkz. [Dosya Alanları](/docs/how-to/file-fields)) aşağıdaki türler, namespace'leri yasak olsa da izinlidir; hiçbiri kendi başına bir yol, handle veya soket açmaz:
+
+| Namespace | İzinli türler |
+|-----------|---------------|
+| `System.IO` | `Stream`, `MemoryStream`, `BufferedStream`, `BinaryReader`, `BinaryWriter`, `TextReader`, `TextWriter`, `StringReader`, `StringWriter`, `StreamReader`, `StreamWriter`, `SeekOrigin`, `IOException`, `EndOfStreamException`, `InvalidDataException` |
+| `System.IO.Compression` | `GZipStream`, `DeflateStream`, `BrotliStream`, `ZLibStream`, `CompressionLevel`, `CompressionMode`, `ZipArchive`, `ZipArchiveEntry`, `ZipArchiveMode` (`System.IO.Compression` assembly'si `AllowedAssemblies`'te veya mapping'in `scripts.allowedAssemblies`'inde olmalıdır) |
+
+`System.IO`'nun geri kalanı yasak kalır: `File`, `FileStream`, `FileInfo`, `Directory`, `Path`, `DriveInfo`, `UnmanagedMemoryStream`, pipe'lar, memory-mapped dosyalar, `System.IO.Compression.ZipFile`.
+
+### Yasak üyeler (her namespace'te)
+
+<sup>New</sup> v0.0.102 — Üye seviyesindeki ban'ler, izinli bir türden namespace ban'inin yasakladığı şeye giden yolları kapatır (bir reflection nesnesi `dynamic` üzerinden çağrılabilir ve analizöre sembol bırakmaz):
+
+| Üye | Neden |
+|-----|-------|
+| `StreamReader(string path, …)`, `StreamWriter(string path, …)` | Yol ile dosya açar |
+| `Activator` (generic olmayan her üye) | Bir `Type` nesnesinden herhangi bir türü örnekler; `Activator.CreateInstance<T>()` izinli kalır (`T`'yi adlandırır) |
+| `Type.GetType(string …)` (static), `GetTypeFromProgID`, `GetTypeFromCLSID` | Yasak bir türe adıyla ulaşır |
+| `Type.GetMethod(s)`, `GetConstructor(s)`, `GetMember(s)`, `GetField(s)`, `GetEvent(s)`, `FindMembers`, `GetDefaultMembers`, `TypeInitializer`, `InvokeMember` | `dynamic` üzerinden çağrılabilen reflection nesneleri |
+| `Environment.Exit`, `Environment.FailFast`, `Environment.SetEnvironmentVariable` | Host'u sonlandırır veya ortamını değiştirir |
+
+:::warning[Davranış değişikliği]
+Bu üyeleri kullanan betikler artık derlenmez ("banned member"). Yasaklamadan önce gönderilmiş tüm domain paketleri (kaynak ve base64 gömülü kod) tarandı ve hiçbirinde kullanım bulunmadı.
+:::
+
+:::info[Bilinen boşluklar]
+`Environment.GetEnvironmentVariable`, `Type.GetProperty`, `Type.Assembly`, `AppDomain` ve `AssemblyLoadContext` gönderilmiş paketler kullandığı için izinli kalır; `dynamic` ile birleştiğinde hâlâ reflection'a ulaşabilirler (bilinen sorun `script-sandbox-reflection-gaps`). Analizör kazara ve düşük çabalı kötüye kullanıma karşı bir korumadır, izolasyon sınırı değildir: izolasyon host'undur (salt okunur kök dosya sistemi, diskte secret olmaması, egress politikası, operatörün yönettiği plugin dizini).
+:::
+
 ## Varsayılan `using`'ler
 
 Her script bağlamına otomatik eklenen namespace'ler:

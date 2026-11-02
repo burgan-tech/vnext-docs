@@ -105,6 +105,26 @@ Task<ScriptResponse> OutputHandler(ScriptContext context);
 
 **Note:** Since subflows run integrated with the parent workflow, both input and output binding are required.
 
+**Carried headers in `OutputHandler`.** <sup>New</sup> v0.0.102 — The headers of the request that settled the child (completion via finish/exit, cancel, or a fault on a request) travel to the parent. On the completion and fault path `OutputHandler` reads them as `context.Headers`; before, `context.Headers` was empty.
+
+```csharp
+// SubFlow OutputHandler on the parent
+var sub = context.Headers?["sub"];            // identity of the user who finished the child
+var lang = context.Headers?["accept-language"];
+// context.Headers never contains authorization / cookie / *token* / *secret* / *session*
+```
+
+- **Not carried:** any header whose name contains `authorization`, `cookie`, `token`, `secret` or `session` (a floor fixed in code; configuration can only add to it with `AdditionalDenied`), and framework headers (`x-subflow-depth`, parent/root/instance ids, `traceparent`, `content-*`, `dapr-*`, `grpc-*`, …).
+- **`role`** is always carried; keys arrive **lower-cased**.
+- **Empty set:** a child finished by a timer or timeout, a job-timeout recovery or a downward cancel/fault cascade has no caller request; nothing is carried and `context.Headers` is empty.
+- **Denylist model:** every header not caught by the floor travels; a credential in an unusually named header such as `x-api-key` reaches the parent unless it is listed in `AdditionalDenied`.
+
+**Resume.** On completion, fault and cancel the parent's resumed hop runs with these headers by default (`Workflow:SubFlow:CarriedHeaders:ApplyToResume`, default `true`): auto conditions, onEntry tasks that forward the caller credential, and the next subflow's `InputHandler` see the finisher's request. `Actor` stays `System`; transition authorization is unchanged. A domain that wants the old behaviour opts out with `ApplyToResume=false` (env: `Workflow__SubFlow__CarriedHeaders__ApplyToResume=false`); `Emit=false` disables carrying altogether. Settings: [Workflow Execution](/docs/configuration/workflow-execution).
+
+:::warning[Upgrade note]
+Before v0.0.102 the parent's SubFlow `OutputHandler` saw an empty `context.Headers` and the resumed hop ran with empty headers, so every subflow after the first started without the caller's identity. Scripts that assumed empty headers after a subflow (e.g. conditions or mappings that fall back to a default identity when a header is missing) now behave differently. Review them, or set `ApplyToResume=false` for the domain.
+:::
+
 ### IConditionMapping
 Used for decision parts like auto transitions. Provides condition checking in automatic transitions.
 
