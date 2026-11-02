@@ -124,6 +124,7 @@ Her `res-key`, ilgili sistem bileşeninin saklandığı sistem flow'una karşıl
 | `function` | `sys-functions` | [Function](/docs/components/functions/) |
 | `view` | `sys-views` | [View](/docs/components/view) |
 | `task` | `sys-tasks` | [Task](/docs/components/tasks/) |
+| — | `sys-version-registry` <sup>New</sup> v0.0.102 | [Flow varsayılan sürümü](/docs/concepts/flow-default-version) — flow başına bir instance (key = flow key) varsayılan sürüm pointer'ını tutar. Bir bileşen tanımı saklamaz; bu sürümde belgelenmiş bir `res-key`'i yoktur |
 
 :::tip[View `dataSchema` kullanımı]
 Bu yapı, view'ların `dataSchema` alanında bağlı oldukları şemayı adreslemek için de kullanılır — ör. `urn:vnext:res:schema:customer:registration-form`. Pseudo UI bağlamında ayrıntı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).

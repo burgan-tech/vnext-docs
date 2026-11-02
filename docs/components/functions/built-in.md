@@ -1049,7 +1049,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/tasks
 | `items[].triggerType` | `string` | Transition'ın trigger tipi (`manual`, `auto`, `scheduled`, `event`) |
 | `items[].hook` <sup>New</sup> v0.0.99 | `string \| null` | Task'ın transition içindeki fazı: `onExecute` (transition'ın kendi task'ları), `onEntry`, `onExit` (state task'ları). `triggerType` transition'ın nasıl tetiklendiğini, `hook` task'ın hangi fazda çalıştığını söyler. Migration öncesi satırlarda `null` |
 | `items[].order` <sup>New</sup> v0.0.99 | `integer \| null` | Task'ın hook grubu içindeki `order` değeri (eşit order ⇒ paralel grup). Migration öncesi satırlarda `null` |
-| `items[].status` | `string` | Platform durumu: `waiting` \| `busy` \| `completed` \| `faulted` |
+| `items[].status` | `string` | Platform durumu: `completed` \| `faulted`. <sup>New</sup> v0.0.102 — Güncel runtime yalnızca bu iki değeri yazar; `waiting` \| `busy` yalnızca eski runtime'ların journal'a yazdığı satırlarda görülür |
 | `items[].businessStatus` | `string` | İş sonucu: `unknown` \| `success` \| `failed` |
 | `items[].startedAt` / `finishedAt` / `durationMs` | — | Zamanlama bilgisi |
 | `items[].error` | `string \| null` | Yalnızca `faulted` satırlarda fault nedeni; asla stack trace değil |
@@ -1062,6 +1062,12 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/tasks
 - State gövdesine task linki eklenmez; `ResponseShapeVersion` ve fingerprint ETag'i bu fonksiyondan etkilenmez.
 - <sup>New</sup> v0.0.99 `hook` ve `order`, `InstanceTasks` tablosunda gerçek kolonlara taşındı (migration `AddInstanceTaskTriggerAndOrderColumns`). Transition/state bazlı deneme (attempt) görünümü için bkz. [Fonksiyon Metrikleri](#fonksiyon-metrikleri).
 - <sup>New</sup> v0.0.100 Workflow'u `attributes.history: "none"` olan bir instance için task journal hiç yazılmaz; fonksiyon `200` ile **boş liste** döner. Bkz. [Workflow → History Modu](/docs/components/workflow#history-modu).
+- <sup>New</sup> v0.0.102 **Çalışan task listelenmez.** Journal satırı task başına **bir kez**, tamamlandığında; son `status`, `businessStatus`, payload'lar ve zamanlamalarla yazılır. Önceden task oluşturulurken bir `busy` satırı ekleniyor ve tamamlandığında güncelleniyordu; artık hâlâ çalışan bir task yanıtta yer almaz. Önceki denemenin satırını (`ExecutionKey` ile) bulan bir retry ikinci bir satır eklemek yerine onu günceller; bir çökmeyle yarıda kalan task satır bırakmaz ve yeniden çalıştırılır. Güncel runtime'da bir satır:
+
+  ```json
+  { "id": "…", "taskKey": "send-otp", "status": "completed", "businessStatus": "success",
+    "startedAt": "…", "finishedAt": "…", "durationMs": 184.2 }
+  ```
 
 ## Actions Fonksiyonu
 

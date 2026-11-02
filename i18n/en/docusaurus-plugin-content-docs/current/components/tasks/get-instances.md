@@ -12,6 +12,12 @@ The GetInstances Task enables fetching instance data from other workflows with s
 The task reads with the **caller's presented credential** and applies the target master schema's `x-roles` / `x-masking` / `x-encryption` — the same read service as instance GET/list. The former system visibility (`SystemRead`) was removed. The presented header set is the input mapping's headers plus every credential header (`sub`, `act_sub`, `position`, `client_id`, `role`) the mapping leaves unset; to read as another identity (e.g. a service role), set it in the input mapping. `X-Request-Id` is forwarded fill-if-absent.
 :::
 
+:::note[Row security (`rowSecurity`) — v0.0.102]
+When the target workflow declares `attributes.rowSecurity`, the task is filtered by the same row rules as the instance list — same-domain and cross-domain — **with the credential and headers the task presents**. A header a rule reads (for example `x-branch-code`) is not forwarded automatically; set it in the task's input mapping, otherwise that rule contributes nothing. Pages and totals cover visible rows only.
+
+Since v0.0.102 the task looks the target flow's definition up; when that lookup fails, the task fails with the same error — with or without `rowSecurity`: `Instance:100052` (409, invalid default-version pointer), `Instance:100053` (503, version registry unavailable), `Instance:100051` (404, flow version not activated). Details: [Row Security](/docs/concepts/row-security).
+:::
+
 ## Overview
 
 | Property | Value |

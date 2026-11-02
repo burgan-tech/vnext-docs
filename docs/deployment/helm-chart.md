@@ -214,6 +214,27 @@ orchestrator:
 
 Boyut sınırları: base64 gövdeyi yaklaşık 4/3 büyütür. Orchestration host'unun Kestrel gövde sınırı **10 MiB**'dır (≈ **7,5 MiB** dosya; aşılırsa `413`); Dapr sidecar'ının sınırı `global.dapr.maxBodySize` (`--max-body-size`, varsayılan **64Mi**). Binding'in `get` yanıtı bellekte tamponlanır.
 
+**Akışlı yükleme sınırı.** <sup>New</sup> v0.0.102 — `transport: stream` / `any` ile bildirilen alanlar baytlarını ayrı bir yükleme isteğiyle (`POST /api/v1/{domain}/workflows/{flow}/files`) alır; bu istek Kestrel'in 10 MiB JSON sınırına değil `FileStorage:Upload:MaxBytes`'a tabidir (varsayılan `67108864` = 64 MiB; aşılırsa depoya bayt yazılmadan `413`). Bu değer orchestration sidecar'ının `--max-body-size` değeriyle (`global.dapr.maxBodySize`) **eşleşmelidir**: birini yükseltirken diğerini de yükseltin. Yükleme biletinin ömrü `FileStorage:Upload:TicketTtlMinutes`'tır (varsayılan `60`).
+
+```yaml
+global:
+  dapr:
+    maxBodySize: 128Mi
+orchestrator:
+  appEnvConfig:
+    FileStorage__Upload__MaxBytes: "134217728"   # 128 MiB = global.dapr.maxBodySize
+```
+
+:::warning[S3 ve aws-chunked (Dapr 1.17+)]
+Dapr 1.17'den itibaren `bindings.aws.s3`, `https://` endpoint'ine yaptığı her yüklemeyi CRC32 trailer'lı `Content-Encoding: aws-chunked` olarak gönderir. Bu kodlamayı çözmeyen S3 uyumlu bir depo çerçevenin kendisini nesne olarak saklar (AWS S3, MinIO, Ceph, LocalStack, s3mock, moto ve SeaweedFS çözer). Sidecar'da `AWS_REQUEST_CHECKSUM_CALCULATION=when_required` bunu değiştirmez; bileşen metadata'sıyla da kapatılamaz. <sup>New</sup> v0.0.102 runtime her okumayı doğrular ve yükü handle ile eşleşen çerçeveli nesneyi orijinal haliyle servis eder; bucket'ı vNext dışında doğrudan okuyan bir tüketici ise çerçeveyi görür. Tercih sırasıyla seçenekler:
+
+- `aws-chunked` çözen bir depo kullanın (depoda trailer/streaming-signature desteğini açın).
+- Güvenilir ağ içinde depoya `http://` ile ulaşın (`disableSSL: "true"`); trafik şifresiz olur.
+- Orchestration sidecar'ını daprd 1.16.x'e sabitleyin (`dapr.io/sidecar-image`); diğer tüm Dapr düzeltmelerini geride tutan geçici bir çözümdür.
+
+Ayrıntı: [Dosya Alanları](/docs/how-to/file-fields).
+:::
+
 ---
 
 ## Chart 1.0.123'e geçiş (runtime 0.0.100)

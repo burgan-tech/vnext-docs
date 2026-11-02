@@ -96,6 +96,7 @@ Each function can execute a task and the task result data can be returned in the
 | `task` | `object` | Single task to execute (legacy shape; use with one task) |
 | `onExecutionTasks` | `array` | Ordered tasks to execute; see **Multi-task execution** below |
 | `output` | `object` | Optional output mapping script: `location` / `code`; implements **`IOutputHandler`** |
+| `rawResponse` | `boolean` | `true`: the mapped raw data is returned directly as the response; `false` (default): the platform's own response model. Used when migrating legacy APIs to vNext. <sup>New</sup> v0.0.102 — when the output's `Data` is a `byte[]` or a `ScriptFile`, the bytes are written as is (with `Content-Length`; `Content-Type` is the one the output sets, else the file's `mimeType`, else `application/octet-stream`). Before, a `byte[]` was returned as a quoted base64 JSON string (`application/json`); a client that decoded the base64 string must now read the body as bytes. A response cache hit stays binary |
 | `cache` | `object` | Optional read-through response cache — see **Function Cache** below |
 | `labels` | `array` | Multi-language labels (`[{ label, language }]`). (v0.0.99) No longer dropped at load time; returned by the built-in `catalog` as `functions[].labels` |
 | `executionLog` (v0.0.99) | `string` | Opt-in execution journal: `E` (enabled) records every invocation, served by the [function metrics endpoints](/docs/components/functions/built-in#function-metrics); `D` or absent records nothing. Asynchronous, best-effort |

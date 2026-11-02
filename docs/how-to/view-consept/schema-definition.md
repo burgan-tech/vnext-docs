@@ -545,7 +545,13 @@ Master schema'daki bir özelliğin (ya da bir dizi özelliğin `items` şemasın
 "files": { "type": "array", "items": { "type": "object", "x-storage": { "binding": "vnext-blob-s3" } } }
 ```
 
-`binding` zorunlu, boş olmayan bir string'dir ve orchestration sidecar'ında yüklü bir binding bileşenini adlandırır; `x-storage` başka alan kabul etmez. Yalnızca master rolünde geçerlidir ve yalnızca iç içe `properties` ile erişilen yollarda (ya da öyle erişilen **tek seviyeli** bir dizinin `items` şemasında) izinlidir; kökte, başka bir dosya düğümünün içinde, `$defs`, birleştiriciler, koşullular ve iç içe dizilerde publish hatasıdır. Özellik şeması **kalıcı** şekli tanımlar: `properties`/`required` altında `content` bildirmek publish hatasıdır. Client tarafı gidiş-dönüş, handle şekli ve durum kodları için bkz. [Dosya Alanları](../file-fields).
+`binding` zorunlu, boş olmayan bir string'dir ve orchestration sidecar'ında yüklü bir binding bileşenini adlandırır. <sup>New</sup> v0.0.102 / vnext-schema 0.0.58 — İsteğe bağlı `transport`, client'ın baytları nasıl gönderebileceğini seçer: `inline` (varsayılan; JSON gövdesinde base64 `content`), `stream` (ayrı bir akışlı yükleme isteği, alana `file` id'siyle referans verilir; client'tan gelen inline `content` reddedilir) veya `any` (ikisi de). `x-storage` bu iki üye dışında alan kabul etmez.
+
+```json
+"scan": { "type": "object", "x-storage": { "binding": "vnext-blob-s3", "transport": "stream" } }
+```
+
+Yalnızca master rolünde geçerlidir ve yalnızca iç içe `properties` ile erişilen yollarda (ya da öyle erişilen **tek seviyeli** bir dizinin `items` şemasında) izinlidir; kökte, başka bir dosya düğümünün içinde, `$defs`, birleştiriciler, koşullular ve iç içe dizilerde publish hatasıdır. Özellik şeması **kalıcı** şekli tanımlar: `properties`/`required` altında `content` bildirmek publish hatasıdır. Client tarafı gidiş-dönüş, handle şekli ve durum kodları için bkz. [Dosya Alanları](../file-fields).
 
 ---
 
@@ -689,6 +695,35 @@ Backend ekibi tarafından tanımlanır. Delegate aracılığıyla özel doğrula
   }
 }
 ```
+
+| Alan | Açıklama |
+|------|----------|
+| `rule` | Kuralın adı (zorunlu). `remote` ayrılmış bir değerdir (aşağıda) |
+| `parameters` | Kurala geçirilen parametreler (nesne) |
+| `errorMessages` | Kural başarısız olduğunda gösterilecek çok dilli mesaj |
+| `source` | Yalnız `remote`: client'ın değeri doğrulamak için çağırdığı **function**'ın URN'i. `rule: "remote"` ise zorunludur |
+| `resultField` | Yalnız `remote`: yanıtta, değeri doğru (truthy) olduğunda alanın geçerli sayıldığı yol |
+| `messageField` | Yalnız `remote`: yanıtta, değer geçersiz olduğunda gösterilecek mesajı taşıyan yol |
+| `trigger` | Yalnız `remote`: client'ın function'ı ne zaman çağıracağı — `change` \| `blur` |
+| `debounce` | Yalnız `remote`: son değişiklikten sonra function çağrılmadan önce beklenecek süre (milisaniye, `0` veya üstü) |
+
+**Uzak (remote) kural.** <sup>New</sup> vnext-schema 0.0.57 — `rule: "remote"` ile client, alanın değerini `source` ile adlandırılan backend function'ına gönderir ve sonucu yanıttan okur: `resultField` yolundaki değer doğruysa alan geçerlidir; değilse `messageField` yolundaki mesaj gösterilir. `trigger` ve `debounce` çağrının zamanlamasını belirler.
+
+```json
+"iban": {
+  "type": "string",
+  "x-validation": {
+    "rule": "remote",
+    "source": "urn:vnext:fn:shared:validate-iban",
+    "resultField": "isValid",
+    "messageField": "message",
+    "trigger": "blur",
+    "debounce": 300
+  }
+}
+```
+
+`x-validation` yukarıdaki alanlar dışında üye kabul etmez; `rule: "remote"` olup `source` vermeyen bir tanım şema doğrulamasında reddedilir.
 
 ---
 

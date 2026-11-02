@@ -131,6 +131,16 @@ Aynı kesintisiz pipeline/UoW içinde, her hop yeni bir `TransitionExecutionCont
 
 Zincir derinliği sınırı **50**'dir (aşılırsa `Transition:100017`).
 
+### Otomatik transition değerlendirme sırası
+
+<sup>New</sup> v0.0.102 `RunAutomaticTransitionsStep` (order 80), mevcut state'in otomatik transition'larını `State.AutoTransitions`'ın döndürdüğü sırayla değerlendirir ve **koşulu sağlanan ilk transition kazanır**; geri kalanlar değerlendirilmez:
+
+1. Varsayılan olmayan otomatik transition'lar, etkin önceliğe (`priority ?? 100`) göre artan sırada.
+2. Eşit öncelikte tanım sırası korunur (stable sort).
+3. Varsayılan otomatik transition (`triggerKind: 10`) her zaman en son.
+
+Değerlendirme sıralıdır; bir kuralın script'i exception fırlatırsa adım başarısız olur ve sonraki kurallar değerlendirilmez. Önceki runtime'lar `triggerKind` yazılmamış bir transition'ı açık `triggerKind: 0` olandan önce değerlendiriyordu; bu davranış kaldırıldı. Alan tanımı, publish kuralları ve örnek: [Workflow → Otomatik Transition Sırası](/docs/components/workflow#otomatik-transition-sırası).
+
 ## İlgili
 
 - [Workflow → Transition Yürütme Modeli](../components/workflow) — `resourceLock` ve well-known transition davranışları

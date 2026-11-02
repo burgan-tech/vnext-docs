@@ -211,7 +211,7 @@ GET /api/v1/{domain}/workflows/{workflow}/functions/{function}/metrics
 Yeni instance başlatır.
 
 **Query parameters:**
-- `version` — workflow versiyonu (opsiyonel)
+- `version` — workflow versiyonu (opsiyonel). <sup>New</sup> v0.0.102 Flow'un `sys-version-registry`'de bir varsayılan sürüm pointer'ı varsa sürümsüz, `latest` ve kısmi (`2`, `2.1`) istekler bu varsayılana çözülür; tam ya da artifact sürüm (`2.2.0`) tavan tanımaz — bkz. [Flow Varsayılan Sürümü](/docs/concepts/flow-default-version)
 - `sync` — `true`/`false` (default `false`); bkz. [Async / Sync](/docs/how-to/async-sync). <sup>New</sup> v0.0.99 Flow (`attributes.executionType`) veya `startTransition.executionType` tanımlıysa (`"S"` / `"A"`) parametre **yok sayılır** — tanım kazanır
 - `extensions` — <sup>New</sup> v0.0.93 itibarıyla **yok sayılır** (reddedilmez): senkron start/transition yanıtı extension değerlendirmez ve `extensions` anahtarı her zaman `{}` döner. Extension verisi için `GET …/instances/{instance}?extensions=` veya liste endpoint'ini kullanın
 
@@ -277,13 +277,13 @@ Kurallar:
 :::
 
 **Responses:**
-- `200 OK` → `StartInstanceOutput` (id, key, status, attributes, eTag, extensions) — etkin mod senkron (`sync=true` veya tanımda `executionType: "S"`)
+- `200 OK` → `StartInstanceOutput` (id, key, status, attributes, eTag, extensions, <sup>New</sup> v0.0.102 `flowVersion` — instance'ın başladığı **çözülmüş** sürüm) — etkin mod senkron (`sync=true` veya tanımda `executionType: "S"`)
 - `202 Accepted` → etkin mod asenkron (`sync=false` varsayılan veya tanımda `executionType: "A"`): iş, durable arkaplan işlemesi için kuyruğa alındı
 - `400 Bad Request` → `ProblemDetails` (<sup>New</sup> v0.0.100 `x-storage` alanında geçersiz dosya gövdesi: `Instance:100048`)
-- `404 Not Found` → workflow bulunamadı
-- `409 Conflict` → key collision
+- `404 Not Found` → workflow bulunamadı; <sup>New</sup> v0.0.102 istenen sürüm(ler) varsayılanın üstünde bekliyor (`Instance:100051`)
+- `409 Conflict` → key collision; <sup>New</sup> v0.0.102 varsayılan sürüm pointer'ı geçersiz ya da hiçbir yayınlanmış sürümle eşleşmiyor (`Instance:100052`)
 - `413 Payload Too Large` → gövde host sınırını aştı (varsayılan 10 MiB ≈ 7,5 MiB base64 dosya)
-- `503 Service Unavailable` → <sup>New</sup> v0.0.100 blob deposu ulaşılamıyor (`Instance:100047`) veya dosya taşıyan gövde için master schema yüklenemiyor (`Instance:100050`); instance oluşturulmaz
+- `503 Service Unavailable` → <sup>New</sup> v0.0.100 blob deposu ulaşılamıyor (`Instance:100047`) veya dosya taşıyan gövde için master schema yüklenemiyor (`Instance:100050`); instance oluşturulmaz. <sup>New</sup> v0.0.102 sürüm registry'si okunamıyor (`Instance:100053`, geçici)
 
 > **Not:** Workflow tanımında [`output` mapping](/docs/components/workflow#output-mapping) varsa ve istek `sync=true` ise, yanıt standart `StartInstanceOutput` zarfı yerine **doğrudan output script'in ürettiği gövde** olur (script'in status code + header'ları ile). Subflow instance'ları bu davranışın dışındadır.
 
@@ -355,7 +355,8 @@ Instance metadata + data döner (extension dahil).
 **Responses:**
 - `200 OK` → `GetInstanceOutput`
 - `304 Not Modified` → ETag eşleşti
-- `404 Not Found`
+- `404 Not Found` — <sup>New</sup> v0.0.102 flow `attributes.rowSecurity` tanımlıyorsa çağıranın kurallarının dışladığı bir instance da bulunmayan bir instance ile **aynı** `404`'ü döner (ETag karşılaştırmasından önce)
+- `404` / `409` / `503` — <sup>New</sup> v0.0.102 flow tanımı aranamadıysa arama hatası olduğu gibi döner (`Instance:100051` / `Instance:100052` / `Instance:100053`), flow'da `rowSecurity` olsun ya da olmasın. Bkz. [Satır Güvenliği](/docs/concepts/row-security)
 
 ### GET `/api/v1/{domain}/workflows/{workflow}/instances`
 
@@ -365,6 +366,8 @@ Instance metadata + data döner (extension dahil).
 - `filter` — JSONPath benzeri filter syntax (bkz. [Instance Filtering](/docs/how-to/instance-filtering))
 - `extensions` — extension key listesi
 - `page` (1-1000), `pageSize` (1-100), `sort`, `orderBy`, `version`
+
+<sup>New</sup> v0.0.102 Flow `attributes.rowSecurity` tanımlıyorsa sonuç (sayfalar, `groupBy` ve aggregation'lar dahil) yalnızca çağıranın eşleşen kurallarının açtığı satırları kapsar; tanımlıysa deny-by-default'tur. Flow tanımı aranamadıysa liste boş sayfa yerine arama hatasını döner (`Instance:100051` / `Instance:100052` / `Instance:100053`). Bkz. [Satır Güvenliği](/docs/concepts/row-security).
 
 ### GET `/api/v1/{domain}/workflows/{workflow}/instances/{instance}/transitions`
 
@@ -407,6 +410,47 @@ Instance'ın en yeni **çözülmemiş** incident'ını döner (`incident.active.
 `x-storage` alanındaki bir dosyanın baytlarını döner (`GET` / `HEAD`, `?file=<guid>`). Yalnızca bu instance'ın güncel verisindeki handle okunur. Diğer read fonksiyonlarının aksine `queryRoles` motorun içinde de denetlenir (`403`), ardından `x-roles` (gizli yol `404`).
 
 **Responses:** `200` (baytlar), `206` / `416` (Range), `304` (`If-None-Match`), `400` (`Instance:100048`, eksik `file`), `403`, `404` (`Instance:100049`), `503` (`Instance:100047` / `Instance:100050`). Ayrıntı: [Built-in Functions → File Fonksiyonu](/docs/components/functions/built-in).
+
+### POST `/api/v1/{domain}/workflows/{flow}/files`
+
+<sup>New</sup> v0.0.102 **Streamed upload.** Master schema'da `x-storage.transport` değeri `"stream"` ya da `"any"` olan bir alanın baytlarını, JSON gövdesinde base64 yerine ayrı bir istekle yükler. Dosya base64 ile şişmez, JSON gövdesinde tutulmaz ve 10 MiB JSON gövde sınırı yerine `FileStorage:Upload:MaxBytes` (varsayılan 64 MiB) ile sınırlanır.
+
+**Query parameters:**
+- `path` — şemanın katladığı alan yolu: `passport`, `customer.tax`, `files[]`, `documents[].doc` (zorunlu)
+- `name` — dosya adı (zorunlu)
+- `version` — flow sürümü (opsiyonel)
+
+**Request body:** ham baytlar (`Content-Type` dosyanın medya tipi; `Content-Length` zorunlu)
+
+```http
+POST /api/v1/{domain}/workflows/{flow}/files?path=files[]&name=scan.tiff
+Content-Type: image/tiff
+Content-Length: 31457280
+
+<raw bytes>
+```
+
+**Responses:**
+- `201 Created` → upload bileti:
+
+```json
+{ "file": "6f1c…", "component": "vnext-blob-s3", "path": "files[]", "name": "scan.tiff", "mimeType": "image/tiff",
+  "size": 31457280, "eTag": "<alınan baytların sha256'sı>", "expiresAt": "2026-10-31T13:00:00+00:00" }
+```
+
+- `400 Bad Request` (`Instance:100048`) → bilinmeyen `path`, `transport`'u `inline` olan bir alan ya da eksik `Content-Length`
+- `413 Payload Too Large` → gövde `FileStorage:Upload:MaxBytes`'ı aşıyor; hiçbir bayt saklanmaz
+- `503 Service Unavailable` (`Instance:100047`) → depo hatası
+
+Ardından yüklemeyi, alanın bulunduğu yerde bir start ya da transition gövdesinde `expiresAt`'tan önce referans verin:
+
+```json
+{ "attributes": { "files": [ { "file": "6f1c…", "documentType": "invoice" } ] } }
+```
+
+- `size` ve `eTag` alınan baytlardan hesaplanır, client'tan alınmaz; `Content-Length`'ten kısa ya da uzun bir gövde saklanmaz.
+- Yükleme dağıtık önbellekte `FileStorage:Upload:TicketTtlMinutes` (varsayılan 60) boyunca bekletilir. Bilet **tek kullanımlıktır** ve yalnızca yüklendiği **aynı flow, path ve component** için kabul edilir; süresi dolmuş ya da bilinmeyen bir id, başka bir path için yapılmış yükleme ya da aynı yüklemenin bir gövdede iki kez kullanılması `400` `Instance:100048`'dir. Düğümün diğer üyeleri (`documentType`) korunur.
+- Rotada runtime yetkilendirmesi yoktur (start gibi); gateway'de aynı şekilde koruyun. Ayrıntı: [Dosya Alanları (x-storage)](/docs/how-to/file-fields).
 
 ### Internal endpoint'ler: instance veri geçmişi <sup>New</sup> v0.0.100
 
@@ -503,6 +547,7 @@ Instance verisinin her yazımı için bir satır döner, **en yeniden eskiye**. 
   eTag?: string;
   entityEtag?: string;
   extensions?: { [key: string]: any };
+  flowVersion?: string; // v0.0.102: start yanıtında instance'ın çözülmüş sürümü
 }
 ```
 
@@ -565,12 +610,15 @@ Instance sorgu doğrulama hataları (`Validation:900011` … `900014`) `error.va
 | `Instance:100044` | `HistoryNoneSubFlowChildNotEligible` | 400 | `history: "none"` bir parent'ın SubFlow child'ı `none` değil; child hiçbir şey yazmadan reddeder, parent incident ile fault olur |
 | `Instance:100045` | `HistoryNoneRetryNotSupported` | 409 | `history: "none"` instance'ta `POST …/retry` |
 | `Instance:100046` | `HistoryNoneNotTerminal` | — (incident) | `history: "none"` bir aşama Finish olmayan bir state'te durdu; instance fault edilir |
-| `Instance:100047` | `FileStoreUnavailable` | 503 | Blob deposu (binding) çağrısı başarısız; istek uygulanmadı, yeniden denenebilir |
+| `Instance:100047` | `FileStoreUnavailable` | 503 | Blob deposu (binding) çağrısı başarısız; istek uygulanmadı, yeniden denenebilir. <sup>New</sup> v0.0.102 Okunan baytlar handle ile eşleşmediğinde de (`size` + sha256 `eTag` bütünlük uyumsuzluğu) döner |
 | `Instance:100048` | `FileReferenceInvalid` | 400 | `content` ile `file` birlikte, geçersiz base64, bilinmeyen/yabancı referans, `functions/file`'da eksik `file` |
 | `Instance:100049` | `FileNotFound` | 404 | `functions/file`: dosya bu instance'ın güncel verisinde yok ya da yolu `x-roles` ile gizli |
 | `Instance:100050` | `FileSchemaUnavailable` | 503 | Master schema yüklenemedi ve gövde `content`/`file` üyesi taşıyor (ya da dosya okunuyor); yeniden deneyin |
+| `Instance:100051` | `FlowVersionNotActivated` | 404 | <sup>New</sup> v0.0.102 İstenen sürüm(ler) var ama flow'un varsayılan sürümünün üstünde (bekliyor); açık sürüm isteyin ya da pointer'ı taşıyın |
+| `Instance:100052` | `FlowDefaultVersionInvalid` | 409 | <sup>New</sup> v0.0.102 `sys-version-registry` pointer'ı hatalı ya da yayınlanmış hiçbir sürümle eşleşmiyor (yalnızca `latest` / kısmi istekler); pointer yazımında da reddedilir |
+| `Instance:100053` | `VersionRegistryUnavailable` | 503 | <sup>New</sup> v0.0.102 Sürüm registry'si okunamadı; geçicidir, yeniden deneyin |
 
-Ayrıntı: [Dosya Alanları](/docs/how-to/file-fields), [Workflow → History Modu](/docs/components/workflow).
+Ayrıntı: [Dosya Alanları](/docs/how-to/file-fields), [Workflow → History Modu](/docs/components/workflow), [Flow Varsayılan Sürümü](/docs/concepts/flow-default-version). `Instance:100051` … `100053` v0.0.102 ile instance listesi, tekil GET ve `GetInstances` / `GetInstance` task'lerinde de döner — bkz. [Satır Güvenliği](/docs/concepts/row-security).
 
 ---
 

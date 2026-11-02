@@ -220,6 +220,7 @@ Set kararı kanonik kuralla aynıdır, yalnızca "eşleşme" üç değerli hale 
 | State `alias` | `roles` | State'in role göre maskelenmiş görünümü |
 | Master şema property | `x-roles` | Alan (column) bazlı veri görünürlüğü. <sup>New</sup> v0.0.99 kombinatör kabul eder |
 | Master şema property | `x-masking.roles` / `x-encryption.roles` <sup>New</sup> v0.0.99 | Değeri ham görecek çağıranlar (yalnızca `allow` muafiyet listesi; kombinatör kabul edilmez) |
+| Flow | `rowSecurity.rules[].roles` <sup>New</sup> v0.0.102 | Satır (row) bazlı görünürlük: instance listesi, tekil GET ve `GetInstances` / `GetInstance` task'leri yalnızca eşleşen kuralların açtığı instance'ları döner — bkz. [Satır güvenliği](#satır-güvenliği-rowsecurity) |
 
 `roles`, `queryRoles`, `availableIn[].roles`, function `roles`, `interaction.longPoll.roles`, SubFlow override'ları ve `x-roles` v0.0.99 itibarıyla [kombinatör](#kombinatörler-allof--anyof) (`allOf` / `anyOf`) grant'ları da kabul eder.
 
@@ -264,6 +265,24 @@ Provider ne olursa olsun `transition.roles`, `availableIn[].roles`, `queryRoles`
 
 ---
 
+## Satır güvenliği (rowSecurity)
+
+<sup>New</sup> v0.0.102 Alan bazlı görünürlüğün (`x-roles`, `x-masking`, `x-encryption`) satır karşılığı `attributes.rowSecurity`'dir: flow rol başına bir filtre tanımlar, runtime bunu instance listesine, tekil GET'e ve `GetInstances` / `GetInstance` task'lerine AND'ler. Kısaca:
+
+- **Deny by default:** `rowSecurity` tanımlayan flow'da hiçbir kuralla eşleşmeyen çağıran hiçbir satır görmez; "X her şeyi görür" filtresiz açık bir kuraldır. `rowSecurity` olmayan flow filtrelenmez.
+- Eşleşen kuralların filtreleri **OR**'lanır, çağıranın kendi filtresiyle **AND**'lenir; rol çözümü ya da parametre hataları görünürlüğü **asla genişletmez**. Kural rolleri statik roller ya da `$InstanceStarter` / `$InstanceBehalfOfStarter` olabilir; `allOf` / `anyOf` ve diğer ayrılmış roller kabul edilmez.
+- Dışlanmış bir instance GET'te bulunmayan bir instance ile aynı `404`'ü döner; liste sayıları yalnızca görünür satırları kapsar.
+- **Erişim sınırı değildir:** `functions/state`, `functions/data`, `functions/view` vb., transition'lar ve `GetInstanceData` filtrelenmez. Bu yüzeyleri gateway'deki `authorize` ile denetleyin.
+- **Gateway ön koşulu:** gateway `role` header'ını ve kuralların okuduğu her header'ı token'dan yazmalı (strip/overwrite, asla append değil); `QueryParameters` client kontrolündedir.
+
+:::warning[Lookup hatası artık okumayı başarısız kılar]
+v0.0.102 ile instance listesi, tekil GET ve `GetInstances` / `GetInstance` task'leri flow tanımını arar; arama başarısız olursa okuma da aynı hatayla başarısız olur — `rowSecurity` olsun ya da olmasın: `Instance:100052` (409, geçersiz varsayılan sürüm pointer'ı), `Instance:100053` (503, sürüm registry'si okunamıyor), `Instance:100051` (404, flow sürümü aktive edilmemiş). Uyarı 20509 loglanır.
+:::
+
+Ayrıntı: [Satır Güvenliği](/docs/concepts/row-security).
+
+---
+
 ## İlgili
 
 - [Workflow component](/docs/components/workflow) — `queryRoles`, transition `roles`, state `alias`
@@ -271,3 +290,4 @@ Provider ne olursa olsun `transition.roles`, `availableIn[].roles`, `queryRoles`
 - [Built-in Functions](/docs/components/functions/built-in) — State/Data Function yetkilendirme davranışı ve authorize endpoint'leri
 - [Instance Data](/docs/concepts/instance-data) — `Instance.Data` ve ScriptContext
 - [Configuration → Caller Role Provider](../configuration/caller-role-provider) — `default`/`morph-idm` provider yapılandırması
+- [Satır Güvenliği](/docs/concepts/row-security) — `attributes.rowSecurity` ile satır bazlı görünürlük

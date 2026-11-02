@@ -37,11 +37,27 @@ Orchestration host `appsettings.json`, mevcut `Workflow` kökü altında (`Insta
 | Anahtar | Tip | Varsayılan | Açıklama |
 |---------|-----|------------|----------|
 | `DefaultMode` | `Remote` \| `Local` | `Remote` | `Modes` içinde girişi olmayan her wire tipi için uygulanan mod. Yarın runtime'a eklenen yeni bir task tipi, `Modes`'a girilmediği sürece otomatik olarak Remote çalışır |
-| `Modes` | dictionary | yukarıdaki dört giriş | Wire task tipine göre (büyük/küçük harf duyarsız) mod. Anahtarlar `BBT.Workflow.Execution.TaskTypes` sabitleridir: `http`, `daprservice`, `soap`, `statestore`. v0.0.99'da `cacheaside` anahtarı kaldırıldı |
-| `MaxConnectionsPerServer` | integer, `≥ 1` | `50` (kod varsayılanı; dosyada yok) | Orchestration'ın kendi adlandırılmış HTTP client'ları için hedef başına bağlantı üst sınırı (`HttpClientHandler.MaxConnectionsPerServer`). Process-içi `http`/`soap` task'ları ve deprecated tip `22` External HTTP task'ı bu havuzu paylaşır. v0.0.94 öncesinde yalnızca tip 22 için sabit `10` idi. Execution host'un kendi client'ları ayrıdır ve hâlâ sabit `10`'dur |
+| `Modes` | dictionary | yukarıdaki dört giriş | Wire task tipine göre (büyük/küçük harf duyarsız) mod. Anahtarlar `BBT.Workflow.Execution.TaskTypes` sabitleridir: `http`, `daprservice`, `soap`, `statestore`; <sup>New</sup> v0.0.102 `daprbinding` da Local çalışabilir ancak gönderilen dosyada yoktur (aşağıya bakın). v0.0.99'da `cacheaside` anahtarı kaldırıldı |
+| `MaxConnectionsPerServer` | integer, `≥ 1` | `50` (kod varsayılanı; dosyada yok) | Orchestration'ın kendi adlandırılmış HTTP client'ları için hedef başına bağlantı üst sınırı (`SocketsHttpHandler.MaxConnectionsPerServer`). Process-içi `http`/`soap` task'ları ve deprecated tip `22` External HTTP task'ı bu havuzu paylaşır. v0.0.94 öncesinde yalnızca tip 22 için sabit `10` idi. Execution host'un eşdeğeri `WorkflowHttpClient:MaxConnectionsPerServer`'dır (aşağıya bakın) |
+| `PooledConnectionLifetimeSeconds` <sup>New</sup> v0.0.102 | integer, `≥ 1` | `600` (kod varsayılanı; dosyada yok) | Havuzdaki bir bağlantının en fazla yaşı — bir DNS veya gateway değişikliğinin ne kadar süre fark edilmeyebileceğini sınırlar |
+| `PooledConnectionIdleTimeoutSeconds` <sup>New</sup> v0.0.102 | integer, `≥ 1` | `120` (kod varsayılanı; dosyada yok) | Boşta kalan bir bağlantının havuzda tutulma süresi; gateway'in keep-alive timeout'unun altında tutun |
 | `LocalInvocationTimeoutSeconds` | integer, `≥ 1` | `60` (kod varsayılanı; dosyada yok) | `TaskInvocationDispatcher`'ın her process-içi task çağrısının etrafına koyduğu süre sınırı — Remote yoldaki `ExecutionApi:InvocationTimeoutSeconds`'ın Local karşılığı. `daprservice` ve `statestore` binding'lerinin kendi `timeoutSeconds` alanı **olmadığı** için bu tiplerde (ve `statestore` üzerinden giden Cache-Aside cache I/O'sunda) tek iç sınır budur |
 
 Ortam değişkeni biçimi: `Workflow__TaskInvocation__Modes__http=Remote`, `Workflow__TaskInvocation__MaxConnectionsPerServer=100`.
+
+### HTTP bağlantı havuzu
+
+<sup>New</sup> v0.0.102 — Her `http`/`soap` task'ının (ve deprecated tip `22`'nin) gönderildiği adlandırılmış HTTP client'lar, her iki host'ta da tek bir paylaşımlı fabrikanın (`WorkflowHttpMessageHandlerFactory`) kurduğu **havuzlu bir `SocketsHttpHandler`** üzerindedir ve sonsuz handler ömrüyle kaydedilir. Önceden `IHttpClientFactory` handler'ı iki dakikada bir yeniliyordu; bu da düşük trafikte gateway'e açık her sıcak TCP+TLS bağlantısını atıyor ve bir sonraki task'ı el sıkışmayı yeniden ödemeye zorluyordu (tek bir APISIX host'una ölçüm: ilk çağrı 244 ms, sıcak 76 ms). Bağlantı emekliliği artık bağlantı başınadır ve `PooledConnectionLifetimeSeconds` / `PooledConnectionIdleTimeoutSeconds` ile ayarlanır.
+
+Execution host'un eşdeğer client'ları aynı üç ayarı kendi `WorkflowHttpClient` bölümünden aynı varsayılanlarla okur; böylece bir task, çağrıyı hangi host yaparsa yapsın aynı bağlantı politikasını görür:
+
+| Anahtar (Execution host) | Varsayılan | Açıklama |
+|--------------------------|------------|----------|
+| `WorkflowHttpClient:MaxConnectionsPerServer` | `50` | Hedef başına bağlantı üst sınırı (önceden sabit `10`) |
+| `WorkflowHttpClient:PooledConnectionLifetimeSeconds` | `600` | Havuzdaki bağlantının en fazla yaşı |
+| `WorkflowHttpClient:PooledConnectionIdleTimeoutSeconds` | `120` | Boşta bağlantının tutulma süresi |
+
+Bir ortam bir host'un değerini geçersiz kılıyorsa, yoğun tek hedefli bir tipi Remote'a geri almadan önce diğer host'unkini de eşleyin.
 
 :::warning
 `ExecutionMode.Custom` değeri hem `DefaultMode` hem de her `Modes` girişi için **başlangıçta reddedilir** (`TaskInvocationOptionsValidator`, `ValidateOnStart`). Paylaşılan enum'da hiç inşa edilmemiş bir eklenti senaryosu için durur; kabul edilseydi sessizce Remote gibi davranırdı. Host `Custom` ile ayağa kalkmaz.
@@ -66,12 +82,13 @@ Yetenek kapısı sayesinde yanlış bir yapılandırma (local invoker'ı olmayan
 | `daprservice` | Dapr service invocation (tip `3`) | `LocalDaprServiceTaskInvoker` | Başka bir domain uygulamasını Execution'a uğramadan doğrudan Orchestration'dan çağırır |
 | `soap` | SOAP (tip `16`) | `LocalSoapTaskInvoker` | `http` ile aynı adlandırılmış HTTP client'ları ve bağlantı sınırını paylaşır |
 | `statestore` | State Store (tip `17`) | `LocalStateStoreTaskInvoker` | Paylaşımlı `IStateStoreClient` üzerinden çalışır; function response cache'ini de besler |
+| `daprbinding` <sup>New</sup> v0.0.102 | Dapr Binding (tip `2`) | `LocalDaprBindingTaskInvoker` | Execution'daki `DaprBindingTaskInvoker` ile aynı `DaprBindingInvocation` çekirdeği. **Gönderilen `Modes`'ta yoktur** (Remote kalır): yalnızca Execution app-id'sine scope'lu binding bileşenleri Local'e çevrilince kırılır. Bileşenleri orchestration sidecar'ında duran `x-storage` nesnelerini okuyan, listeleyen veya silen akışlar için `"daprbinding": "Local"` verin (bkz. [Dosya Alanları](/docs/how-to/file-fields)) |
 
 :::warning[v0.0.99 — `cacheaside` modu kaldırıldı]
 `cacheaside` wire tipi, `LocalCacheAsideTaskInvoker` ve Execution tarafındaki `CacheAsideTaskInvoker` v0.0.99'da kaldırıldı. Cache-Aside task'ı (tip `18`) tamamen Orchestration'daki executor'da çalışır: **cache get/set `statestore` modunu izler** (State Store task'ı ve function response cache ile aynı gateway), `sourceTask` ise kendi tipinin yönlendirmesiyle çalışır (ör. bir `http` kaynak `Modes:http`'e tabidir). Ortam konfigürasyonunuzdan `Workflow:TaskInvocation:Modes:cacheaside` (veya `Workflow__TaskInvocation__Modes__cacheaside`) girişini **kaldırın**. Bkz. [Cache-Aside Task](/docs/components/tasks/cache-aside) ve [v0.0.99 Breaking Changes](/blog/breaking-changes/breaking-changes-v0-0-99).
 :::
 
-Diğer tüm wire tipleri (`daprbinding`, `daprhttpendpoint`, `daprpubsub`, `daprconversation`, `python`, trigger/sorgu tipleri…) için local invoker yoktur; yapılandırmadan bağımsız olarak her zaman Remote çözümlenir.
+Diğer tüm wire tipleri (`daprhttpendpoint`, `daprpubsub`, `daprconversation`, `python`, trigger/sorgu tipleri…) için local invoker yoktur; yapılandırmadan bağımsız olarak her zaman Remote çözümlenir.
 
 ### Tip 22 External HTTP deprecated
 
@@ -124,7 +141,7 @@ Tüm tipleri birden geri almak için `DefaultMode: "Remote"` bırakıp `Modes` g
 Değişiklik **bir sonraki Orchestration host başlangıcında** etkili olur, bir sonraki istekte değil. `TaskInvocationRouter`, process ömrü boyunca bir kez bağlanan `IOptions<TaskInvocationOptions>` ile kurulur; hot-reload (`IOptionsMonitor`) bilinçli olarak yoktur. Yalnızca ConfigMap'i düzenlemek çalışan pod'da hiçbir şeyi değiştirmez — Orchestration deployment'ını rolling restart ile yenileyin. Execution servisinde değişiklik ya da yeniden deploy gerekmez.
 :::
 
-`http`/`soap`'ı yük altında Remote'a geri almak, hedef başına bağlantı tavanını `MaxConnectionsPerServer` (50) değerinden Execution host'un sabit `10`'una düşürür; tek hedefe yoğun trafik gönderen bir tipi geri alırken bu düşüşü hesaba katın.
+`http`/`soap`'ı yük altında Remote'a geri almak, hedef başına bağlantı tavanını `Workflow:TaskInvocation:MaxConnectionsPerServer`'dan (Orchestration) Execution host'un `WorkflowHttpClient:MaxConnectionsPerServer`'ına taşır. <sup>New</sup> v0.0.102 — İkisinin de varsayılanı `50`'dir (Execution tarafı önceden sabit `10` idi); bir ortam birini geçersiz kılıyorsa, tek hedefe yoğun trafik gönderen bir tipi geri almadan önce diğerini de eşleyin, yoksa yapılandırma geri alması yeni bir darboğaza dönüşür.
 
 ## Remote yolun transport'u: yalnız Dapr HTTP
 
