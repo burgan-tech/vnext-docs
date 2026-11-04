@@ -59,7 +59,7 @@ vNext, [Aether](https://github.com/burgan-tech) telemetry altyapısı üzerinden
 
 | Anahtar | Tip | Açıklama |
 |---------|-----|----------|
-| `AdditionalMeters` | string[] | Kaydedilecek ek `Meter` adları — host'a göre değişir (ör. Execution host `BBT.Workflow.Execution.Python` metre'sini de ekler); ilgili host'un `appsettings.json` dosyasından doğrulayın |
+| `AdditionalMeters` | string[] | Kaydedilecek ek `Meter` adları — host'a göre değişir (v0.0.103 öncesinde Execution host `BBT.Workflow.Execution.Python` metre'sini de ekliyordu; Python Execution'dan çıktığı için bu metre artık yok); ilgili host'un `appsettings.json` dosyasından doğrulayın |
 
 <sup>New</sup> v0.0.99 — Function yürütme journal'ı (`executionLog: "E"` olan function'lar için `.../functions/{function}/metrics` endpoint'lerini besler) `Telemetry` bölümünde değil `Workflow:FunctionExecutionJournal` altında ayarlanır:
 

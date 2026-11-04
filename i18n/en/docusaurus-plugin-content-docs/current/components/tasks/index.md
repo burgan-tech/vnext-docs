@@ -15,7 +15,7 @@ A workflow named `tasks` is created in each domain deployment. All tasks used wi
 
 ## Task Types
 
-The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.0.56`'s `task-definition.schema.json` defines the first **22** of them; type `23` (Python) is not in the published schema enum (see the note below). Each is listed below with its number, name, and detail page.
+The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.0.59`'s `task-definition.schema.json` defines **all** of them (type `23` Python entered the schema in 0.0.59). Each is listed below with its number, name, and detail page.
 
 | # | Task Type | Description | Detail |
 |---|---|---|---|
@@ -41,16 +41,16 @@ The runtime executes a total of **23 task types**. `@burgan-tech/vnext-schema@0.
 | 20 | **DaprConversationTask** | Invoke an LLM/AI provider via Dapr Conversation | [DaprConversation](./dapr-conversation) |
 | 21 | **FanOutTask** | Run an inner task in parallel, once per item of a runtime-resolved collection | [Fan-Out](./fan-out) |
 | 22 | **ExternalHttpTask** — *deprecated* v0.0.94 | Runs the HTTP call directly inside the Orchestrator. Since v0.0.94 the type `6` HTTP task already runs orchestrator-local by default (`Workflow:TaskInvocation`); use `6` for new definitions | [External HTTP](./external-http) |
-| 23 | **PythonTask** | Built-in `main(input)` Python task, executed in the Execution service (experimental) | [Python](./python) |
+| 23 | **PythonTask** — *changed in v0.0.103* | Calls a named handler in the domain's own Python runtime container over Dapr (`handler`, `input`, `timeoutSeconds`) | [Python](./python) |
 
 > **Note:** Only these task types exist. Task types not on this list are **not supported** by the system.
 
-:::warning[Type `23` is not in the schema package]
-The `task-definition.schema.json` shipped in `@burgan-tech/vnext-schema@0.0.56` enumerates `1`–`22` (unchanged since 0.0.55); `23` (Python) is not in the `attributes.type` enum. As a result, `npm run validate` in a domain package rejects a Python task definition, while `publish` and runtime execution work fine. Type `22` (External HTTP) was added to the schema in 0.0.55 but is **deprecated** since v0.0.94 — use type `6` HTTP task for new definitions. Schemas 0.0.54 and earlier enumerate only `1`–`21`. Details: [External HTTP Task](./external-http), [Python Task](./python).
+:::note[Task types by schema version]
+The `task-definition.schema.json` shipped in `@burgan-tech/vnext-schema@0.0.55`–`0.0.58` enumerates `1`–`22`; `23` (Python) is not in the `attributes.type` enum there, so `npm run validate` rejects a Python task definition. **0.0.59** adds `23` to the enum together with the handler contract (`handler` required, `script` / `executionMode` rejected). Type `22` (External HTTP) was added to the schema in 0.0.55 but is **deprecated** since v0.0.94 — use type `6` HTTP task for new definitions. Schemas 0.0.54 and earlier enumerate only `1`–`21`. Details: [External HTTP Task](./external-http), [Python Task](./python).
 :::
 
 :::info[Orchestrator-local task types — v0.0.94]
-Since v0.0.94 the `http` (6), `daprservice` (3), `soap` (16) and `statestore` (17) task types run **inside the Orchestrator process** by default instead of hopping to Execution (`Workflow:TaskInvocation:Modes`, `Local` / `Remote` per type; task-level `invocation` override > per-type mode > `DefaultMode`). `FanOutTask` (21) is always orchestrator-local; `ExternalHttpTask` (22) is therefore redundant and **deprecated**; `PythonTask` (23) runs in Execution over the `python` route. Since v0.0.99 `CacheAsideTask` (18) runs in the Orchestrator without a separate `cacheaside` mode: its cache I/O follows the `statestore` mode and its `sourceTask` follows its own type's mode (`Modes:cacheaside` was removed). The orchestrator sidecar now needs a Dapr `state` component. Details: [Task Invocation](../../configuration/task-invocation).
+Since v0.0.94 the `http` (6), `daprservice` (3), `soap` (16) and `statestore` (17) task types run **inside the Orchestrator process** by default instead of hopping to Execution (`Workflow:TaskInvocation:Modes`, `Local` / `Remote` per type; task-level `invocation` override > per-type mode > `DefaultMode`). `FanOutTask` (21) is always orchestrator-local; `ExternalHttpTask` (22) is therefore redundant and **deprecated**; since v0.0.103 `PythonTask` (23) never goes to Execution: the Orchestrator calls the domain's Python runtime container directly over Dapr ([Python Task](./python)). Since v0.0.99 `CacheAsideTask` (18) runs in the Orchestrator without a separate `cacheaside` mode: its cache I/O follows the `statestore` mode and its `sourceTask` follows its own type's mode (`Modes:cacheaside` was removed). The orchestrator sidecar now needs a Dapr `state` component. Details: [Task Invocation](../../configuration/task-invocation).
 :::
 
 ## Task Usage

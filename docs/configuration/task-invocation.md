@@ -88,7 +88,7 @@ Yetenek kapısı sayesinde yanlış bir yapılandırma (local invoker'ı olmayan
 `cacheaside` wire tipi, `LocalCacheAsideTaskInvoker` ve Execution tarafındaki `CacheAsideTaskInvoker` v0.0.99'da kaldırıldı. Cache-Aside task'ı (tip `18`) tamamen Orchestration'daki executor'da çalışır: **cache get/set `statestore` modunu izler** (State Store task'ı ve function response cache ile aynı gateway), `sourceTask` ise kendi tipinin yönlendirmesiyle çalışır (ör. bir `http` kaynak `Modes:http`'e tabidir). Ortam konfigürasyonunuzdan `Workflow:TaskInvocation:Modes:cacheaside` (veya `Workflow__TaskInvocation__Modes__cacheaside`) girişini **kaldırın**. Bkz. [Cache-Aside Task](/docs/components/tasks/cache-aside) ve [v0.0.99 Breaking Changes](/blog/breaking-changes/breaking-changes-v0-0-99).
 :::
 
-Diğer tüm wire tipleri (`daprhttpendpoint`, `daprpubsub`, `daprconversation`, `python`, trigger/sorgu tipleri…) için local invoker yoktur; yapılandırmadan bağımsız olarak her zaman Remote çözümlenir.
+Diğer tüm wire tipleri (`daprhttpendpoint`, `daprpubsub`, `daprconversation`, trigger/sorgu tipleri…) için local invoker yoktur; yapılandırmadan bağımsız olarak her zaman Remote çözümlenir. v0.0.103'ten itibaren `PythonTask` (23) bu router'ın **dışındadır**: Orchestrator onu her zaman domain'in Python runtime container'ına Dapr ile doğrudan gönderir; `Modes:python` ayarının etkisi yoktur ([Python Task](../components/tasks/python)).
 
 ### Tip 22 External HTTP deprecated
 

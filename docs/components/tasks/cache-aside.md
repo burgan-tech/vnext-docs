@@ -182,7 +182,7 @@ Task-level mapping'in (`onExecutionTasks[].mapping`) `OutputHandler`'ı **hit ve
 
 - **`CacheAsideTaskExecutor`** (Orchestration / Application) giriş aşamasını (task-level `InputHandler`, ardından `key` script'i), read-through'u ve çıkış aşamasını yönetir.
 - **Cache get/set**, function response cache'iyle ortak **state-store cache gateway**'i üzerinden yapılır ve `Workflow:TaskInvocation:Modes.statestore` ayarını izler (Local: in-process, Remote: Execution servisi) — [State Store task](./state-store) ile aynı. Bkz. [Task Invocation Routing](/docs/configuration/task-invocation).
-- **Source**, kendi tipinin executor'ı ile çalışır; yönlendirmeyi source'un tipi belirler (ör. HTTP Local, Python source Remote olabilir). Yalnızca cache I/O `statestore` modunu izler.
+- **Source**, kendi tipinin executor'ı ile çalışır; yönlendirmeyi source'un tipi belirler (ör. HTTP source Local, DaprPubSub source Remote çalışır; Python source her zaman domain'in Python runtime'ına gider). Yalnızca cache I/O `statestore` modunu izler.
 - Ayrı bir `cacheaside` wire type'ı, invoker'ı veya routing anahtarı **yoktur** (v0.0.99'da kaldırıldı).
 - Task sonucu, diğer tüm task sonuçları gibi instance-data versiyonlamasına (Patch bump) katılır.
 

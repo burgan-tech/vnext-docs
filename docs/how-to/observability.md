@@ -47,6 +47,8 @@ Canlı değerler otomatik enjekte edilir: `traceparent` / `tracestate` .NET Http
 
 `sub` / `act_sub` kasıtlı olarak reserved **değildir**: binding bu alanları set edebilir ve o değer kazanır (**fill-if-absent**) — yoksa gateway token'ından (baggage) doldurulur.
 
+<sup>New</sup> v0.0.103 — vNext, W3C baggage'a yazdığı `vnext.flow.version` değerini propagation-güvenli biçimde taşır: RFC 3986 unreserved kümesi (`A-Z a-z 0-9 - . _ ~`) dışındaki her karakter `_` olur; ör. `1.0.0-pkg.1.0.346+contract` → `1.0.0-pkg.1.0.346_contract`. Sebep: eski propagator'lı (.NET `DiagnosticSource` < 10) servisler `+`'yı boşluğa çeviriyor, Dapr 1.18 de sonraki çağrıyı `invalid baggage header` ile reddediyordu. Downstream servislerin APM dokümanlarındaki `labels.baggage_vnext_flow_version` alanında artık `_` görünür. vNext'in kendi span'lerindeki `vnext.flow.version` tag'i ham SemVer'i taşımaya devam eder.
+
 <sup>New</sup> v0.0.99 **`X-Request-Id` artık reserved değildir — mapping kazanır, vNext doldurur.** v0.0.80–v0.0.97 arasında reserved listesindeydi: mapping'deki değer sessizce atılıyor ve hiçbir şey gönderilmiyordu (ör. OHVPS/BKM `400 TR.OHVPS.Resource.InvalidFormat`). Şimdi kural fill-if-absent'tir: task'in `headers` bloğunda ya da input mapping'inde verilen boş olmayan değer olduğu gibi (tek sefer) gönderilir; verilmemiş ya da boşsa vNext'in kendi request id'si değiştirilmeden gönderilir; vNext'in request id'si yoksa (ör. request id yakalanmamış timer / event hop'u) hiçbir şey üretilmez. Kural Http, ExternalHttp, Soap, DaprService, DaprHttpEndpoint, DirectTrigger, GetInstance / GetInstances / GetInstanceData, StartTrigger ve SubProcess task'lerinde geçerlidir (StartTrigger ve SubProcess hâlâ başka workflow / kimlik header'ı damgalamaz).
 
 :::tip[Çağrı başına benzersiz UUID]
@@ -185,6 +187,7 @@ Yeni bir `ActivitySource` tanımlayan her değişiklik, **aynı commit'te** o ka
 | `workflow_fanout_batch_size` | histogram | `task_key`, `workflow` |
 | `workflow_fanout_batch_duration_seconds` | histogram | `task_key`, `workflow` |
 | `workflow_fanout_item_failures_total` | counter | `task_key`, `workflow` — batch başına **bir kez**, başarısız öğe sayısı kadar artar (öğe başına değil) |
+| `workflow_longpoll_resume_total` <sup>New</sup> v0.0.103 | counter | `vnext.domain`, `vnext.flow.key`, `vnext.activation.trigger` (`ack` \| `ack-timeout`), `vnext.longpoll.ack_resume.outcome` — duraklatılmış bir long-poll pipeline'ının her resume isteği. Bkz. [Async/Sync → Long-poll resume'unu izleme](./async-sync#long-poll-resumeunu-izleme) |
 
 :::danger[Deprecated: `script_executions_total`]
 `script_executions_total` her zaman **compile** yolunda artırılmıştır (cache hit'ler dahil) — script'in gerçekten **çalıştırılmasında** değil. Geriye dönük uyumluluk için değişmeden emitlenmeye devam eder. Grafana panellerini şuna taşıyın:

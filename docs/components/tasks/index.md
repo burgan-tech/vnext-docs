@@ -53,7 +53,7 @@ Her task tanımı `task-definition.schema.json` şemasına uyar. Zorunlu alanlar
 
 ## Görev Türleri
 
-Runtime toplamda **23 task türü** çalıştırır. `@burgan-tech/vnext-schema@0.0.56` paketindeki `task-definition.schema.json` bunların ilk **22**'sini tanımlar; type `23` (Python) şema enum'unda yer almaz (bkz. aşağıdaki not):
+Runtime toplamda **23 task türü** çalıştırır. `@burgan-tech/vnext-schema@0.0.59` paketindeki `task-definition.schema.json` bunların **hepsini** tanımlar (type `23` Python, 0.0.59 ile şemaya girdi):
 
 | # | Görev Türü | Açıklama | Detay |
 |---|---|---|---|
@@ -79,14 +79,14 @@ Runtime toplamda **23 task türü** çalıştırır. `@burgan-tech/vnext-schema@
 | 20 | **DaprConversationTask** | Dapr Conversation ile LLM/AI sağlayıcı çağrısı | [DaprConversation](./dapr-conversation) |
 | 21 | **FanOutTask** | Çalışma zamanında çözülen koleksiyonun her elemanı için iç task'ı paralel çalıştırma | [Fan-Out](./fan-out) |
 | 22 | **ExternalHttpTask** — *deprecated* v0.0.94 | HTTP çağrısını doğrudan Orchestrator içinde yürütme. v0.0.94'ten itibaren type `6` HTTP task varsayılan olarak zaten orchestrator-local çalışır (`Workflow:TaskInvocation`); yeni tanımlarda `6` kullanın | [External HTTP](./external-http) |
-| 23 | **PythonTask** <sup>New</sup> | `main(input)` kontratlı, Execution'da çalışan built-in Python task (experimental) | [Python](./python) |
+| 23 | **PythonTask** — *v0.0.103'te değişti* | Domain'in kendi Python runtime container'ındaki isimli bir handler'ı Dapr üzerinden çağırır (`handler`, `input`, `timeoutSeconds`) | [Python](./python) |
 
-:::warning[Type `23` şema paketinde yok]
-`@burgan-tech/vnext-schema@0.0.56` paketindeki `task-definition.schema.json`, `attributes.type` enum'ında `1`–`22` değerlerini içerir (0.0.55'ten beri aynı); `23` (Python) enum'da yoktur. Bu nedenle domain paketlerinde `npm run validate` Python task tanımını reddeder; runtime tarafında `publish` ve çalıştırma sorunsuzdur. Type `22` (External HTTP) 0.0.55 ile şemaya eklendi, ancak v0.0.94'ten beri **deprecated**'dır — yeni tanımlarda type `6` HTTP task kullanın. 0.0.54 ve öncesi şemalar yalnızca `1`–`21` değerlerini içerir. Ayrıntı: [External HTTP Task](./external-http), [Python Task](./python).
+:::note[Şema sürümüne göre task türleri]
+`@burgan-tech/vnext-schema@0.0.55`–`0.0.58` paketlerindeki `task-definition.schema.json`, `attributes.type` enum'ında `1`–`22` değerlerini içerir; `23` (Python) enum'da yoktur — `npm run validate` Python task tanımını reddeder. **0.0.59** ile `23` enum'a ve handler kontratıyla (`handler` zorunlu, `script` / `executionMode` reddedilir) şemaya eklendi. Type `22` (External HTTP) 0.0.55 ile şemaya eklendi, ancak v0.0.94'ten beri **deprecated**'dır — yeni tanımlarda type `6` HTTP task kullanın. 0.0.54 ve öncesi şemalar yalnızca `1`–`21` değerlerini içerir. Ayrıntı: [External HTTP Task](./external-http), [Python Task](./python).
 :::
 
 :::info[Orchestrator-local çalışan task türleri — v0.0.94]
-v0.0.94'ten itibaren `http` (6), `daprservice` (3), `soap` (16) ve `statestore` (17) task türleri varsayılan olarak Execution'a gitmeden **doğrudan Orchestrator process'i içinde** çalışır (`Workflow:TaskInvocation:Modes`, tip başına `Local` / `Remote`; task tanımındaki `invocation` override'ı > tip modu > `DefaultMode`). `FanOutTask` (21) her zaman orchestrator-local'dir; `ExternalHttpTask` (22) bu yüzden gereksizleşmiş ve **deprecated** edilmiştir; `PythonTask` (23) Execution servisinde `python` route'u üzerinden çalışır. `CacheAsideTask` (18) v0.0.99'dan itibaren ayrı bir `cacheaside` modu olmadan Orchestrator'da çalışır; cache I/O'su `statestore` modunu, `sourceTask` ise kendi tipinin modunu izler (`Modes:cacheaside` kaldırıldı). Orchestrator sidecar'ı artık bir Dapr `state` bileşenine ihtiyaç duyar. Ayrıntı: [Task Invocation Yapılandırması](../../configuration/task-invocation).
+v0.0.94'ten itibaren `http` (6), `daprservice` (3), `soap` (16) ve `statestore` (17) task türleri varsayılan olarak Execution'a gitmeden **doğrudan Orchestrator process'i içinde** çalışır (`Workflow:TaskInvocation:Modes`, tip başına `Local` / `Remote`; task tanımındaki `invocation` override'ı > tip modu > `DefaultMode`). `FanOutTask` (21) her zaman orchestrator-local'dir; `ExternalHttpTask` (22) bu yüzden gereksizleşmiş ve **deprecated** edilmiştir; `PythonTask` (23) v0.0.103'ten itibaren Execution'a hiç gitmez: Orchestrator domain'in Python runtime container'ını Dapr ile doğrudan çağırır ([Python Task](./python)). `CacheAsideTask` (18) v0.0.99'dan itibaren ayrı bir `cacheaside` modu olmadan Orchestrator'da çalışır; cache I/O'su `statestore` modunu, `sourceTask` ise kendi tipinin modunu izler (`Modes:cacheaside` kaldırıldı). Orchestrator sidecar'ı artık bir Dapr `state` bileşenine ihtiyaç duyar. Ayrıntı: [Task Invocation Yapılandırması](../../configuration/task-invocation).
 :::
 
 ## Görev Kullanımı

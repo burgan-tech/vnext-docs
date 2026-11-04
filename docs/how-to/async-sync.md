@@ -81,6 +81,18 @@ Yayın kuralının tam tablosu için bkz. [Built-in Functions → Interaction bl
 - **Ack gate'i gateway'dedir** <sup>New</sup> v0.0.95: `POST …/longpoll/ack` yetkiyi in-process denetlemez; Internal Gateway isteği iletmeden önce [`authorize?ack=true`](/docs/components/functions/built-in#instance-authorize) fonksiyonunu çağırır. Önünde gateway olmayan bir runtime ack'i reddetmez.
 - Parent bir subflow tüketicisi olarak child state'in `fallbackTimeoutSeconds` ve `roles` değerlerini override edebilir (`terminate` ve `rule` edilemez) — bkz. [SubFlow Overrides](./subflow-overrides).
 
+#### Long-poll resume'unu izleme
+
+<sup>New</sup> v0.0.103 — `terminate: true` ile duraklayan bir pipeline iki yoldan devam eder: client `longpoll/ack` gönderir **ya da** `fallbackTimeoutSeconds` job'ı ateşlenir. Önceden ikisi aynı log satırını (20301) paylaşıyordu ve metrik yoktu; ack'lemeyen bir client her instance'ta tüm pencereyi (varsayılan 60 sn) ödetiyordu ve bu görünmüyordu. Artık üç yüzey ikisini ayırır:
+
+| Yüzey | Ack ile resume | Fallback ile resume |
+|---|---|---|
+| Span `LongPoll.AckResume` → `vnext.activation.trigger` | `ack` | `ack-timeout` |
+| Metrik `workflow_longpoll_resume_total` (meter `BBT.Workflow.Telemetry`) | `vnext.activation.trigger=ack` | `vnext.activation.trigger=ack-timeout` |
+| Log | `LongPollAckResumed` (20301) | `LongPollFallbackResumed` (20308) |
+
+`LongPollTerminationArmed` (20300) her duraklamayı kurduğu pencereyle işaretlemeye devam eder. Bir flow'un `ack-timeout` sayısı toplam resume sayısını izliyorsa, o flow'un client'ı hiç ack göndermiyordur: client'ı `ack` href'ine `POST` edecek şekilde düzeltin ya da state'te `terminate: false` kullanın.
+
 ### Continuation işletimi (durable)
 
 Asenkron bir kabulün (start veya manuel/event transition) **yalnızca ilk** job'ı bu şekilde kuyruğa alınır: continuation **doğrudan Dapr üzerinden** enqueue edilir (`DirectEnqueueContinuations`, varsayılan `true`), bu yol başarısız olursa transactional **outbox** fallback devreye girer. Bu, sağlıklı koşullarda gecikmeyi azaltırken dayanıklılık garantisini korur.
