@@ -20,7 +20,7 @@ Bu bölümdeki sayfalar, platformun başlıca yapılandırma bloklarını host b
 | [Workflow Execution](./workflow-execution) | Transition job timeout, fan-out eşzamanlılığı, InstanceData yazım budget'ı | Orchestration |
 | [Task Invocation](./task-invocation) | Task'ların Orchestration içinde (Local) veya Execution'da (Remote) çalıştırılması, bağlantı ve timeout limitleri | Orchestration |
 | [Caller Role Provider](./caller-role-provider) | Çağıran rollerinin çözümlenmesi — `default` / `morph-idm` | Orchestration, Execution |
-| [Python](./python) | Trusted Python task çalıştırma modları ve limitleri | Execution |
+| [Python Runtime](./python) | Python Task için `Workflow:PythonRuntime`, runtime container ortam değişkenleri ve Helm `pythonRuntime` (v0.0.103) | Orchestration |
 | [Scripting / Sandbox](./scripting) | Script motoru helper ve sandbox güvenlik sınırları | Orchestration, Execution |
 | [Sunucu Timeout](./server-timeout) | Init Service publish timeout'ları | Init Service |
 | [Header Limitleri](./header-limits) | Kestrel request header boyut/sayı limitleri | Tüm host'lar |

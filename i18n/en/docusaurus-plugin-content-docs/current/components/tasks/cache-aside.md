@@ -182,7 +182,7 @@ The task-level mapping's (`onExecutionTasks[].mapping`) `OutputHandler` runs on 
 
 - **`CacheAsideTaskExecutor`** (Orchestration / Application) runs the input stage (task-level `InputHandler`, then the `key` script), the read-through and the output stage.
 - **Cache get/set** goes through the **state-store cache gateway** shared with the function response cache and follows `Workflow:TaskInvocation:Modes.statestore` (Local in-process, or Remote through Execution) — exactly like the [State Store task](./state-store). See [Task Invocation Routing](/docs/configuration/task-invocation).
-- **The source** runs through its own type's executor; its own type decides routing (e.g. HTTP Local, a Python source Remote). Only the cache I/O follows `statestore`.
+- **The source** runs through its own type's executor; its own type decides routing (e.g. an HTTP source runs Local, a DaprPubSub source Remote; a Python source always goes to the domain's Python runtime). Only the cache I/O follows `statestore`.
 - There is **no** separate `cacheaside` wire type, invoker or routing key (removed in v0.0.99).
 - The task result participates in instance-data versioning (Patch bump) like any other task result.
 

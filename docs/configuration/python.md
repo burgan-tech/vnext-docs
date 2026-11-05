@@ -1,170 +1,97 @@
 ---
 sidebar_position: 7
-title: Python Yapılandırması
-description: Execution host'unda Python Task çalıştırma modları, limitler ve container/Kubernetes ayarları
+title: Python Runtime Yapılandırması
+description: Python Task için Orchestrator'ın Workflow:PythonRuntime ayarları, runtime container ortam değişkenleri ve Helm pythonRuntime bloğu
 ---
 
-# Python Yapılandırması <sup>New</sup> v0.0.88
+# Python Runtime Yapılandırması
 
-[Python Task](/docs/components/tasks/python) (type `23`), Execution host'unun `Python` appsettings bölümü ile yapılandırılır. Tüm değerler standart .NET configuration provider'ları ve `Python__Enabled`, `Python__DefaultMode` gibi environment variable'lar ile override edilebilir (iç içe alanlar için `__` ayracı kullanılır, örn. `Python__Process__MaxConcurrency`).
+:::warning[v0.0.103 — Execution `Python:*` ayarları kaldırıldı]
+v0.0.88–v0.0.102 arasında [Python Task](/docs/components/tasks/python) Execution host'unda `Python:*` bölümüyle (`Enabled`, `DefaultMode`, `EnabledModes`, `PythonNet`, `Process`, `Container`…) yapılandırılıyordu. v0.0.103 ile Execution host Python'u hiç taşımaz ve bu anahtarların **hiçbirini okumaz** — kalan override'lar sessizce yok sayılır. Bunları ortam değerlerinizden temizleyin. Geçiş: [v0.0.103 Breaking Changes](/blog/breaking-changes/breaking-changes-v0-0-103).
+:::
 
-Kaynak dosya: `execution/BBT.Workflow.Execution.HttpApi.Host/appsettings.json`.
+Python Task artık domain'in kendi runtime container'ında çalışır ve üç yerden yapılandırılır:
 
-## Örnek Yapılandırma
+| Katman | Nerede | Kim set eder |
+|---|---|---|
+| Orchestrator | `Workflow:PythonRuntime:*` appsettings | Helm chart (`pythonRuntime.enabled: true` olduğunda) |
+| Runtime container | `VNEXT_PYTHON_*` ortam değişkenleri | Helm chart (`pythonRuntime.config`) |
+| Deployment | Helm `pythonRuntime` bloğu | Domain sahibi |
+
+## Orchestrator: `Workflow:PythonRuntime`
 
 ```json
 {
-  "Python": {
-    "Enabled": false,
-    "DefaultMode": "pythonNet",
-    "EnabledModes": ["pythonNet", "process"],
-    "MaxTimeoutSeconds": 50,
-    "MaxCodeBytes": 262144,
-    "MaxInputBytes": 2097152,
-    "MaxOutputBytes": 2097152,
-    "MaxStdoutBytes": 32768,
-    "MaxStderrBytes": 32768,
-    "AllowedModules": ["*"],
-    "PythonNet": {
-      "PythonDll": "libpython3.12.so.1.0",
-      "PythonHome": "/usr",
-      "PythonPath": "/opt/vnext-python/venv/lib/python3.12/site-packages",
-      "RunnerDirectory": "/opt/vnext-python",
-      "MaxConcurrency": 1
-    },
-    "Process": {
-      "PythonExecutable": "/opt/vnext-python/venv/bin/python",
-      "RunnerPath": "/opt/vnext-python/runner.py",
-      "MaxConcurrency": 2,
-      "UsePrlimit": true,
-      "PrlimitExecutable": "/usr/bin/prlimit",
-      "MemoryBytes": 4294967296,
-      "CpuTimeSeconds": 45,
-      "OpenFiles": 256
-    },
-    "Container": {
-      "Driver": "docker",
-      "Endpoint": "unix:///var/run/docker.sock",
-      "ApiVersion": "v1.43",
-      "Image": "ghcr.io/burgan-tech/vnext/python-runner:latest",
-      "PullPolicy": "ifNotPresent",
-      "NetworkMode": "none",
-      "MaxConcurrency": 2,
-      "MemoryBytes": 2147483648,
-      "NanoCpus": 1000000000,
-      "PidsLimit": 128,
-      "TmpfsBytes": 67108864,
-      "Kubernetes": {
-        "Namespace": "default",
-        "ContainerName": "python-runner",
-        "RunnerServiceAccountName": null,
-        "ImagePullSecrets": [],
-        "PodStartTimeoutSeconds": 30,
-        "PollIntervalMilliseconds": 250,
-        "JobTtlSecondsAfterFinished": 60,
-        "RuntimeClassName": null
-      }
+  "Workflow": {
+    "PythonRuntime": {
+      "AppId": "vnext-core-python-runtime-app",
+      "InvokeMethod": "v1/invoke",
+      "TimeoutGraceSeconds": 5
     }
   }
 }
 ```
 
-## Kök Alanlar
-
 | Alan | Tip | Varsayılan | Açıklama |
 |------|-----|------------|----------|
-| `Enabled` | boolean | `false` | Python task yürütmesini global olarak açar/kapatır |
-| `DefaultMode` | string | `pythonNet` | Task `executionMode` belirtmediğinde kullanılacak mod |
-| `EnabledModes` | string[] | `["pythonNet", "process"]` | Kullanılabilir modların açık listesi. `DefaultMode`, `Enabled=true` iken bu listede **bulunmak zorundadır**; aksi halde başlangıçta doğrulama hatası verir |
-| `MaxTimeoutSeconds` | integer | `50` | Task'ın `timeoutSeconds` alanı için üst sınır; `1–50` aralığında olmalıdır |
-| `MaxCodeBytes` | integer | `262144` (256 KiB) | Decode edilmiş Python kaynak kodu boyut sınırı |
-| `MaxInputBytes` | integer | `2097152` (2 MiB) | `config.input` boyut sınırı |
-| `MaxOutputBytes` | integer | `2097152` (2 MiB) | `main()` dönüş değeri boyut sınırı |
-| `MaxStdoutBytes` | integer | `32768` (32 KiB) | Yakalanan stdout sınırı |
-| `MaxStderrBytes` | integer | `32768` (32 KiB) | Yakalanan stderr sınırı |
-| `AllowedModules` | string[] | `["*"]` | İzinli Python modülleri — paylaşılan runner bootstrap'ı tarafından her modda (dinamik import'lar dahil) uygulanır. **Yönetişim politikasıdır, güvenlik sınırı değildir** |
+| `AppId` | string? | boş | Domain'in Python runtime'ının Dapr app-id'si. **Boş = runtime yok**; her Python task'ı çağrı yapılmadan `503` ile düşer |
+| `InvokeMethod` | string | `v1/invoke` | Kontratın invoke route'u |
+| `TimeoutGraceSeconds` | integer (`1`–`30`) | `5` | Handler timeout'unun üstüne eklenen bekleme; runtime'ın kendi `504`'ü Orchestrator vazgeçmeden önce gelsin diye. Bu süre de aşılırsa task `408` ile düşer |
 
-## `PythonNet`
+Environment variable biçimi: `Workflow__PythonRuntime__AppId`. Helm chart `pythonRuntime.enabled: true` iken bu değeri runtime'ın app-id'siyle (`vnext-<appDomain>-python-runtime-app` ya da `pythonRuntime.dapr.appId`) kendisi verir; elle set etmeniz gerekmez.
 
-| Alan | Tip | Varsayılan | Açıklama |
-|------|-----|------------|----------|
-| `PythonDll` | string | `libpython3.12.so.1.0` | Yüklenecek CPython paylaşımlı kütüphanesi |
-| `PythonHome` | string? | `/usr` | `PYTHONHOME` |
-| `PythonPath` | string? | `/opt/vnext-python/venv/lib/python3.12/site-packages` | `PYTHONPATH` |
-| `RunnerDirectory` | string | `/opt/vnext-python` | Runner script dizini |
-| `MaxConcurrency` | integer | `1` | Eşzamanlı `pythonNet` çağrı sınırı (GIL nedeniyle düşük tutulur) |
+Handler timeout'u (`timeoutSeconds`) task tanımındadır, `1`–`50` aralığındadır ve publish'te doğrulanır — host tarafında ayrı bir üst sınır ayarı yoktur.
 
-## `Process`
+## Runtime container: `VNEXT_PYTHON_*`
 
-| Alan | Tip | Varsayılan | Açıklama |
-|------|-----|------------|----------|
-| `PythonExecutable` | string | `/opt/vnext-python/venv/bin/python` | `python -I runner.py` için yürütülebilir dosya |
-| `RunnerPath` | string | `/opt/vnext-python/runner.py` | Runner script yolu |
-| `MaxConcurrency` | integer | `2` | Eşzamanlı process sınırı |
-| `UsePrlimit` | boolean | `true` | Linux'ta CPU/adres-alanı/açık-dosya limitleri için `prlimit` kullanımı |
-| `PrlimitExecutable` | string | `/usr/bin/prlimit` | `prlimit` binary yolu |
-| `MemoryBytes` | integer (long) | `4294967296` (4 GiB) | Adres-alanı limiti |
-| `CpuTimeSeconds` | integer | `45` | CPU zaman limiti |
-| `OpenFiles` | integer | `256` | Açık dosya sayısı limiti |
+| Değişken | Helm alanı | Varsayılan | Açıklama |
+|---|---|---|---|
+| `VNEXT_PYTHON_PORT` | `pythonRuntime.service.port` | `8080` | Dinleme portu (Dapr app port'u) |
+| `VNEXT_PYTHON_HANDLERS` | `pythonRuntime.config.handlersPackage` | `handlers` | Modülleri handler kaydeden paket |
+| `VNEXT_PYTHON_MAX_WORKERS` | `pythonRuntime.config.maxWorkers` | `4` | Pod başına eşzamanlı handler çağrısı |
+| `VNEXT_PYTHON_MAX_REQUEST_BYTES` | `pythonRuntime.config.maxRequestBytes` | `4194304` (4 MiB) | İstek gövdesi sınırı — Dapr body size sınırının içinde tutun |
+| `VNEXT_PYTHON_MAX_OUTPUT_BYTES` | `pythonRuntime.config.maxOutputBytes` | `4194304` (4 MiB) | Cevap gövdesi sınırı |
 
-## `Container`
+Orchestrator, input mapping'den sonraki girdiyi ayrıca **2 MiB** ile sınırlar; aşan girdi çağrı yapılmadan `413` ile düşer.
 
-| Alan | Tip | Varsayılan | Açıklama |
-|------|-----|------------|----------|
-| `Driver` | string | `docker` | `docker` veya `kubernetes` |
-| `Endpoint` | string | `unix:///var/run/docker.sock` | Docker Engine endpoint'i (Docker driver) |
-| `ApiVersion` | string | `v1.43` | Docker Engine API versiyonu |
-| `Image` | string | `ghcr.io/burgan-tech/vnext/python-runner:latest` | Runner container image'ı |
-| `PullPolicy` | string | `ifNotPresent` | Image çekme politikası |
-| `NetworkMode` | string | `none` | Container network modu |
-| `MaxConcurrency` | integer | `2` | Eşzamanlı container sınırı |
-| `MemoryBytes` | integer (long) | `2147483648` (2 GiB) | Container bellek limiti |
-| `NanoCpus` | integer (long) | `1000000000` (1 CPU) | Container CPU limiti |
-| `PidsLimit` | integer (long) | `128` | Container PID limiti |
-| `TmpfsBytes` | integer (long) | `67108864` (64 MiB) | `/tmp` tmpfs boyutu |
-| `ClientCertificatePath` | string? | `null` | Docker TLS client sertifikası (yalnızca Docker driver) |
-| `ClientCertificatePassword` | string? | `null` | Docker TLS client sertifika şifresi |
-| `CaCertificatePath` | string? | `null` | Docker TLS CA sertifikası |
+Handler'ın kendi ayarları için `pythonRuntime.extraEnvConfig` kullanılır. Secret'lar buraya **konmaz** — Dapr secret store'dan okunur.
 
-Container driver varsayılan olarak non-root UID/GID 65532, read-only root filesystem, düşürülmüş capability'ler, `no-new-privileges` ve host mount yasağı ile çalışır. Container çalıştırma **opt-in**'dir; normal geliştirme Compose dosyası Docker socket'ini mount etmez — yalnızca açıkça onaylanmış bir ortamda `etc/docker/docker-compose.python-container.yml` kullanılmalıdır.
+## Deployment: Helm `pythonRuntime`
 
-### `Container.Kubernetes`
-
-| Alan | Tip | Varsayılan | Açıklama |
-|------|-----|------------|----------|
-| `Namespace` | string | `default` | Job/Pod'ların oluşturulacağı namespace |
-| `KubeConfigPath` | string? | `null` | Kubeconfig dosya yolu (in-cluster çalışırken gerekmez) |
-| `Context` | string? | `null` | Kubeconfig context adı |
-| `ContainerName` | string | `python-runner` | Pod içindeki container adı |
-| `RunnerServiceAccountName` | string? | `null` | Image-pull veya admission policy amaçlı service account (runner pod'unun kendi token mount'u her zaman kapalıdır) |
-| `ImagePullSecrets` | string[] | `[]` | Image pull secret adları |
-| `PodStartTimeoutSeconds` | integer | `30` | Pod başlatma zaman aşımı |
-| `PollIntervalMilliseconds` | integer | `250` | Job/Pod durumu polling aralığı |
-| `JobTtlSecondsAfterFinished` | integer | `60` | Job'un tamamlanma sonrası TTL'i (ek güvence; asıl silme `finally` bloğunda yapılır) |
-| `RuntimeClassName` | string? | `null` | Kullanılacak `RuntimeClass` |
-
-Kubernetes driver, invocation başına bir `batch/v1` Job oluşturur (`backoffLimit: 0`), JSON girdiyi `pods/attach` streaming API'si ile gönderir (ConfigMap/Secret/env/command-line **kullanmaz**), stdout/stderr'i ayrı okur, ardından Job'u `finally` içinde siler. Runner pod'unda `automountServiceAccountToken: false` her zaman geçerlidir. Kubernetes taşınabilir bir per-Pod PID limiti sunmadığı için `PidsLimit` yalnızca politika metadata'sı olarak Job üzerine yazılır — asıl uygulama node/container runtime veya uyumlu bir admission/runtime politikasına bırakılır.
-
-:::info[RBAC]
-Execution servisinin Kubernetes'te namespace-scoped Job (create/get/list/watch/delete), Pod (get/list/watch) ve `pods/attach` (create/get) izinlerine ihtiyacı vardır. Bu RBAC kaynakları (ServiceAccount, Role, RoleBinding) `vnext-helm-charts` reposundaki Helm chart'tan gelir — bu repo bunları sağlamaz.
-:::
-
-## Timeout Bütçe Hiyerarşisi
-
-Başlangıçta doğrulanan (`WorkflowExecutionOptionsValidator`, fail-fast) katmanlı bütçe kuralı:
-
-```
-Python:MaxTimeoutSeconds < ExecutionApi:InvocationTimeoutSeconds < WorkflowExecution:TransitionJobTimeoutSeconds < (chain lock lease)
+```yaml
+pythonRuntime:
+  enabled: true
+  replicaCount: 1
+  image:
+    # DOMAIN'in image'ı: FROM ghcr.io/burgan-tech/vnext/python-runtime:<sürüm>
+    repository: registry.example.com/core/python-runtime
+    tag: "1.4.0"
+  config:
+    handlersPackage: handlers
+    maxWorkers: 4
+  networkPolicy:
+    enabled: true   # yalnızca bu release'in orchestrator pod'larından ingress
 ```
 
-- `Python:MaxTimeoutSeconds`, Dapr çağrısının Python cleanup'ından ve response propagation'ından **daha kısa** olmalıdır → `ExecutionApi:InvocationTimeoutSeconds`'tan küçük olmak zorunda.
-- `ExecutionApi:InvocationTimeoutSeconds`, tek bir task invocation'ının tüm job yürütme bütçesini tüketmemesi için `WorkflowExecution:TransitionJobTimeoutSeconds`'tan küçük olmak zorunda.
-- `WorkflowExecution:TransitionJobTimeoutSeconds`, chain lock lease süresinden (`TransitionLockLeaseSeconds` veya türetilmiş varsayılanı) küçük olmak zorunda — kilit, job bütçesini ve timeout-recovery yolunu **aşmalıdır**.
+Tüm alanlar (güvenlik bağlamı, kaynaklar, HPA, NetworkPolicy, probe'lar): [Helm Chart § Python Runtime](../deployment/helm-chart#python-runtime).
 
-Hiyerarşi ihlal edilirse uygulama **boot'ta başarısız olur** (`ValidateOnStart`), production'da bir race window olarak ortaya çıkmak yerine.
+## Timeout Katmanları
+
+```
+handler timeoutMs (= timeoutSeconds) < Orchestrator beklemesi (timeoutSeconds + TimeoutGraceSeconds) < WorkflowExecution:TransitionJobTimeoutSeconds
+```
+
+- En uzun bekleme 50 + 30 = **80 sn**'dir.
+- Bu zincir başlangıçta **doğrulanmaz**: `WorkflowExecutionOptionsValidator` yalnızca `ExecutionApi:InvocationTimeoutSeconds < WorkflowExecution:TransitionJobTimeoutSeconds < chain lock lease` kuralını denetler (bkz. [Workflow Execution](./workflow-execution)). Job bütçesini (varsayılan 300 sn) akıştaki en uzun Python beklemesinin üstünde tutun.
+- Python çağrısı Execution'a gitmediği için `ExecutionApi:InvocationTimeoutSeconds` Python task'ını **etkilemez**.
+
+## Lokal geliştirme
+
+vnext-example'daki [`labs/python-runtime/`](https://github.com/burgan-tech/vnext-example/tree/master/labs/python-runtime) lab'ı domain image'ını ve Dapr sidecar'ını (`--app-id vnext-python-runtime-app`) lokal vNext altyapı ağına bağlar; Orchestrator `Workflow__PythonRuntime__AppId=vnext-python-runtime-app` ile başlatılır. Lab, Helm chart'taki gibi salt-okur kök dosya sistemi, root olmayan kullanıcı ve düşürülmüş capability'lerle çalışır.
 
 ## İlgili
 
-- [Python Task](/docs/components/tasks/python) — task kontratı ve hata sınıfları
-- [Server Timeout Yapılandırması](./server-timeout)
+- [Python Task](/docs/components/tasks/python) — task alanları, handler yazımı, kontrat ve hata kodları
+- [Helm Chart § Python Runtime](../deployment/helm-chart#python-runtime)
+- [Workflow Execution Yapılandırması](./workflow-execution) — timeout bütçe hiyerarşisi
 - Runtime dokümanı: [python-task.md (vnext)](https://github.com/burgan-tech/vnext/blob/master/docs/runtime/python-task.md)

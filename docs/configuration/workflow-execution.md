@@ -70,10 +70,10 @@ Orchestration host'unun transition job'larını, fan-out eşzamanlılığını v
 Startup'ta doğrulanan (fail-fast) bir bütçe hiyerarşisi vardır — her katman bir sonrakinin içine sığmalıdır:
 
 ```
-Python:MaxTimeoutSeconds < ExecutionApi:InvocationTimeoutSeconds < WorkflowExecution:TransitionJobTimeoutSeconds < chain lock lease
+ExecutionApi:InvocationTimeoutSeconds < WorkflowExecution:TransitionJobTimeoutSeconds < chain lock lease
 ```
 
-- `Python:MaxTimeoutSeconds` (Execution host, varsayılan `50`), `ExecutionApi:InvocationTimeoutSeconds`'tan (varsayılan `60`) küçük olmalıdır — Dapr çağrısı, Python cleanup ve yanıt yayılımından daha uzun sürmelidir.
+- v0.0.103 ile Execution host'un `Python:MaxTimeoutSeconds` katmanı kaldırıldı. Python Task artık Orchestrator'dan domain runtime'ına gider ve beklemesi (`timeoutSeconds + Workflow:PythonRuntime:TimeoutGraceSeconds`, en fazla 80 sn) bu hiyerarşide **doğrulanmaz** — job bütçesini bunun üstünde tutun ([Python Runtime Yapılandırması](./python#timeout-katmanları)).
 - `ExecutionApi:InvocationTimeoutSeconds`, `WorkflowExecution:TransitionJobTimeoutSeconds`'tan küçük olmalıdır — tek bir task invocation, job'un tüm yürütme bütçesini tüketemez.
 - `TransitionJobTimeoutSeconds`, zincir lock lease'inden (varsayılan `TransitionJobTimeoutSeconds + 30`, veya `TransitionLockLeaseSeconds` ile açıkça ayarlanabilir) küçük olmalıdır — lock, job bütçesini ve timeout-recovery yolunu aşmalıdır.
 

@@ -78,7 +78,7 @@ Minikube kurulumu, local geliştirme ve test senaryoları için uygundur. Üreti
 
 ## Chart ↔ Runtime Sürüm Eşlemesi
 
-Chart, `appVersion` alanında hedeflediği runtime imaj etiketini taşır. v0.0.93–v0.0.100 için:
+Chart, `appVersion` alanında hedeflediği runtime imaj etiketini taşır. v0.0.93–v0.0.103 için:
 
 | Chart | Runtime (`appVersion`) | Not |
 |---|---|---|
@@ -92,6 +92,10 @@ Chart, `appVersion` alanında hedeflediği runtime imaj etiketini taşır. v0.0.
 | `1.0.121` | `0.0.98` | — |
 | `1.0.122` | `0.0.99` | — |
 | `1.0.123` | `0.0.100` | Kafka pub/sub seçeneği (`global.dapr.pubsub.type`), `global.blobStorageComponents` (x-storage), Execution gRPC values'ları kaldırıldı (bkz. [1.0.123'e geçiş](#chart-10123e-geçiş-runtime-00100)) |
+| `1.0.124` | `0.0.101` | — |
+| `1.0.125` | `0.0.102` | — |
+| `1.0.126` | `0.0.102` | Init job `VNEXT_COMPONENT_VERSION` → `0.0.21` (vnext-core, `sys-version-registry`) |
+| `1.0.127` | `0.0.103` | İsteğe bağlı `pythonRuntime` bloğu — PythonTask (type `23`) için domain'in Python runtime Deployment'ı (bkz. [Python Runtime](#python-runtime)) |
 
 :::warning[Dapr bileşen ayak izi — v0.0.93 (chart ≥ 1.0.111)]
 Runtime v0.0.93 ile Dapr bileşenleri **yalnızca tüketen host'a** yüklenir (`vnext/docs/runtime/dapr-component-footprint.md`): `state` → orchestrator + execution; `lock` → orchestrator + db-migrator; `pubsub` → orchestrator, execution, inbox, outbox; `pubsub-broadcast` → yalnız orchestrator. `lock` execution/inbox/outbox'tan, `state` inbox/outbox'tan kaldırıldı; `AddRedis()` / `Redis__Standalone__EndPoints__*` env'leri, `dapr-placement` bağımlılığı ve `DAPR_PLACEMENT_HOST` runtime'dan silindi (Redis **sunucusu** kalır — Dapr bileşenlerini besler). Monitor API host'u (`/api/v1/monitor`, port 4203) da bu sürümde kaldırıldı. Chart, `global.dapr.redis.scopes.<state|lock|pubsub|pubsubBroadcast>` ile bu politikayı **değiştirmenize** (liste birleşmez, yerine geçer) izin verir; 0.0.90 öncesi bir imaj sabitleyen domain `Redis__Standalone__EndPoints__0`'ı kendi values'ında yeniden eklemelidir.
@@ -244,6 +248,52 @@ Ayrıntı: [Dosya Alanları](/docs/how-to/file-fields).
 - **Kaldırılan gRPC values'ları.** Orchestration → Execution gRPC transport'u runtime'dan kaldırıldı; çağrı her zaman Dapr HTTP service invocation'dır (bkz. [Task Invocation](/docs/configuration/task-invocation)). `execution.grpcPort`, `Kestrel__GrpcPort` ve `orchestrator.appEnvConfig.ExecutionApi__Transport` chart'tan çıkarıldı; bunları set eden bir override etkisizdir.
 - **`execution.dapr.protocol` `"http"` kalmalıdır.** Execution sidecar'ını `grpc`'ye çevirmiş bir ortam `http`'ye döndürülmelidir. Dapr sidecar'ının kendi gRPC portları ve OTLP gRPC bundan etkilenmez.
 :::
+
+---
+
+## Python Runtime
+
+<sup>New</sup> chart 1.0.127 (runtime 0.0.103) — [Python Task](/docs/components/tasks/python) (type `23`) için domain'in kendi Python handler'larını çalıştıran **isteğe bağlı** Deployment. Orchestrator onu Dapr service invocation ile doğrudan çağırır (`POST v1/invoke`, kontrat sürümü 1); hiçbir vNext servisi Python taşımaz. Varsayılan olarak kapalıdır — Python task'ı olmayan bir domain ek bir şey deploy etmez.
+
+```yaml
+pythonRuntime:
+  enabled: true
+  replicaCount: 1
+  image:
+    # DOMAIN'in image'ı: FROM ghcr.io/burgan-tech/vnext/python-runtime:<sürüm> üzerine
+    # handler'lar ve sabitlenmiş requirement'lar. Zorunlu; appVersion varsayılanı yoktur.
+    repository: registry.example.com/core/python-runtime
+    tag: "1.4.0"
+  config:
+    handlersPackage: handlers
+    maxWorkers: 4
+    maxRequestBytes: 4194304
+    maxOutputBytes: 4194304
+  networkPolicy:
+    enabled: true   # yalnızca bu release'in orchestrator pod'larından ingress
+```
+
+| Alan | Varsayılan | Açıklama |
+|---|---|---|
+| `enabled` | `false` | Runtime'ı açar ve orchestrator'a `Workflow__PythonRuntime__AppId` verir. Kapalıyken her Python task'ı `503` ile düşer |
+| `image.repository` / `tag` / `digest` | boş | Domain'in image'ı — **zorunlu**; eksikse render başarısız olur. Sürüm vNext'in değil domain'indir |
+| `replicaCount` | `1` | Çağrılar pod başına tek process'i paylaşır ve CPU-yoğun handler'lar GIL ile sınırlıdır: thread değil replica ile ölçekleyin |
+| `dapr.appId` | boş | Boş = `vnext-<appDomain>-python-runtime-app`. Orchestrator aynı değere yönlendirilir; override başka bir şey gerektirmez |
+| `dapr.maxBodySize` / `httpMaxRequestSize` | boş | Boş = `global.dapr.*` |
+| `service.port` | `8080` | Runtime'ın dinleme portu; `dapr.io/app-port` buradan türetilir |
+| `config.handlersPackage` | `handlers` | `VNEXT_PYTHON_HANDLERS` |
+| `config.maxWorkers` | `4` | `VNEXT_PYTHON_MAX_WORKERS` — pod başına eşzamanlı handler çağrısı |
+| `config.maxRequestBytes` / `maxOutputBytes` | `4194304` | `VNEXT_PYTHON_MAX_REQUEST_BYTES` / `_OUTPUT_BYTES` — istek sınırını Dapr body size içinde tutun |
+| `extraEnvConfig` | `{}` | Handler ayarları için ek ortam değişkenleri. **Secret konmaz** — Dapr secret store kullanın |
+| `resources` / `resourcesFallback` | `{}` / 100m–1000m CPU, 256Mi–1Gi | Boş `resources` = `global.resources.default`, o da yoksa `resourcesFallback`. En ağır handler'a göre boyutlayın |
+| `autoscaling.*` | kapalı, 1–5 replica, %80 CPU/bellek | HPA |
+| `networkPolicy.enabled` | `true` | Ingress yalnızca bu release'in orchestrator pod'larından (Dapr sidecar'ı üzerinden). Egress kısıtlanmaz. NetworkPolicy destekleyen CNI gerekir; `extraIngress` ek kurallar içindir (ör. Prometheus) |
+| `tmpSizeLimit` | `128Mi` | Salt-okur kök üzerinde yazılabilir `/tmp` (emptyDir) |
+| `podSecurityContext` / `securityContext` | UID/GID 65532, non-root, drop ALL, read-only root | Base image'ın beklediği sertleştirme |
+
+Pod service-account token'ı mount etmez (`automountServiceAccountToken: false`) ve `/v1/health` liveness/readiness probe'larıyla çalışır. App-id seviyesinde ek kısıt isteyen cluster'lar runtime sidecar'ı için yalnız orchestrator app-id'sini kabul eden bir Dapr `Configuration` `accessControl` politikası ekleyebilir. Base image `ghcr.io/burgan-tech/vnext/python-runtime` vNext release'leriyle yayımlanır.
+
+Yapılandırma ayrıntısı: [Python Runtime Yapılandırması](/docs/configuration/python). Chart kaynağı: [`charts/vnext/values.yaml` → `pythonRuntime`](https://github.com/burgan-tech/vnext-helm-charts/blob/master/charts/vnext/values.yaml).
 
 ---
 
