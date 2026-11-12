@@ -340,6 +340,21 @@ Ana iş akışı ile paralel çalışan bağımsız bir subprocess instance'ı b
 | `UseDapr` | `SetUseDapr(bool useDapr)` | Dapr service invocation kullan |
 | `ValidateSSL` | `SetValidateSSL(bool validateSSL)` | SSL doğrulama |
 
+### Sync çıktıda child'ın state'i
+
+<sup>New</sup> v0.0.104 Task **sync** çalıştığında (`"sync": true` / `SetSync(true)`) çıktısı child'ın `currentState` ve `effectiveState` alanlarını taşır; output mapping child'ın nerede durduğunu ek bir okuma yapmadan görebilir. Alanın yolu rotaya göre değişir:
+
+```csharp
+// SubProcess (sync) OutputHandler
+var state = context.Body?.data?.value?.currentState   // aynı domain'de start: çıktı data.value altına sarılır
+         ?? context.Body?.data?.currentState;         // cross-domain start: uzak gövde düz geçer (data.*)
+```
+
+- Değerler child instance'ın **kendi persisted state'idir** (instance GET'teki `metadata.currentState` / `metadata.effectiveState`); state fonksiyonunun `state` alanı (aktif SubFlow yaprağının state'i) **değildir**. Child başlangıç state'inden otomatik ilerliyorsa değer, **durduğu** state'tir.
+- **Async** (`sync: false`, `202`) yanıtta iki alan da yoktur.
+
+Ayrıntı: [Workflow → Sync SubProcess task çıktısında child state'i](/docs/components/workflow). Çalışan örnek: [vnext-example `sync-subprocess-state-lab`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/sync-subprocess-state-lab/src/SspStartChildMapping.csx) (task: [`ssp-start-child.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Tasks/sync-subprocess-state-lab/ssp-start-child.json)).
+
 :::tip[SubProcess vs StartTask]
 
 - **SubProcess**: Fire-and-forget, bağımsız çalışır, ana iş akışını bloke etmez (`sync` varsayılanı `false`)

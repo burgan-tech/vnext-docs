@@ -89,7 +89,7 @@ Aynı `order` değerine sahip, sayısı tanımda **sabit ve bilinen** task'lar z
 | `join.minSuccess` | integer | Koşullu | yok | `policy: "quorum"` iken **zorunlu** ve `>= 1` olmalıdır; aksi hâlde parse hatası. Diğer politikalarda (bugün uyarı üretmeden) yok sayılır |
 | `join.resultKey` | string | Hayır | `"fanOutResults"` | **Varsayılan çıktı paketlemesinin** eleman sonuçlarını yazdığı instance-data anahtarı. Varsayılan paketleme devredeyken geçerlidir: task hiç mapping taşımıyorsa **veya** mapping'i `OutputHandler`'ı override etmiyorsa. Mapping `OutputHandler`'ı override ettiği anda yok sayılır — çıktı, anahtarlarıyla birlikte o handler'ın verisidir |
 | `join.ordered` | boolean | Hayır | `true` | İleride sonuçları tamamlanma sırasına göre akıtabilecek durable mod ile şema uyumluluğu için kabul edilir. **Inline modda no-op'tur** — sonuçlar her zaman `Index`'e göre sıralı döner ve executor bu bayrağı hiç okumaz |
-| `errorBoundary` | object | Hayır | yok | Normal bir `ErrorBoundary` (`onError` kuralları: `action`, `errorCodes`/`errorTypes`, `priority`, `retryPolicy`, `logOnly`). State veya transition error boundary'sinin kullandığı **aynı** motor mekanizması ile **her elemana bağımsız** uygulanır. Retry'ı tükenmiş bir eleman sonuç kümesinde bir `Failed` kaydına dönüşür; batch'i kendi başına durdurmaz — buna join policy karar verir |
+| `errorBoundary` | object | Hayır | yok | Normal bir `ErrorBoundary` (`onError` kuralları: `action`, `errorCodes`/`errorTypes`, `priority`, `retryPolicy`, `logOnly`). State veya transition error boundary'sinin kullandığı **aynı** motor mekanizması ile **her elemana bağımsız** uygulanır. Retry'ı tükenmiş bir eleman sonuç kümesinde bir `Failed` kaydına dönüşür; batch'i kendi başına durdurmaz — buna join policy karar verir. <sup>New</sup> v0.0.104 Hatası `Ignore` (`action: 3`) veya `Log` ile geçilen eleman, iç task'ın normalize kodunu (`Task:{taskType}:{taskKey}:{status}`), mesajını ve yanıt `data`'sını taşır; `OutputHandler` status'a göre dallanabilir (ör. `:409` / `:404`'ü beklenen ret say) — bkz. [Hata kodları](#hata-kodları-ve-kısmi-başarısızlıkta-dallanma) |
 
 \* `itemsPath` ile mapping'in `ItemSelector`'ından **tam olarak biri** verilmelidir.
 
@@ -487,7 +487,32 @@ Aşağıdaki kodlar **public bir kontrattır** — iş akışı yazarları bu st
 | `FanOut:BatchTimeout` | Eleman, batch bütünüyle `batchTimeoutSeconds`'a takıldığı için kesildi |
 | `FanOut:ItemCancelled` | Eleman join policy'nin early-stop'u ile iptal edildi — `firstSuccess` zaten başarılı oldu ya da `all` zaten başarısız oldu ve bu eleman hâlâ çalışıyordu |
 | `FanOut:ItemNotStarted` | Eleman hâlâ eşzamanlılık slotu için kuyrukta beklerken iptal edildi; açıklayacak bir süre sınırı veya early-stop yok |
-| `FanOut:ItemFailed` | Fallback: elemanın iç task'ı, fan-out seviyesinde daha spesifik bir kod olmadan başarısız oldu (veya exception attı) — iç task'ın kendi hata kodu varsa **değiştirilmeden** geçer |
+| `FanOut:ItemFailed` | Fallback — yalnızca iç task bir hata kodu üretmediğinde: tipik olarak iç task'ın başarısızlığına **hiç error boundary** (task, state veya global) uygulanmadığında (mesaj ve `data` korunur) ya da kodsuz bir exception'da. İç task bir kod ürettiyse (`Abort`/`Rollback` gibi bloklayan bir aksiyonla ya da <sup>New</sup> v0.0.104 itibarıyla `Ignore`/`Log` ile ele alınmış olsun) o kod **değiştirilmeden** geçer |
+
+#### Yok sayılan elemanın hata kodu
+
+<sup>New</sup> v0.0.104 Kendi `errorBoundary`'si iç task'ın hatasını bloklamayan bir aksiyonla (`Ignore` = `3` veya `Log`) geçen eleman, iç task'ın cevabını `FanOutItemResult` üzerinde korur:
+
+| Alan | Değer |
+|------|-------|
+| `IsSuccess` | `false` |
+| `ErrorCode` | İç task'ın normalize kodu, `Task:{taskType}:{taskKey}:{status}` — ör. `Task:DirectTrigger:notify-subprocesses-finalize:409` |
+| `ErrorMessage` | İç task'ın kendi mesajı |
+| `Data` | İç task'ın yanıt gövdesi (döndürdüyse) |
+
+v0.0.103'e kadar böyle bir eleman her zaman `FanOut:ItemFailed`, genel `FanOut item <key> failed.` mesajı ve `Data = null` ile gelirdi; `OutputHandler` beklenen bir reddi (`409`, `404`) diğer yok sayılan hatalardan ayıramazdı. `Abort` / `Rollback` gibi bloklayan aksiyonla ele alınan hatalar ve hiç boundary olmayan yol **değişmedi**; `FanOutItemResult` kaydına yeni alan eklenmedi.
+
+```json
+"errorBoundary": { "onError": [ { "action": 3, "errorCodes": ["400", "404", "409"], "priority": 1 } ] }
+```
+
+Bu boundary altında hedefi `409` dönen eleman `OutputHandler`'a `IsSuccess = false`, `ErrorCode = "Task:DirectTrigger:<taskKey>:409"` ve iç task'ın mesajıyla ulaşır — [Örnek 2](#örnek-2--itemselector--directtrigger-iç-taskı)'deki `ErrorCode.Contains("409")` kontrolü artık gerçekten iç status'u görür.
+
+:::warning[Migration: `FanOut:ItemFailed` ile yok sayılan reddi yakalayan `OutputHandler`'lar]
+`Ignore`/`Log` ile geçilen reddi `item.ErrorCode == "FanOut:ItemFailed"` ile tespit eden bir `OutputHandler` v0.0.104'te artık eşleşmez. Bunun yerine iç status koduna bakın (ör. `item.ErrorCode?.EndsWith(":409")`). `FanOut:ItemFailed` yalnızca iç task'ın kod üretmediği durumlar için kalır.
+:::
+
+Doğrulayan senaryo: [vnext-example `fanout-case-item-boundary-ignore-task.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Tasks/fan-out-config-matrix/fanout-case-item-boundary-ignore-task.json) — `FanOutConfigMatrixTests` içindeki `PerItemErrorBoundary_Ignore_KeepsTheInnerTasksErrorCodeAndMessage` testi.
 
 ### Önerilen kısmi başarısızlık deseni
 

@@ -346,6 +346,23 @@ State Function yanıtında bu değer v0.0.99'dan itibaren üst seviye `stateSubT
 - **Çözülmüş sürüm** <sup>New</sup> v0.0.102: parent, correlation'a child'ın **çözülmüş** sürümünü (child start yanıtındaki `flowVersion`) yazar — `process.version`'daki yazılmış referansı (`1.0`, `latest`) değil. Parent'ın sonraki okumaları (forward, descent, human task, retry) floating referansı yeniden çözmez; child'ın varsayılan sürümü sonradan değişse de çalışan child kendi sürümünde kalır. `flowVersion` döndürmeyen eski bir uzak runtime'da yazılmış referans korunur. Bkz. [Flow Varsayılan Sürümü](/docs/concepts/flow-default-version).
 - **Taşınan header'lar** <sup>New</sup> v0.0.102: child'ı sonlandıran isteğin (finish/exit, cancel ya da istek üzerinde fault) header'ları parent'a taşınır. Parent'ın output mapping'i bunları `context.Headers` olarak görür ve parent'ın resume hop'u varsayılan olarak bu header'larla çalışır (auto koşulları, onEntry task'leri, sonraki subflow'un input mapping'i). Timer / timeout ile biten child hiçbir header taşımaz. İçerik, hariç tutulan header'lar ve opt-out için bkz. [Interfaces](/docs/components/interfaces).
 
+#### Sync SubProcess task çıktısında child state'i
+
+<sup>New</sup> v0.0.104 Alt süreçler (SubProcess, `P`) state seviyesinde değil, [SubProcess task](/docs/components/tasks/trigger) (type `14`) ile başlatılır. Task **sync** çalıştığında (`SetSync(true)`) çıktısı artık child'ın `currentState` ve `effectiveState` alanlarını taşır; output mapping child'ın nerede durduğunu ek bir okuma yapmadan görebilir. Alanın yolu rotaya göre değişir:
+
+```csharp
+// SubProcess (sync) OutputHandler
+var state = context.Body?.data?.value?.currentState   // aynı domain'de start: çıktı data.value altına sarılır
+         ?? context.Body?.data?.currentState;         // cross-domain start: uzak gövde düz geçer (data.*)
+```
+
+- Bu alanlar instance'ın **kendi persisted state'idir** — instance GET'teki `metadata.currentState` / `metadata.effectiveState` ile aynı ad ve değer; SubFlow'a inilmez. State fonksiyonunun `state` alanı (aktif SubFlow yaprağının state'i) **değildir**.
+- Child kendi başlangıç state'inden otomatik olarak ilerliyorsa değer, doğduğu state değil **durduğu** state'tir.
+- **Async** (`202`) yanıtta iki alan da yoktur. Yanıtı bir `ClientResponse` ile üreten pipeline'da instance olmadığından ikisi de `null` kalır.
+- Aynı alanlar sync start / transition yanıtında (`?sync=true` veya `executionType: S`) da döner — bkz. [Çalıştırma Modu](#çalıştırma-modu-executiontype).
+
+Çalışan örnek: [vnext-example `sync-subprocess-state-lab`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/sync-subprocess-state-lab/src/SspStartChildMapping.csx) (task: [`ssp-start-child.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Tasks/sync-subprocess-state-lab/ssp-start-child.json)).
+
 #### Aktif SubFlow'a transition iletimi (proxy)
 
 <sup>New</sup> v0.0.100 Aktif bir `S` SubFlow'u olan parent'a gelen ve iletilebilir (forwardable) bir transition artık **parent'ta kuyruğa alınmaz**; doğrudan aktif child'a iletilir (davranış değişikliği):
@@ -668,7 +685,8 @@ Kanonik adım sırası (pipeline `LifecycleOrder` değerleri), her trigger tipin
 | `priority` <sup>New</sup> v0.0.102 | integer | Hayır | Otomatik transition'ların değerlendirme önceliği (`minimum: 1`, yoksa `100`). Düşük değer önce değerlendirilir. **Yalnızca state seviyesindeki, varsayılan olmayan otomatik** transition'larda (`triggerType: 1`, `triggerKind: 10` değil) geçerlidir; manuel, shared ya da start transition'da veya `triggerKind: 10`'da publish hatasıdır. Bir state'in otomatik transition'ları aynı etkin önceliği paylaşıyor ve en az biri açıkça `priority` yazmışsa publish uyarı loglar — bkz. [Otomatik Transition Sırası](#otomatik-transition-sırası) |
 | `versionStrategy` | string | **Evet** | `None`, `Patch`, `Minor`, `Major` |
 | `labels` | array | **Evet** | Çoklu dil etiketleri (`minItems: 1`) |
-| `schema` | object \| null | Hayır | Transition schema referansı (request body validation) |
+| `schema` | object \| null | Hayır | Transition schema referansı (request body validation). `schemas` tanımlıysa yok sayılır |
+| `schemas` <sup>New</sup> v0.0.105 | array \| object \| null | Hayır | Kural tabanlı schema seçimi — `view` için kural tabanlı `views` ne ise payload şeması için odur: `[{ "rule"?, "schema" }]` veya `{ "schemas": [...] }`. İlk eşleşen `rule` kazanır; `schema`'yı ezer; eşleşme yoksa `400` `Transition:100025`. Otomatik ve zamanlanmış transition'larda tanımlanamaz — bkz. [Kural tabanlı schema seçimi (`schemas`)](#kural-tabanlı-schema-seçimi-schemas) |
 | `rule` | object \| null | **Koşullu** | Kural betiği. `triggerType: 1` (auto) ise **zorunlu** (triggerKind 10 hariç) |
 | `timer` | object \| null | **Koşullu** | Timer betiği (`ITimerMapping`). `triggerType: 2` (scheduled) ise **zorunlu**. Schedule transition'ın nasıl timer ürettiği için bkz. [Timer mapping](/docs/components/mappings#timer-mapping) |
 | `view` | object \| null | Hayır | Transition view tanımı. Yalnızca `triggerType: 0` (manual) için geçerli |
@@ -696,6 +714,79 @@ Kanonik adım sırası (pipeline `LifecycleOrder` değerleri), her trigger tipin
 | `0` | Not applicable | Uygulanmaz (varsayılan) |
 | `10` | Default auto | Varsayılan otomatik transition (rule opsiyonel) |
 
+### Kural tabanlı schema seçimi (`schemas`)
+
+<sup>New</sup> v0.0.105 Her transition türü — state transition'ları, `sharedTransitions`, `startTransition`, `cancel`, `updateData` ve `exit` — tek `schema` referansının yanında, kural tabanlı bir `schemas` listesi tanımlayabilir. Şekil, function `inputSchema` slot'unun zaten kullandığı şekildir ve seçim semantiği [kural tabanlı view seçimi](/docs/how-to/view-selection) (`views`) ile aynıdır: istek gövdesi, kuralı eşleşen girişin şemasına karşı doğrulanır.
+
+```json
+{
+  "key": "submit",
+  "target": "done",
+  "triggerType": 0,
+  "versionStrategy": "Major",
+  "labels": [{ "label": "Gönder", "language": "tr-TR" }],
+  "schemas": [
+    {
+      "rule": { "location": "./src/IsCorporate.csx", "code": "<base64>", "encoding": "B64" },
+      "schema": { "key": "corporate-payload", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" }
+    },
+    {
+      "schema": { "key": "retail-payload", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" }
+    }
+  ]
+}
+```
+
+Liste düz dizi olarak ya da sarmalı `{ "schemas": [...] }` formunda yazılabilir (runtime her zaman sarmalı formu geri yazar). Her giriş yalnızca `rule` (opsiyonel) ve `schema` (zorunlu) taşır.
+
+**Seçim kuralları:**
+
+1. Girişler **bildirim sırasıyla** değerlendirilir; `rule`'u eşleşen **ilk giriş kazanır**.
+2. `rule`'suz giriş her zaman eşleşir — fallback'tir ve **son giriş** olmalıdır.
+3. `schemas` tanımlıysa `schema`'yı **ezer**.
+4. Otomatik (`triggerType: 1`) ve zamanlanmış (`triggerType: 2`) transition'lar `schemas` **tanımlayamaz** (gövde taşıyan bir istek yoktur).
+5. Değerlendirilemeyen (exception fırlatan) bir kural loglanır ve atlanır; çağıranın rolleri okunamadığında bu geçerli değildir (aşağıya bakın).
+
+**Sonuçlar (yazma yolu):**
+
+| Durum | Sonuç |
+|-------|-------|
+| Bir giriş eşleşti | Gövde o girişin şemasına karşı doğrulanır; ihlal → `400` + alan bazlı hatalar (tek `schema` ile aynı format) |
+| `schemas` tanımlı, hiçbir giriş eşleşmedi | `400` `Transition:100025` — gövdeden bağımsız. Instance state'ini korur, fault **olmaz**, transition kaydı yazılmaz |
+| Ne `schema` ne `schemas` tanımlı | İstek doğrulamasız kabul edilir (değişmedi) |
+
+**Kural bağlamı.** Kural bir [IConditionMapping](/docs/components/interfaces#iconditionmapping) betiğidir. Bağlamda workflow, instance, runtime, transition, `body` (instance'ın **en son verisi**; veri yoksa `{}`) ve istek header'ları bulunur. **Query parametresi yoktur** ve kural **istek gövdesini görmez** — çağıran kendi şemasını gövdeyle seçemez. Kural, çağıranın runtime tarafından çözülmüş rollerini `context.Caller` ile okuyabilir; rol sağlayıcısı cevap veremezse seçim fallback'e düşmez, `503` `Authorization:110006` ile başarısız olur — bkz. [Mappings → ScriptContext Kullanımı](/docs/components/mappings).
+
+```csharp
+public class IsCorporate : ScriptBase, IConditionMapping
+{
+    public Task<bool> Handler(ScriptContext context)
+    {
+        string segment = context.Headers?["x-segment"]?.ToString();
+        return Task.FromResult(string.Equals(segment, "corporate", StringComparison.OrdinalIgnoreCase));
+    }
+}
+```
+
+:::note[Doğrulama sırası]
+Şema çözümü (kural betikleri dahil), state-machine / aktör tipi politika kontrolünden **önce** çalışır. Bu yüzden yanlış state'teki (ya da yanlış aktörden gelen) ve hiçbir girişle eşleşmeyen bir istek önce `400` `Transition:100025` alır. Rol yetkilendirmesi bu yazma yolunda verilmediği için (karar gateway'indir) burada öne geçilecek bir `403` yoktur.
+:::
+
+**Okuma yolu.** Transition schema fonksiyonu eşleşen girişin şemasını döner; eşleşme yoksa `404`. State fonksiyonunun transition listelerindeki `hasSchema` yalnızca **tanıma** bakar (`schema` ya da boş olmayan `schemas`), `hasView` gibi. Header'a göre seçen kurallar başka bir header değeri için seçilen girişi almasın diye schema fonksiyonunun cache anahtarı ve ETag'i değişken olmayan istek header'larını da içerir.
+
+| Kod | HTTP | Ne zaman |
+|-----|------|----------|
+| `Transition:100025` | 400 | `schemas` tanımlı, hiçbir giriş eşleşmedi (`TransitionSchemaNotMatched`) |
+| `Authorization:110006` | 503 (yeniden denenebilir) | Kural çağıranın rollerini okudu ve rol sağlayıcısı cevap veremedi (`CallerRolesUnavailable`) |
+
+:::tip[Seçim yetkilendirme değildir]
+Role ya da header'a göre şema seçmek bir kontrat seçimidir, erişim kararı değildir. Kuralları pozitif test olarak yazın (`HasRoleAsync("x")`) ve kuralsız fallback'i **en az yetkili** kontrat yapın.
+:::
+
+Function `inputSchema` slot'u aynı mekanizmayı kullanır; tek fark eşleşmesizlikte `Function:800006` dönmesidir — bkz. [Custom Functions → Fonksiyon Kontratı](/docs/components/functions/custom).
+
+Çalışan örnek: [vnext-example `core/Workflows/rule-schema-lab/rule-schema-lab.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/rule-schema-lab/rule-schema-lab.json) (rol bazlı giriş için `src/IsApproverRole.csx`). Şema paketi: vnext-schema `0.0.60`.
+
 ### Çalıştırma Modu (`executionType`)
 
 v0.0.99'dan itibaren bir istek sync mi async mi çalışacağı tanımda sabitlenebilir. `executionType` flow seviyesinde (`attributes.executionType`) ve state transition'larında, `sharedTransitions`'ta ve `startTransition`'da tanımlanabilir.
@@ -708,7 +799,8 @@ v0.0.99'dan itibaren bir istek sync mi async mi çalışacağı tanımda sabitle
 **Öncelik:** transition `executionType` → flow `executionType` → çağıranın `?sync` query parametresi (varsayılan `false` = async). Tanım bir değer belirttiğinde `?sync` parametresi **yok sayılır**.
 
 - Otomatik transition'lara, runtime-iç yollara ve subflow start/forward'a uygulanmaz.
-- Yanıta yeni bir alan eklenmez. Trace'te `vnext.execution.requested`, `vnext.execution.effective` (`SYNC` / `ASYNC`) ve yalnızca tanım çağıranın modunu değiştirdiğinde `vnext.execution.overridden=true` tag'leri bulunur.
+- <sup>New</sup> v0.0.104 Sync (`200`) start / transition yanıtı `status` / `effectiveStatus` yanında `currentState` ve `effectiveState` alanlarını da taşır (instance GET'teki `metadata.currentState` / `metadata.effectiveState` ile aynı değerler; SubFlow'a inilmez). Async `202` yanıtında bu alanlar yoktur. Sync SubProcess task'ında kullanımı için bkz. [Sync SubProcess task çıktısında child state'i](#sync-subprocess-task-çıktısında-child-statei).
+- `executionType` yanıta yeni bir alan eklemez. Trace'te `vnext.execution.requested`, `vnext.execution.effective` (`SYNC` / `ASYNC`) ve yalnızca tanım çağıranın modunu değiştirdiğinde `vnext.execution.overridden=true` tag'leri bulunur.
 - Geçersiz değer publish'te reddedilir: `Unknown execution type: X`.
 
 ```json
@@ -858,12 +950,17 @@ Bu sürümden eski bir runtime `priority`'yi yok sayar ve dizi sırasıyla değe
 | `versionStrategy` | string | **Evet** | `None`, `Patch`, `Minor`, `Major` |
 | `labels` | array | **Evet** | Çoklu dil etiketleri |
 | `schema` | object \| null | Hayır | Start request body validation schema'sı |
+| `schemas` <sup>New</sup> v0.0.105 | array \| object \| null | Hayır | Kural tabanlı start payload şeması; `schema`'yı ezer. Kural bağlamında `body` instance'ın en son verisidir — start'ta henüz instance verisi olmadığından `{}` gelir; seçimi header'a (veya `context.Caller` ile role) göre yapın. Bkz. [Kural tabanlı schema seçimi](#kural-tabanlı-schema-seçimi-schemas) |
 | `onExecutionTasks` | array | Hayır | Başlangıçta çalıştırılacak task'lar |
 | `mapping` | object \| null | Hayır | Input mapping betiği |
-| `roles` | array | Hayır | Yetkilendirme rolleri (`allOf` / `anyOf` kombinatörleri v0.0.99'dan itibaren desteklenir) |
+| `roles` | array | Hayır | Instance başlatma yetkisi (`allOf` / `anyOf` kombinatörleri v0.0.99'dan itibaren desteklenir). <sup>New</sup> v0.0.105 itibarıyla anlamlıdır — aşağıdaki nota bakın |
 | `executionType` | string | Hayır | `S` / `A` — start isteğinin çalıştırma modu (v0.0.99). Bkz. [Çalıştırma Modu](#çalıştırma-modu-executiontype) |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 | `resourceLock` <sup>New</sup> | object \| null | Hayır | Dağıtık kaynak kilidi. Ayrıntı: [Kaynak Kilitleme](/docs/how-to/resource-lock) |
+
+:::info[`startTransition.roles` artık uygulanıyor]
+<sup>New</sup> v0.0.105 Bu sürüme kadar `startTransition.roles` hiçbir yerde değerlendirilmiyordu. Artık gateway, `POST …/workflows/{workflow}/instances/start` isteğini iletmeden önce workflow-scoped `GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?type=instance` fonksiyonunu çağırır ve bu fonksiyon kararı — henüz instance yokken — `startTransition.roles` üzerinden verir. Runtime `instances/start` sırasında rolleri **kendisi kontrol etmez**; karar diğer transition'larda olduğu gibi gateway'indir. Statik roller ve `$Everyone` her zamanki gibi karşılaştırılır; instance'a bağlı grant'ler (`$InstanceStarter`, `$PreviousUser`, `$user.` / `$role.` bağlam referansları vb.) start öncesinde **hiç eşleşmez** — yalnızca `allow $InstanceStarter` ile korunan bir start herkese kapalıdır. `roles` tanımsızsa start herkese açıktır. Route, `version` parametresi ve gateway kuralı için bkz. [Yetkilendirme](/docs/concepts/authorization).
+:::
 
 ### Initial state olmadan başlangıç (`$start`)
 
@@ -904,7 +1001,7 @@ Bu özellik vnext-schema `0.0.55` gerektirir.
 
 ### Davranış
 
-Start transition **view tanımı alamaz** (tabloda `view` alanı bilinçli olarak yoktur); yalnızca `schema` ile **başlangıç verisi** ve validation tanımlanabilir. Bu, instance'ın hangi veriyle başlatılacağını belirler.
+Start transition **view tanımı alamaz** (tabloda `view` alanı bilinçli olarak yoktur); yalnızca `schema` (ya da <sup>New</sup> v0.0.105 kural tabanlı `schemas`) ile **başlangıç verisi** ve validation tanımlanabilir. Bu, instance'ın hangi veriyle başlatılacağını belirler.
 
 - **Service-to-service (S2S) akışlar:** Start transition'da `schema` ile veri almak mantıklıdır; çağıran sistem başlangıç payload'ını doğrudan gönderir.
 - **Client-base akışlar:** Instance genellikle **base bilgiyle** başlatılır; kullanıcı girdisi (gerekiyorsa) start'ta değil, **initial state view**'inde alınır. Çünkü client tarafı girdiyi view üzerinden toplar.
@@ -967,7 +1064,7 @@ Otomatik transition'lar **her** `updateData` sonrasında değerlendirilir; böyl
 | `versionStrategy` | string | **Evet** | Versiyon stratejisi |
 | `labels` | array | **Evet** | Çoklu dil etiketleri |
 | `availableIn` | (string \| object)[] | Hayır | Cancel'ın geçerli olduğu state'ler. Öğeler bare state key veya rol daraltmalı `{ state, roles }` objesi olabilir <sup>New</sup> — bkz. [availableIn ve rol daraltması](#availablein-ve-rol-daraltması) |
-| `view`, `schema`, `mapping`, `onExecutionTasks`, `roles` | — | Hayır | Standart transition alanları |
+| `view`, `schema`, `schemas` <sup>New</sup> v0.0.105, `mapping`, `onExecutionTasks`, `roles` | — | Hayır | Standart transition alanları (`schemas` için bkz. [Kural tabanlı schema seçimi](#kural-tabanlı-schema-seçimi-schemas)) |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata (passthrough) |
 
 Alt akışları varsa onlara da **cancel** bildirisi yayınlar. Alt akışlarda cancel tanımı **yoksa** bypass edilir.

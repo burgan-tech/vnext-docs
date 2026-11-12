@@ -114,9 +114,19 @@ Alan bazlı görünürlük, master şema property'lerinde **`x-roles`** keyword'
 
 `role` değeri statik bir ad ya da JSONPath ifadesi olabilir; sistem rolleri (`$InstanceStarter` vb.) ve JSONPath grant prefiksleri (`$user.` / `$userBehalfOf.` / `$role.`) burada da geçerlidir. Bu kalıpların çözümleme semantiği için bkz. [Yetkilendirme](/docs/concepts/authorization).
 
+<sup>New</sup> v0.0.105 Bir alanı **her çağırandan** gizlemek için ön tanımlı [`$Everyone`](/docs/concepts/authorization#everyone--her-çağıran) rolünü kullanın (rolü olan, olmayan, instance'lı ya da instance'sız her çağıranla eşleşir). Yazım ordinal'dır — `$everyone` publish hatasıdır. Eski `deny $InstanceStarter` + `allow $InstanceStarter` geçici çözümü çalışmaya devam eder.
+
+```json
+{
+  "x-roles": [
+    { "role": "$Everyone", "grant": "deny" }
+  ]
+}
+```
+
 v0.0.99 ile bir `x-roles` girdisi tek `role` yerine `allOf` / `anyOf` kombinatörü de olabilir (`{ "allOf": [ { "role": "..." }, ... ], "grant": "allow" }`); bkz. [Yetkilendirme → Kombinatörler](/docs/concepts/authorization#kombinatörler-allof--anyof). Hatalı `x-roles` girdileri artık publish'te reddedilir.
 
-`x-masking` (v0.0.99) değeri düz saklar ve okuma sırasında dönüştürür: `operator: "mask"` (`keepFirst`, `keepLast`, `maskingChar`; çıktı girdiyle aynı uzunlukta) veya `operator: "replace"` (`params.value`). `roles` yalnızca `allow` kabul eden muafiyet listesidir (kombinatör kabul edilmez); eşleşen çağıran ham değeri görür. Okuma sırası `x-roles` → `x-masking` → `x-encryption` (yalnız `source: runtime`) → `x-computed` (`evaluatedBy: runtime`, <sup>New</sup> v0.0.100)'dır; `x-masking` / `x-encryption` yalnızca iç içe `properties` altındaki `type: "string"` alanlarda, alan başına tek dönüşüm olarak ve `x-filterOperators` / `x-sortable` / `x-indexed` olmadan kullanılabilir.
+`x-masking` (v0.0.99) değeri düz saklar ve okuma sırasında dönüştürür: `operator: "mask"` (`keepFirst`, `keepLast`, `maskingChar`; çıktı girdiyle aynı uzunlukta) veya `operator: "replace"` (`params.value`). `roles` yalnızca `allow` kabul eden muafiyet listesidir (kombinatör kabul edilmez); eşleşen çağıran ham değeri görür. <sup>New</sup> v0.0.105 `x-masking.roles` ve `x-encryption.roles` içinde `$Everyone` publish'te reddedilir — her çağıranı muaf tutardı; okuma yolu da onu düşürür (fail closed). Okuma sırası `x-roles` → `x-masking` → `x-encryption` (yalnız `source: runtime`) → `x-computed` (`evaluatedBy: runtime`, <sup>New</sup> v0.0.100)'dır; `x-masking` / `x-encryption` yalnızca iç içe `properties` altındaki `type: "string"` alanlarda, alan başına tek dönüşüm olarak ve `x-filterOperators` / `x-sortable` / `x-indexed` olmadan kullanılabilir.
 
 `x-encryption` de aynı alan-yönetişim kapsamındadır. <sup>New</sup> v0.0.100 — `source` alanı şifrelemeyi kimin yaptığını seçer: `runtime` (varsayılan; at rest, aşağıdaki davranış) veya `client` (in transit; client değeri alıcının public key'iyle mühürleyip gönderir, runtime bu kurala **hiç dokunmaz**). `source: runtime` için: `hash` değeri yazarken instance'a özgü tuzla özetler (veritabanında özet saklanır), `encrypt` değeri instance data'da AES-256-GCM ile şifreli saklar ve okuma yüzeylerinde (instance GET, liste, data function, senkron yanıt, Get* task'leri — task'ler sundukları başlık setiyle) yalnızca `allow` muafiyet rolleri için çözer (`persisted` / `transport` kaldırıldı). Script'ler encrypt alanı jeton olarak görür ve `context.Instance.DecryptAsync(path)` ile açar. Tüm property seviyesi `x-*` uzantılarının ayrıntısı için bkz. [Schema Tanımı](/docs/how-to/view-consept/schema-tanimi).
 

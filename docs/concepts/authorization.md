@@ -38,7 +38,7 @@ Bu ayrım, hem **sistem rollerinde** (actor mı subject mı?) hem de **JSONPath 
 
 ## Ön Tanımlı Sistem Rolleri
 
-Instance yetkilendirmesi için (transition `roles`, state/flow `queryRoles` veya master şema alan görünürlüğü) dört statik sistem rolü kullanılabilir. Bunlar instance bağlamına göre çalışma zamanında çözülür:
+Instance yetkilendirmesi için (transition `roles`, state/flow `queryRoles` veya master şema alan görünürlüğü) ön tanımlı sistem rolleri kullanılabilir. İlk dördü instance bağlamına göre çalışma zamanında çözülür; `$Everyone` hiçbir şey okumaz:
 
 | Rol | Çözülen kimlik | Açıklama |
 |-----|----------------|----------|
@@ -46,8 +46,9 @@ Instance yetkilendirmesi için (transition `roles`, state/flow `queryRoles` veya
 | `$PreviousUser` | Actor | Bir **önceki** transition'ı tetikleyen kullanıcı |
 | `$InstanceBehalfOfStarter` | Subject | Instance'ı başlatan **subject** (adına işlem yapılan token) |
 | `$PreviousBehalfOfUser` | Subject | Bir önceki transition'ı tetikleyen **subject** (adına işlem yapılan token) |
+| `$Everyone` | — | <sup>New</sup> v0.0.105 **Her çağıran** — rolü olsun olmasın, instance yüklü olsun olmasın. Ayrıntı: [`$Everyone`](#everyone--her-çağıran) |
 
-İlk ikisi `act_sub` (actor), son ikisi `sub` (subject) tarafıyla karşılaştırılır.
+`$InstanceStarter` / `$PreviousUser` `act_sub` (actor), `$InstanceBehalfOfStarter` / `$PreviousBehalfOfUser` `sub` (subject) tarafıyla karşılaştırılır.
 
 **roleGrant örneği:**
 
@@ -59,6 +60,28 @@ Instance yetkilendirmesi için (transition `roles`, state/flow `queryRoles` veya
   ]
 }
 ```
+
+### `$Everyone` — her çağıran
+
+<sup>New</sup> v0.0.105 `$Everyone`, **her çağıran için Yes** olan bir kimlik yaprağıdır: rolü olan, rolü olmayan, instance'lı (transition, `queryRoles`, `x-roles`) ya da instance'sız ([başlatma yetkisi](#instance-başlatma-yetkisi-authorizetypeinstance)) her değerlendirmede eşleşir. Bu yüzden `deny $Everyone` herkesi reddeder, `allow $Everyone` herkesi — rolsüz çağıran dahil — kabul eder.
+
+```json
+"x-roles": [
+  { "role": "$Everyone", "grant": "deny" }
+]
+```
+
+| Kural | Açıklama |
+|-------|----------|
+| Kabul edildiği yerler | Her rol-grant yüzeyi: transition `roles`, workflow / state `queryRoles`, `availableIn[].roles`, function `roles`, SubFlow override'ları, şema `x-roles` ve `allOf` / `anyOf` çocuğu olarak |
+| Reddedildiği yerler | `x-masking.roles` / `x-encryption.roles` — her çağıranı muaf tutardı; publish reddeder, okuma yolu da düşürür (fail closed). `rowSecurity.rules[].roles` — RS-E05 ([Satır Güvenliği](/docs/concepts/row-security)) |
+| Yazım | **Ordinal** (büyük/küçük harf duyarlı): `$everyone` ya da `$EVERYONE` rol-grant alan her yüzeyde publish hatasıdır (mesaj: `predefined roles are case-sensitive, write '$Everyone'`). Bu denetim yalnız `$Everyone` için yapılır; eski sistem rolleri için yayımlanmış tanımları kırmamak adına eklenmedi |
+| Çağıranın rolü | Karar grant tarafında verilir: `role: $Everyone` header'ı gönderen çağıran hiçbir şeyi değiştirmez |
+| Statik rol çakışması | Adı tam olarak `$Everyone` olan **statik** bir rolü hedefleyen grant artık her çağıranı kapsar — ön tanımlı eşleşme statik karşılaştırmadan önce çalışır |
+
+"Bu alanı herkesten gizle" için önceki geçici çözüm `deny $InstanceStarter` + `allow $InstanceStarter` idi; yalnızca üç değerli eşleştiricinin Unknown davranışı sayesinde çalışıyordu. Çalışmaya devam eder, ama yeni tanımlarda niyeti açıkça söyleyen `deny $Everyone` kullanın.
+
+**Örnek:** [`role-matrix-combinator-master.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Schemas/role-matrix-lab/role-matrix-combinator-master.json) — `hiddenFromAll` (`deny $Everyone`) ve `hiddenByWorkaround` (eski yazım) alanları; testler: [`EveryoneGrantTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/RoleMatrixLab/EveryoneGrantTests.cs).
 
 ---
 
@@ -100,7 +123,8 @@ Flow **master şeması**, şema property'lerinde **`x-roles`** keyword'ü tanım
 
 - `x-roles` tanımı **olmayan** property'ler tüm yetkili çağıranlara görünür.
 - `x-roles` tanımlı property'lerde aynı sistem rolleri ve JSONPath grant'ları geçerlidir; `role` statik ad ya da JSONPath ifadesi olabilir, `grant` ∈ `allow|deny` (DENY > ALLOW). v0.0.99 ile [kombinatörler](#kombinatörler-allof--anyof) de kabul edilir.
-- `x-masking` / `x-encryption` `roles` listeleri yalnızca `allow` kabul eden muafiyet listeleridir; bkz. [Schema Tanımı → `x-masking`](/docs/how-to/view-consept/schema-tanimi).
+- <sup>New</sup> v0.0.105 Bir alanı her çağırandan gizlemek için `x-roles`'u `[{ "role": "$Everyone", "grant": "deny" }]` olarak yazın; bkz. [`$Everyone`](#everyone--her-çağıran).
+- `x-masking` / `x-encryption` `roles` listeleri yalnızca `allow` kabul eden muafiyet listeleridir (`$Everyone` reddedilir — her çağıranı muaf tutardı); bkz. [Schema Tanımı → `x-masking`](/docs/how-to/view-consept/schema-tanimi).
 - Yapı ve örnekler için bkz. [Schema → Alan Bazlı Yetkilendirme: `x-roles`](/docs/components/schema#alan-bazlı-yetkilendirme-x-roles) ve [Schema Tanımı → `x-roles`](/docs/how-to/view-consept/schema-tanimi).
 - Keyword tanımı `vnext-schema` [view-vocab.json](https://github.com/burgan-tech/vnext-schema/blob/master/vocabularies/view-vocab.json)'da yer alır.
 
@@ -149,7 +173,7 @@ Kural 5, rolsüz çağıranın nadir olmamasından doğar: anonim/cihaz token'ı
 6. <sup>New</sup> v0.0.99 **Rolsüz çağıran, `""` olarak çözülen bir `$role.` ALLOW'u ile kabul edilmez.** Önceden yol boş string'e çözüldüğünde rolsüz çağıranın boş rol adıyla "eşleşip" geçebildiği durum kapatıldı: rol-bağlı bir yaprak rolsüz çağıran için **Unknown**'dur ve allow yalnızca **Yes**'te kabul eder (bkz. [Kombinatörler](#kombinatörler-allof--anyof)). Deny'lar (kural 5) ve düz statik / sistem rolü grant'ları değişmedi.
 
 :::warning[Geriye dönük etki]
-Yalnızca `deny` grant'ı içeren mevcut bir set artık **blacklist** olarak değerlendirilir (listelenenler dışındaki herkese açık). Niyetiniz "herkesi engelle" idiyse en az bir `allow` grant'ı ekleyerek allow-list'e çevirin.
+Yalnızca `deny` grant'ı içeren mevcut bir set artık **blacklist** olarak değerlendirilir (listelenenler dışındaki herkese açık). Niyetiniz "herkesi engelle" idiyse en az bir `allow` grant'ı ekleyerek allow-list'e çevirin — ya da <sup>New</sup> v0.0.105 itibarıyla doğrudan [`deny $Everyone`](#everyone--her-çağıran) yazın.
 :::
 
 ### Tek değerlendirme çekirdeği
@@ -185,12 +209,15 @@ Bu birleştirme birkaç gözlemlenebilir davranışı değiştirir (ör. `x-role
 
 ### Üç değerli değerlendirme
 
-Rol-bağlı bir yaprak (statik rol ya da `$role.` referansı) çağıranın *rolleri* hakkında bir ifadedir; rolsüz çağıran için ne kanıtlanır ne çürütülür — **Unknown**'dur. Kimlik yaprakları (`$InstanceStarter`, `$PreviousUser`, behalf-of sistem rolleri, `$user.`, `$userBehalfOf.`) çağıranın kimliğini karşılaştırdığından her zaman **Yes** ya da **No**'dur.
+Rol-bağlı bir yaprak (statik rol ya da `$role.` referansı) çağıranın *rolleri* hakkında bir ifadedir; rolsüz çağıran için ne kanıtlanır ne çürütülür — **Unknown**'dur. Kimlik yaprakları (`$InstanceStarter`, `$PreviousUser`, behalf-of sistem rolleri, `$user.`, `$userBehalfOf.`) çağıranın kimliğini karşılaştırdığından her zaman **Yes** ya da **No**'dur. <sup>New</sup> v0.0.105 `$Everyone` instance'tan hiçbir şey okumaz; her çağıran için — instance'sız yolda da — **Yes**'tir.
 
 | Yaprak | Çağıranın rolü var | Çağıranın rolü yok |
 |--------|--------------------|--------------------|
 | Statik rol / `$role.…` | Eşleşirse Yes, değilse No | **Unknown** |
-| Sistem rolleri, `$user.…`, `$userBehalfOf.…` | Yes / No | Yes / No |
+| `$InstanceStarter`, `$PreviousUser`, `$InstanceBehalfOfStarter`, `$PreviousBehalfOfUser`, `$user.…`, `$userBehalfOf.…` | Yes / No | Yes / No |
+| `$Everyone` <sup>New</sup> v0.0.105 | **Yes** | **Yes** |
+
+Instance'sız yolda (karşılaştırılacak başlatan ya da geçmiş yokken — ör. [başlatma yetkisi](#instance-başlatma-yetkisi-authorizetypeinstance)) kimlik yaprakları **No**'dur; `$Everyone` orada da **Yes** kalır.
 
 | `allOf` çocukları | Sonuç | `anyOf` çocukları | Sonuç |
 |-------------------|-------|-------------------|-------|
@@ -199,6 +226,13 @@ Rol-bağlı bir yaprak (statik rol ya da `$role.` referansı) çağıranın *rol
 | hepsi **Yes** | Yes | hepsi **No** | No |
 
 Set kararı kanonik kuralla aynıdır, yalnızca "eşleşme" üç değerli hale gelir: **deny, Yes veya Unknown'da tetiklenir** (dışlanamayan bir deny reddeder), **allow yalnızca Yes'te kabul eder**. Kural 5 bunun özel halidir. Kimlik yaprağı içeren bir `allOf` deny kendini dışlayabilir (kimlik No ⇒ `allOf` No); örneğin `allow maker` + `deny allOf[maker, $PreviousUser]` "dört göz" kuralını rolsüz çağıranlar için de doğru uygular.
+
+| Niyet | Grant'lar |
+|-------|-----------|
+| Dört göz: maker işlem yapar, ama iki kez değil | `allow maker`, `deny allOf[maker, $PreviousUser]` |
+| Bir rolü yalnızca kendi başlattığı instance'ta engelle | `deny allOf[blocked, $InstanceStarter]` |
+| Herkesten gizle <sup>New</sup> v0.0.105 | `deny $Everyone` |
+| Herkese açık, açıkça <sup>New</sup> v0.0.105 | `allow $Everyone` |
 
 **Publish kuralları:** dinamik yollar her yaprak için ayrı denetlenir (`$.context.` ile başlamalı — büyük/küçük harf duyarlı — ve boş navigasyon yolu içermemeli). Hatalı şema `x-roles` girdileri ve hatalı dinamik yol taşıyan function `roles` girdileri artık publish'te reddedilir (önceden runtime sessizce atlıyordu). `permissions` (yetki matrisi) yanıtında kombinatör grant'ları `allOf` / `anyOf` ile ve **`role` olmadan** gösterilir; matrisi okuyan istemci `role`'süz grant'a tolerans göstermelidir.
 
@@ -213,13 +247,14 @@ Set kararı kanonik kuralla aynıdır, yalnızca "eşleşme" üç değerli hale 
 | Bağlam | Alan | Etki |
 |--------|------|------|
 | Transition | `roles` | İlgili transition'ı kimin tetikleyebileceği |
+| Workflow `startTransition` | `roles` | <sup>New</sup> v0.0.105 Flow'dan kimin instance başlatabileceği. **Gateway** → `authorize?type=instance`; runtime `POST …/instances/start`'ta denetlemez — bkz. [Instance başlatma yetkisi](#instance-başlatma-yetkisi-authorizetypeinstance) |
 | Transition `availableIn` öğesi | `roles` <sup>New</sup> | Transition'ın o state'te kime sunulacağı (transition `roles` ile AND) |
 | Flow / State | `queryRoles` | Instance ve state'leri kimin sorgulayabileceği (state seviyesi root'u override eder). <sup>New</sup> v0.0.99 Instance SubFlow içindeyken karar **yalnızca en derin aktif yaprakta** verilir: parent'ın damgaladığı override ?? yaprak state `queryRoles` ?? yaprak workflow `queryRoles`. <sup>New</sup> v0.0.95 **Gateway** → `authorize?queryRoles=true` — read fonksiyonları in-process denetlemez (aşağıdaki tablo) |
 | Function | `roles` | Keşif (`/info`, `catalog`) yanıtlarında kimin görebileceği. <sup>New</sup> v0.0.88 itibarıyla doğrudan custom function çağrısında bir gate **değildir** — yalnızca `authorize` fonksiyonu değerlendirir; bkz. [Çağıran rollerinin çözümlenmesi](#çağıran-rollerinin-çözümlenmesi-caller-role-provider) |
 | State `interaction.longPoll` | `roles` / `rule` <sup>New</sup> v0.0.94 | Long-poll sonlandırma sinyalini kimin alacağı ve ack'i kimin gönderebileceği. <sup>New</sup> v0.0.95 **Gateway** → `authorize?ack=true` |
 | State `alias` | `roles` | State'in role göre maskelenmiş görünümü |
 | Master şema property | `x-roles` | Alan (column) bazlı veri görünürlüğü. <sup>New</sup> v0.0.99 kombinatör kabul eder |
-| Master şema property | `x-masking.roles` / `x-encryption.roles` <sup>New</sup> v0.0.99 | Değeri ham görecek çağıranlar (yalnızca `allow` muafiyet listesi; kombinatör kabul edilmez) |
+| Master şema property | `x-masking.roles` / `x-encryption.roles` <sup>New</sup> v0.0.99 | Değeri ham görecek çağıranlar (yalnızca `allow` muafiyet listesi; kombinatör kabul edilmez; <sup>New</sup> v0.0.105 `$Everyone` publish'te reddedilir) |
 | Flow | `rowSecurity.rules[].roles` <sup>New</sup> v0.0.102 | Satır (row) bazlı görünürlük: instance listesi, tekil GET ve `GetInstances` / `GetInstance` task'leri yalnızca eşleşen kuralların açtığı instance'ları döner — bkz. [Satır güvenliği](#satır-güvenliği-rowsecurity) |
 
 `roles`, `queryRoles`, `availableIn[].roles`, function `roles`, `interaction.longPoll.roles`, SubFlow override'ları ve `x-roles` v0.0.99 itibarıyla [kombinatör](#kombinatörler-allof--anyof) (`allOf` / `anyOf`) grant'ları da kabul eder.
@@ -236,6 +271,24 @@ Set kararı kanonik kuralla aynıdır, yalnızca "eşleşme" üç değerli hale 
 
 <sup>New</sup> v0.0.99 **Yaprak-tek karar.** Instance bir SubFlow içindeyken `authorize?queryRoles=true` kararı yalnızca **en derin aktif SubFlow yaprağında** verilir: parent'ın damgaladığı override (`subFlow.overrides.states.<state>.queryRoles`) ?? yaprak state'in `queryRoles`'u ?? yaprak workflow'un `queryRoles`'u (boş yaprak izin verir). Root ve ara seviyelerin `queryRoles`'u arasındaki AND (conjunction) **kaldırıldı**. Bu, root'un `queryRoles` tanımlayıp yaprağın tanımlamadığı durumda erişimi **gevşetir**; root kısıtını korumak için parent'ta `subFlow.overrides.states.<state>.queryRoles` ya da yaprakta `queryRoles` tanımlayın (bkz. [SubFlow Overrides](/docs/how-to/subflow-overrides)). Parent'a ait transition'lar ve `?ack=true` değişmedi. Human-task yaprak hop'u çağıranın `act_sub` / `sub` başlıklarını taşır; `CallerScopeHash` artık `sub`'ı da içerir (önbellekler deploy'da bir kez yeniden anahtarlanır).
 
+<sup>New</sup> v0.0.104 **Yaprak, var olan en derin instance'tır.** Parent, SubFlow korelasyonunu kendi transaction'ında commit eder; child'ın satırı ise commit sonrası çalışan bir job ile (SubFlow input mapping'inden sonra) oluşturulur. Arada — yük altında yüzlerce milisaniye, child başlatılamazsa süresiz — korelasyon henüz yüklenemeyen bir child'ı gösterir. Bu aralıkta child hiçbir grant değerlendirmeden `allowed: false` ve `reason: "instance-not-found"` döner; parent da yaprakmış gibi **kendi** `queryRoles` çözümüyle (kendisine damgalanmış override ?? state `queryRoles` ?? workflow `queryRoles`) karar verir. Bu, `state` fonksiyonunun aynı aralıkta sunduğu görünümle (child'a iniş başarısız olunca ana flow'un görünümü) aynıdır ve henüz açığa çıkacak child verisi yoktur. v0.0.103'e kadar bu aralıktaki her `queryRoles` sorgusu reddediliyor, gateway client'ın state poll'una `403` dönüyordu.
+
+- **Yalnızca `queryRoles` geri düşer.** `transitionKey` / `functionKey` / `ack` hedefleri değişmedi: eksik bir child'a iletilen transition ya da function zaten çalışamaz, cevap `false` kalır.
+- Var olan ve reddeden bir child'ın cevabı yine ret olarak kalır; geri düşme yalnızca `instance-not-found` nedeninde tetiklenir.
+- Geri düşme yanıttaki `reason` alanını okuduğu için domain'ler arası (remote) inişte de çalışır. Eski runtime'lı bir partner domain bu alanı göndermez; o durumda eski davranış (ret) geçerlidir.
+- Bu kısa aralıkta parent'ın child için tanımladığı `subFlow.overrides.states.<state>.queryRoles` uygulanmaz — child'ın state'i henüz bilinmez; parent'ın kendi gate'i karar verir.
+- Gözlemlenebilirlik: parent'ta alınan karar `AuthorizeLeafMissingFallback` (EventId 50046, eksik child'ın flow'u ve id'siyle) olarak loglanır; `Authorization.Decide` span'ı `vnext.auth.fallback = leaf-missing` tag'ini taşır.
+
+**`authorize` yanıtındaki `reason` alanı.** <sup>New</sup> v0.0.104 Yanıt gövdesi opsiyonel bir `reason` alanı kazandı; tek değeri `instance-not-found`'dur ve adreslenen instance yüklenemediği için **hiçbir grant'ın değerlendirilmediği** bir reddi işaretler. Normal bir kararın gövdesi eskisi gibi `{"allowed": true|false}`'dur ve `reason` taşımaz.
+
+```json
+{ "allowed": false, "reason": "instance-not-found" }
+```
+
+**Gateway / istemci yorumu:** doğrudan adreslenmiş bir instance için `403` + `reason: "instance-not-found"`, instance'ın **yok (ya da henüz oluşmamış)** olduğu anlamına gelir — çağıranın rolünün eksik olduğu anlamına **gelmez**. Bunu yetki hatası olarak göstermeyin; `reason` taşımayan `403` ise grant reddidir.
+
+**Örnek:** [`authorization-chain-lab`](https://github.com/burgan-tech/vnext-example/tree/master/core/Workflows/authorization-chain-lab) — `root-slow` → `mid-slow` → `leaf-open` zinciri, 6 sn'lik input mapping ([`ChainSlowSubFlowMapping.csx`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/authorization-chain-lab/src/ChainSlowSubFlowMapping.csx)) ile aralığı açık tutar; testler: [`LeafNotCreatedYetTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/AuthorizationChainLab/LeafNotCreatedYetTests.cs).
+
 **Rol çözümü değişmedi:** `availableTransitions` filtreleme, state alias, `x-roles` alan filtreleme, human-task listesi ve `CallerScopeHash` cache anahtarı çağıranın rollerini değerlendirmeye devam eder. Görünürlük kaldı, enforcement gateway'e taşındı. **Tanım yazarının bilmesi gereken sonuç:** önünde bu gateway olmayan bir runtime bu okumaları reddetmez. Ayrıntı: [Built-in Functions → Instance Authorize](/docs/components/functions/built-in#instance-authorize).
 
 ### Üç yüzey hizalaması
@@ -250,6 +303,59 @@ Set kararı kanonik kuralla aynıdır, yalnızca "eşleşme" üç değerli hale 
 
 Roller execution'da **bilinçli olarak** enforce edilmez — hiçbir transition tipi için hiçbir zaman edilmedi. `roles`, client'a *ne sunulacağını* belirleyen bir discovery kontrolüdür; tek bir transition tipine 403 eklemek tutarsız bir güvenlik modeli yaratırdı.
 
+### Instance başlatma yetkisi (`authorize?type=instance`)
+
+<sup>New</sup> v0.0.105 Başlatmadan önce adreslenecek bir instance olmadığı için instance route'u "bu çağıran bu flow'dan bir instance başlatabilir mi?" sorusunu yanıtlayamaz; bu yüzden `startTransition.roles` şimdiye kadar hiçbir yerde uygulanmıyordu. `authorize` fonksiyonunun **workflow-scoped** route'u bu soruyu, henüz instance yokken, flow'un kendi `startTransition.roles`'u üzerinden yanıtlar:
+
+```http
+GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?type=instance[&version=x][&role=r]
+```
+
+| Parametre | Zorunlu | Açıklama |
+|-----------|---------|----------|
+| `type` | **Evet** | Neyin yetkilendirildiği. Bugün desteklenen tek değer `instance`'tır (yeni instance başlatma); parametre, ileride yeni route açmadan başka workflow-scoped sorular eklenebilsin diye vardır. **Ordinal** eşleşir ve varsayılanı yoktur: eksik ya da bilinmeyen değer `400` `Authorization:110005` (`AuthorizeUnsupportedType`) döner, mesaj desteklenen değerleri listeler. Instance listesi filtresi `instanceType` (`R`/`S`/`P`) ile karıştırmayın |
+| `version` | Hayır | Tanım sürümünü sabitler. Gateway, start isteğinin kendi `version`'ını iletmelidir ki iki çağrı aynı `startTransition.roles`'u okusun |
+| `role` | Hayır | Instance route'undaki gibi; provider'ın `RoleParameterMode`'una göre bileşir ([Caller Role Provider](../configuration/caller-role-provider)) |
+
+| Durum | Gövde | Anlam |
+|-------|-------|-------|
+| `200` | `{"allowed": true}` | Başlatabilir |
+| `403` | `{"allowed": false}` | Başlatamaz |
+| `400` | hata zarfı | `type` eksik ya da bilinmiyor (`Authorization:110005`) |
+| `404` | hata zarfı | Bilinmeyen workflow ya da sürüm |
+
+Yanıt sözleşmesi instance route'uyla aynıdır. Gateway start transition'ın key'ini bilmek zorunda değildir — route onu tanımdan çözer. Çağıranın rol kümesi instance route'undaki gibi (yapılandırılmış provider, `role` parametresi) çözülür.
+
+**Değerlendirme** tek değerlendirme çekirdeğinin instance'sız yoludur:
+
+| Grant yaprağı | Başlatmada |
+|---------------|------------|
+| Statik rol | Çağıranın rolleriyle karşılaştırılır; DENY tüm sette ALLOW'u geçersiz kılar |
+| `$Everyone` | Her çağıranla eşleşir |
+| `$InstanceStarter`, `$PreviousUser`, `$InstanceBehalfOfStarter`, `$PreviousBehalfOfUser` | **Asla eşleşmez** — karşılaştırılacak instance yok |
+| `$user.` / `$userBehalfOf.` / `$role.` bağlam referansları | **Asla eşleşmez** — `Instance.Data` henüz yok ve istek gövdesi yetkilendirme bağlamının parçası değil |
+
+Hiç eşleşmeyen bir yaprak ne kabul eder ne reddeder: onun ALLOW'u kimseyi kabul etmez, DENY'ı kimseyi reddetmez, onu içeren bir `allOf` sağlanamaz. Sonuç olarak:
+
+- **Yalnızca** `allow $InstanceStarter` ile korunan bir start transition **herkese kapalıdır** (fail-closed) — actor kimliği taşıyan çağırana bile.
+- `[allow $InstanceStarter, allow maker]` `maker` ile karar verilir.
+- Grant yoksa izinlidir (her transition'da olduğu gibi).
+- `availableIn` ve state kontrolü uygulanmaz — start transition hiçbir state'e ait değildir.
+
+:::warning[Runtime start'ı kendisi denetlemez]
+Runtime, `POST …/workflows/{workflow}/instances/start`'ta `startTransition.roles`'u **hâlâ kontrol etmez** — diğer transition'larda olduğu gibi karar gateway'indir. Önünde bu kuralı uygulayan bir gateway olmayan runtime, rolü olmayan çağıranın instance başlatmasını reddetmez.
+:::
+
+**Gateway kuralı:** APISIX check-authorize'da, transition kuralının instance route'unu çağırdığı gibi, `POST …/workflows/{workflow}/instances/start` için bu route'u çağıran ikinci bir kural tanımlayın. Host ortama özeldir; start isteği `version` query parametresi taşıyorsa onu da iletin:
+
+```text
+Utils.CallApiGet("http://<orchestrator-host>/api/v1/"+path.var1+"/workflows/"+path.var2+"/functions/authorize?type=instance", header, allHeader).IsSuccessStatusCode == true
+```
+
+Her karar `AuthorizeRequest` (EventId 50030) audit logunda hedef `start:{key}` ve boş instance id ile görünür.
+
+**Örnekler:** [`role-matrix-lab-start-open.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/role-matrix-lab/role-matrix-lab-start-open.json) (grant yok → herkese açık), [`role-matrix-lab-start-gated.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/role-matrix-lab/role-matrix-lab-start-gated.json) (`allow maker`, `deny viewer` + hiç eşleşmeyen instance-bağlı grant'lar), [`role-matrix-lab-start-starter-only.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/role-matrix-lab/role-matrix-lab-start-starter-only.json) (yalnızca `allow $InstanceStarter` → herkese kapalı); testler: [`StartAuthorizeTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/RoleMatrixLab/StartAuthorizeTests.cs).
+
 ---
 
 ## Çağıran rollerinin çözümlenmesi (Caller-role provider)
@@ -258,6 +364,7 @@ Roller execution'da **bilinçli olarak** enforce edilmez — hiçbir transition 
 
 - <sup>New</sup> v0.0.96 **`morph-idm` boş kümeye fail-open çalışır.** Provider hatası (hata durum kodu, timeout, transport, ayrıştırılamayan gövde) ve `204` artık **403** (`Authorization:110004`) üretmez; rol kümesi `[]` olur ve istek onunla değerlendirilir. Boş küme zaten önemli olanı reddeder: allow-list eşleşmez ve **kural 5** her rol-bağlı deny'ı reddettirir — bir kesinti çağıranın gördüğünü daraltır, asla genişletmez. `act_sub` da `client_id` de taşımayan çağıranlar için morph-idm hiç çağrılmaz.
 - <sup>New</sup> v0.0.97 **`morph-idm` altında `role` header'ı önceliklidir.** Boş olmayan bir `role` header'ı taşıyan istek o rollerle değerlendirilir ve morph-idm **çağrılmaz** (replace, merge değil); yalnızca header'sız istek servise gider. `authorize`'ın `?role=` parametresi, istekte header yokken o header gibi davranır (rol kümesi `[X]`, morph-idm çağrılmaz); gerçek header parametreyi ezer. Tasarım gereği **daha izinlidir** — header'ı üreten gateway'in otoritesine güvenilir.
+- **Gateway ön koşulu:** her iki provider'da da istemcinin gönderdiği `role` header'ı olduğu gibi alınır. Gateway bu header'ı istemciden gelen haliyle iletmemeli; strip etmeli ya da token'dan üzerine yazmalıdır (append değil).
 
 Provider ne olursa olsun `transition.roles`, `availableIn[].roles`, `queryRoles` ve schema `x-roles` semantiği **değişmez** — yalnızca rol kümesinin kaynağı değişir.
 
@@ -270,7 +377,7 @@ Provider ne olursa olsun `transition.roles`, `availableIn[].roles`, `queryRoles`
 <sup>New</sup> v0.0.102 Alan bazlı görünürlüğün (`x-roles`, `x-masking`, `x-encryption`) satır karşılığı `attributes.rowSecurity`'dir: flow rol başına bir filtre tanımlar, runtime bunu instance listesine, tekil GET'e ve `GetInstances` / `GetInstance` task'lerine AND'ler. Kısaca:
 
 - **Deny by default:** `rowSecurity` tanımlayan flow'da hiçbir kuralla eşleşmeyen çağıran hiçbir satır görmez; "X her şeyi görür" filtresiz açık bir kuraldır. `rowSecurity` olmayan flow filtrelenmez.
-- Eşleşen kuralların filtreleri **OR**'lanır, çağıranın kendi filtresiyle **AND**'lenir; rol çözümü ya da parametre hataları görünürlüğü **asla genişletmez**. Kural rolleri statik roller ya da `$InstanceStarter` / `$InstanceBehalfOfStarter` olabilir; `allOf` / `anyOf` ve diğer ayrılmış roller kabul edilmez.
+- Eşleşen kuralların filtreleri **OR**'lanır, çağıranın kendi filtresiyle **AND**'lenir; rol çözümü ya da parametre hataları görünürlüğü **asla genişletmez**. Kural rolleri statik roller ya da `$InstanceStarter` / `$InstanceBehalfOfStarter` olabilir; `allOf` / `anyOf` ve diğer ayrılmış roller (<sup>New</sup> v0.0.105 `$Everyone` dahil, RS-E05) kabul edilmez.
 - Dışlanmış bir instance GET'te bulunmayan bir instance ile aynı `404`'ü döner; liste sayıları yalnızca görünür satırları kapsar.
 - **Erişim sınırı değildir:** `functions/state`, `functions/data`, `functions/view` vb., transition'lar ve `GetInstanceData` filtrelenmez. Bu yüzeyleri gateway'deki `authorize` ile denetleyin.
 - **Gateway ön koşulu:** gateway `role` header'ını ve kuralların okuduğu her header'ı token'dan yazmalı (strip/overwrite, asla append değil); `QueryParameters` client kontrolündedir.

@@ -102,6 +102,8 @@ Function'ı **instance context'inde** çalıştırır.
 | `Role` | query | Authorization rolü |
 | `FunctionKey` | query | Inner function reference |
 | `QueryRoles` | query | Query roles dahil edilsin mi (boolean) |
+
+> **Not (kural tabanlı `inputSchema`):** <sup>New</sup> v0.0.105 Function'ın `inputSchema`'sı kural tabanlı bir liste ise ve gövdeli bir istek için hiçbir entry eşleşmezse istek artık doğrulama atlanarak kabul edilmez; `400` `Function:800006` ile reddedilir (**breaking**). Gövdesiz istek kabul edilmeye devam eder. Eşleşmeyen çağıranları kabul etmek için listeyi kuralsız bir fallback entry ile bitirin. Ayrıntı: [Breaking Changes v0.0.105](/blog/breaking-changes/breaking-changes-v0-0-105).
 | `If-None-Match` | header | ETag (304 Not Modified için) |
 
 ### GET `…/instances/{instance}/functions/tasks` ve `…/functions/actions` <sup>New</sup> v0.0.93
@@ -138,7 +140,42 @@ Runtime'ın **tek yetkilendirme karar noktası** <sup>New</sup> v0.0.95: Interna
 
 Dört seçiciden **tam olarak biri** verilmelidir; sıfır veya iki seçici `Authorization:110002` ile reddedilir. Parent'ta kalan transition'lar (`cancel`, `exit`, `updateData`, parent state'inde sunulan shared transition) ve `ack=true` davranışı v0.0.99'da değişmedi. Ayrıntı: [Built-in Functions → Instance Authorize](/docs/components/functions/built-in#instance-authorize).
 
-**Responses:** `200` → `{"allowed": true}`, `403` → `{"allowed": false}` — karar **her iki durumda da gövdededir**. Yanıtlanamayan soru (instance yok, hatalı istek) hata zarfıyla `4xx`/`5xx` döner.
+**Responses:** `200` → `{"allowed": true}`, `403` → `{"allowed": false}` — karar **her iki durumda da gövdededir**. Yanıtlanamayan soru (hatalı istek, rol çözümleme hatası) hata zarfıyla `4xx`/`5xx` döner.
+
+<sup>New</sup> v0.0.104 Yanıt gövdesinde opsiyonel bir **`reason`** alanı bulunabilir. Tek değeri `"instance-not-found"`'dur ve yalnızca **adreslenen instance yüklenemediğinde** döner — hiçbir grant değerlendirilmemiştir, status yine `403`'tür:
+
+```json
+{ "allowed": false, "reason": "instance-not-found" }
+```
+
+Sıradan bir kararda (izin ya da grant reddi) alan **yoktur**; gövde önceki gibi `{"allowed": true|false}`'dur. Gateway / client açısından, doğrudan adreslenen bir instance için `reason: "instance-not-found"` taşıyan `403`, çağıranın rolü eksik demek değil, instance'ın (henüz) var olmadığı demektir. Aynı sürümde `queryRoles=true` sorgusu, SubFlow child'ı henüz oluşturulmamışken (correlation commit edilmiş, child satırı post-commit job ile yaratılıyor) **mevcut en derin instance**'ın kendi `queryRoles` çözümüyle karar verir; önceden bu pencerede her state poll'u `403` alıyordu. `transitionKey` / `functionKey` var olmayan bir child'a iletildiğinde red devam eder. Kavramsal ayrıntı: [Yetkilendirme](/docs/concepts/authorization). Örnek: [vnext-example — `LeafNotCreatedYetTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/AuthorizationChainLab/LeafNotCreatedYetTests.cs) ([`authorization-chain-lab`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/authorization-chain-lab/authorization-chain-lab-root-slow.json)).
+
+### GET `/api/v1/{domain}/workflows/{workflow}/functions/authorize`
+
+<sup>New</sup> v0.0.105 `authorize` fonksiyonunun **workflow kapsamlı** rotası: henüz instance yokken, çağıranın bu flow'dan **instance başlatıp başlatamayacağını** flow'un kendi `startTransition.roles` tanımından cevaplar. Gateway `POST …/instances/start` isteğini, diğer transition'larda olduğu gibi bu cevaba göre kabul eder ya da reddeder; start transition'ın key'ini bilmesine gerek yoktur, rota onu tanımdan çözer.
+
+```http
+GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?type=instance[&version=x][&role=r]
+```
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `type` | query | Evet | Neyin yetkilendirildiği. Bugün desteklenen tek değer `instance` (yeni instance başlatma). Varsayılanı yoktur; eksik ya da bilinmeyen değer → `400` `Authorization:110005` (mesaj desteklenen değerleri listeler). Instance listesi filtresindeki `instanceType` (`R`/`S`/`P`) ile karıştırmayın |
+| `version` | query | Hayır | Tanım versiyonunu sabitler; gateway start isteğinin kendi `version`'ını iletmelidir ki ikisi aynı rolleri okusun |
+| `role` | query | Hayır | Instance rotasıyla aynı çağıran rol çözümü |
+
+**Responses:** `200` → `{"allowed": true}`, `403` → `{"allowed": false}` (sözleşme instance rotasıyla aynı); `400` → `Authorization:110005`; `404` → bilinmeyen flow veya versiyon.
+
+- Statik roller ve `$Everyone` her zamanki gibi karşılaştırılır. **Instance'a bağlı grant'lar** (`$InstanceStarter`, `$PreviousUser`, `$InstanceBehalfOfStarter`, `$PreviousBehalfOfUser`, `$user.` / `$userBehalfOf.` / `$role.` context referansları) start öncesi **hiçbir zaman eşleşmez** — ne kabul ne red üretir. Yalnızca `allow $InstanceStarter` ile korunan bir start transition herkese **kapalıdır**; `[allow $InstanceStarter, allow maker]` ise `maker` ile karar verir. Grant yoksa izinlidir.
+- Runtime `POST …/instances/start`'ta `startTransition.roles`'u kendisi denetlemez; karar, diğer tüm transition'larda olduğu gibi gateway'dedir.
+
+Gateway kuralı örneği (orchestrator host'u ortama özeldir):
+
+```csharp
+Utils.CallApiGet("http://<orchestrator-host>/api/v1/"+path.var1+"/workflows/"+path.var2+"/functions/authorize?type=instance", header, allHeader).IsSuccessStatusCode == true
+```
+
+Kavramsal ayrıntı: [Yetkilendirme](/docs/concepts/authorization). Örnek: [vnext-example — `StartAuthorizeTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/RoleMatrixLab/StartAuthorizeTests.cs).
 
 :::warning[In-process `queryRoles` denetimleri kaldırıldı — v0.0.95]
 `state`, `data`, `view`, `schema`, `master`, `tasks`, `actions`, `instance-correlation`, `incidents`, `incidents/active` fonksiyonları ve `POST …/longpoll/ack` artık kendi içlerinde `queryRoles` / interaction kapısını **değerlendirmez**. Karar yalnızca `authorize` üzerinden verilir; Internal Gateway'in bu fonksiyonu çağırmadığı bir deployment'ta bu yüzeylerde `queryRoles` **uygulanmaz**. Görünürlük çözümü (transition filtreleme, `x-roles`) değişmemiştir. Ayrıntı: [Yetkilendirme](/docs/concepts/authorization).
@@ -277,9 +314,9 @@ Kurallar:
 :::
 
 **Responses:**
-- `200 OK` → `StartInstanceOutput` (id, key, status, attributes, eTag, extensions, <sup>New</sup> v0.0.102 `flowVersion` — instance'ın başladığı **çözülmüş** sürüm) — etkin mod senkron (`sync=true` veya tanımda `executionType: "S"`)
+- `200 OK` → `StartInstanceOutput` (id, key, status, effectiveStatus, attributes, eTag, extensions, <sup>New</sup> v0.0.102 `flowVersion` — instance'ın başladığı **çözülmüş** sürüm, <sup>New</sup> v0.0.104 `currentState` / `effectiveState` — bkz. [StartInstanceOutput / TransitionOutput](#startinstanceoutput--transitionoutput)) — etkin mod senkron (`sync=true` veya tanımda `executionType: "S"`)
 - `202 Accepted` → etkin mod asenkron (`sync=false` varsayılan veya tanımda `executionType: "A"`): iş, durable arkaplan işlemesi için kuyruğa alındı
-- `400 Bad Request` → `ProblemDetails` (<sup>New</sup> v0.0.100 `x-storage` alanında geçersiz dosya gövdesi: `Instance:100048`)
+- `400 Bad Request` → `ProblemDetails` (<sup>New</sup> v0.0.100 `x-storage` alanında geçersiz dosya gövdesi: `Instance:100048`; <sup>New</sup> v0.0.105 `startTransition` kural tabanlı `schemas` bildiriyor ve hiçbir entry eşleşmedi: `Transition:100025`)
 - `404 Not Found` → workflow bulunamadı; <sup>New</sup> v0.0.102 istenen sürüm(ler) varsayılanın üstünde bekliyor (`Instance:100051`)
 - `409 Conflict` → key collision; <sup>New</sup> v0.0.102 varsayılan sürüm pointer'ı geçersiz ya da hiçbir yayınlanmış sürümle eşleşmiyor (`Instance:100052`)
 - `413 Payload Too Large` → gövde host sınırını aştı (varsayılan 10 MiB ≈ 7,5 MiB base64 dosya)
@@ -305,10 +342,11 @@ Bir instance üzerinde transition tetikler.
 Gövde serbest (free-form) JSON da olabilir — bkz. yukarıdaki *Serbest payload* notu (`x-vnext-payload-mode` header'ı burada da geçerlidir). **Form-urlencoded** gövde de kabul edilir — bkz. yukarıdaki *Form-urlencoded gövde desteği* notu.
 
 **Responses:**
-- `200 OK` → `TransitionOutput` — etkin mod senkron (`sync=true` veya `executionType: "S"`)
+- `200 OK` → `TransitionOutput` — etkin mod senkron (`sync=true` veya `executionType: "S"`); <sup>New</sup> v0.0.104 `currentState` / `effectiveState` taşır
 - `202 Accepted` → etkin mod asenkron (`sync=false` varsayılan veya `executionType: "A"`): iş, durable arkaplan işlemesi için kuyruğa alındı
 - `400 Bad Request`, `403 Forbidden` (yetki yok), `404 Not Found`, `409 Conflict`, `503 Service Unavailable`
 - <sup>New</sup> v0.0.100 Dosya alanları için `400` (`Instance:100048`), `503` (`Instance:100047` / `Instance:100050`) — bkz. [Hata kodları](#instance-hata-kodları-v00100).
+- <sup>New</sup> v0.0.105 Transition kural tabanlı `schemas` bildiriyor ve hiçbir entry eşleşmedi → `400` `Transition:100025` (instance state'ini korur, fault edilmez; `schema` / `schemas` bildirmeyen transition kabul edilmeye devam eder). Bir `schemas` kuralı `context.Caller` ile çağıran rollerini okurken rol sağlayıcı cevap veremezse → `503` `Authorization:110006` (yeniden denenebilir) — bkz. [Hata kodları (v0.0.105)](#hata-kodları-v00105).
 
 > **Not (aktif SubFlow):** <sup>New</sup> v0.0.100 Instance'ın aktif bir SubFlow'u varsa transition parent'ta kuyruğa alınmaz, değiştirilmeden en derin aktif child'a (leaf) iletilir; yanıt parent'ın id'sini ve child'ın status'ünü taşır. Leaf'in reddi (`400`/`403`/`409`) artık senkron döner. Child tamamlanmış ya da henüz oluşmamışsa parent `409` `InstanceBusy` döner — yeniden deneyin. Ayrıntı: [Workflow → SubFlow State](/docs/components/workflow).
 
@@ -514,7 +552,7 @@ Instance verisinin her yazımı için bir satır döner, **en yeniden eskiye**. 
   completedAt?: string;     // ISO datetime
   duration?: number;
   createdAt: string;
-  modifiedAt?: string;
+  modifiedAt?: string;       // v0.0.104 — instance'ın son değiştiği an (aşağıdaki nota bakın)
   createdBy?: string;
   createdByBehalfOf?: string;
   modifiedBy?: string;
@@ -523,6 +561,8 @@ Instance verisinin her yazımı için bir satır döner, **en yeniden eskiye**. 
   incident?: IncidentHref;     // hasActiveIncident + active/history link'leri — bkz. Instance Incidents
 }
 ```
+
+<sup>New</sup> v0.0.104 **`modifiedAt` instance'ın son değiştiği andır.** Artık her transition'da hareket eder — aynı state'te kalan transition, tamamlanma, `cancel` ve fault dahil — ve `updateData`'nın yazdığı her data satırında (istek gövdesi veya task output'u; son satır kazanır) ve stage / tags / key değiştiğinde güncellenir. Hiçbir şeyi (data, stage, tags, key) değiştirmeyen bir `updateData` onu hareket ettirmez. Önceki runtime'lar `modifiedAt`'i yalnızca set-based status yazımlarında güncelliyordu; bu yüzden tamamlanmış bir instance, son transition'ı başlamadan önceki bir zamanı gösterebiliyordu. Yükseltme öncesi yazılmış satırlar eski değerlerini korur (backfill yok). `modifiedAt`'i "son status değişikliği" olarak okuyan tüketiciler (sıralama, `modifiedAt` filtreleri, raporlar) bu anlam değişikliğine göre tekrar kontrol edilmelidir. Ayrıntı: [Instance Filtering](/docs/how-to/instance-filtering).
 
 ### IncidentHref <sup>New</sup>
 
@@ -543,12 +583,24 @@ Instance verisinin her yazımı için bir satır döner, **en yeniden eskiye**. 
   id: string;
   key?: string;
   status: InstanceStatus;
+  effectiveStatus?: InstanceStatus; // yalnız senkron yanıtta; instance GET'teki metadata.effectiveStatus ile aynı
+  currentState?: string;    // v0.0.104 — yalnız senkron yanıtta; instance GET'teki metadata.currentState ile aynı
+  effectiveState?: string;  // v0.0.104 — yalnız senkron yanıtta; instance GET'teki metadata.effectiveState ile aynı
   attributes?: any;
   eTag?: string;
   entityEtag?: string;
   extensions?: { [key: string]: any };
   flowVersion?: string; // v0.0.102: start yanıtında instance'ın çözülmüş sürümü
 }
+```
+
+<sup>New</sup> v0.0.104 Senkron start / transition yanıtı `currentState` ve `effectiveState` taşır: instance GET'in `metadata.currentState` / `metadata.effectiveState` alanlarıyla **aynı ad ve değer** (persist edilmiş kolonlar). SubFlow'a inilmez; bu değerler state function'ın `state` alanı (en derin aktif leaf'in state'i) **değildir**. Ek DB okuması eklenmedi — değerler pipeline'ın elindeki instance'tan gelir; `ClientResponse` ile cevap veren bir pipeline'da `null` kalır. Asenkron `202` yanıtında iki alan da **yoktur**. Runtime-internal kimlik-only yanıt (cross-domain `sub/instances/start`, subflow forward) da iki alanı taşır; böylece senkron bir SubProcess task output'u child'ın state'ini içerir. Örnek ve mapping yolu: [Async / Sync](/docs/how-to/async-sync).
+
+```json
+// PATCH …/instances/{id}/transitions/submit?sync=true — 200
+{ "id": "8d83c1f2-…", "status": "A", "effectiveStatus": "A",
+  "currentState": "otp-waiting", "effectiveState": "otp-waiting",
+  "attributes": { "…": "…" }, "eTag": "\"…\"", "extensions": {} }
 ```
 
 ### RetryInstanceOutput
@@ -619,6 +671,19 @@ Instance sorgu doğrulama hataları (`Validation:900011` … `900014`) `error.va
 | `Instance:100053` | `VersionRegistryUnavailable` | 503 | <sup>New</sup> v0.0.102 Sürüm registry'si okunamadı; geçicidir, yeniden deneyin |
 
 Ayrıntı: [Dosya Alanları](/docs/how-to/file-fields), [Workflow → History Modu](/docs/components/workflow), [Flow Varsayılan Sürümü](/docs/concepts/flow-default-version). `Instance:100051` … `100053` v0.0.102 ile instance listesi, tekil GET ve `GetInstances` / `GetInstance` task'lerinde de döner — bkz. [Satır Güvenliği](/docs/concepts/row-security).
+
+### Hata kodları (v0.0.105)
+
+<sup>New</sup> v0.0.105 ile eklenen hata kodları (`ProblemDetails` içinde döner):
+
+| Kod | Ad | HTTP | Anlamı |
+|---|---|---|---|
+| `Transition:100025` | `TransitionSchemaNotMatched` | 400 | Transition (state, shared, start, `cancel`, `updateData`, `exit`) kural tabanlı `schemas` bildiriyor ve hiçbir entry eşleşmedi. Instance state'ini korur, fault edilmez. Şema bildirmeyen transition kabul edilir |
+| `Function:800006` | `FunctionInputSchemaNotMatched` | 400 | Function'ın kural tabanlı `inputSchema` listesinde gövdeli istek için eşleşen entry yok (**breaking** — önceden doğrulama atlanıyordu). Gövdesiz istek kabul edilir |
+| `Authorization:110005` | `AuthorizeUnsupportedType` | 400 | Workflow kapsamlı `GET …/workflows/{workflow}/functions/authorize` çağrısında `type` eksik veya desteklenmiyor (desteklenen: `instance`) |
+| `Authorization:110006` | `CallerRolesUnavailable` | 503 | Kural tabanlı bir seçim (şema veya view) `context.Caller` ile çağıran rollerini okudu ve rol sağlayıcı cevap veremedi; fallback sunulmaz. Geçicidir, **yeniden denenebilir** |
+
+Ayrıntı: [Breaking Changes v0.0.105](/blog/breaking-changes/breaking-changes-v0-0-105), [Release v0.0.105](/blog/release-v0-0-105).
 
 ---
 

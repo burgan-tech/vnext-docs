@@ -187,6 +187,8 @@ public sealed class ScriptContext
 
     public IRelatedInstanceAccessor Related { get; }
 
+    public ICallerAccessor Caller { get; private set; }   // v0.0.105 — hiçbir zaman null
+
     public IRuntimeInfoProvider Runtime { get; private set; }
     public Dictionary<string, dynamic> Definitions { get; private set; }
     public Dictionary<string, dynamic?> TaskResponse { get; private set; }
@@ -372,6 +374,74 @@ Input ve transition mapping’lerde **orijinal geçiş isteğinin** gövdesi ve 
 var transitionBody = context.CurrentTransition.Data;
 var authHeader = context.CurrentTransition.Header?.authorization;
 ```
+
+### Caller
+
+<sup>New</sup> v0.0.105 `context.Caller`, çağıranın rollerini **runtime'ın çözdüğü haliyle** verir. Asıl kullanım yeri seçim kurallarıdır: transition `schemas`, function `inputSchema` / `outputSchema` / `inputView` / `outputView` ve state/transition `views` kuralları ([IConditionMapping](./interfaces#iconditionmapping)).
+
+```csharp
+public class IsApprover : ScriptBase, IConditionMapping
+{
+    public async Task<bool> Handler(ScriptContext context) =>
+        await context.Caller.HasRoleAsync("morph-idm.approver");
+}
+```
+
+Rol kümesi yapılandırılmış caller-role sağlayıcısından gelir — runtime'ın kendi rol kararlarında ve çağırana göre cache anahtarlarında kullandığı kümenin aynısıdır:
+
+| Sağlayıcı | Kaynak |
+|-----------|--------|
+| `default` | Token claim'leri (`ICurrentUser.Roles`), yoksa gateway'in gönderdiği `role` header'ı |
+| `morph-idm` | Kimlik servisi (`get-roles`); boş olmayan bir `role` header'ı bu cevabın **yerine geçer** |
+
+`Headers["role"]` ayrıştırmak yerine `context.Caller` kullanın: `morph-idm` altında header, gateway koymadıkça çağıranın rol kümesi değildir.
+
+**API** — `ScriptContext.Caller` bir `ICallerAccessor`'dır (`BBT.Workflow.Scripting.Caller`) ve hiçbir zaman `null` değildir:
+
+| Üye | İmza | Anlamı |
+|-----|------|--------|
+| `HasRoleAsync` | `Task<bool> HasRoleAsync(string role)` | Çağıran `role`'e sahipse `true` (ordinal karşılaştırma) |
+| `RolesAsync` | `Task<IReadOnlyList<string>> RolesAsync()` | Çağıranın rolleri; hiç rolü yoksa boş liste |
+| `IsAvailable` | `bool IsAvailable { get; }` | Bu yüzeyde rolleri sorulabilecek bir çağıran var mı; yoksa `false` |
+| `ResolutionFailed` | `bool ResolutionFailed { get; }` | Bir okuma, sağlayıcı cevap veremediği için başarısız olduysa `true` (yapışkandır) |
+| `RolesFromHeader` | `bool? RolesFromHeader { get; }` | Başarılı bir okumadan sonra: küme isteğin `role` header'ından mı geldi. Okumadan önce `null`. **Yalnızca tanı amaçlı** — buna göre dallanmayın |
+
+Çağıran olmayan bir yüzeyde ya da sağlayıcı cevap veremediğinde okumalar (`HasRoleAsync`, `RolesAsync`) `CallerRolesUnavailableException` fırlatır.
+
+**Yüzey başına erişilebilirlik:**
+
+| Yüzey | Kimin rolleri | Sağlayıcı hatasında |
+|-------|---------------|---------------------|
+| Seçim kuralları (transition `schemas`, function kontrat slot'ları, state/transition `views`) | İsteği yapan çağıran | Seçim başarısız: `503` `Authorization:110006` |
+| Otomatik transition `rule`'u | Hop'u süren çağıran (istek, async-accept job'ı, inline auto zinciri); System hop'larında **yok** | Adım başarısız olur (`110006`, error boundary'den geçer); DefaultAutoTransition **alınmaz** |
+| Timer betiği (`ITimerMapping`) | State'e **giren** çağıran (timer armlanırken hesaplanır); ateşlenen bir timer yeniden armlandığında **yok** | Adım başarısız olur (`110006`) |
+| SubFlow output mapping | Child'ı sonlandıran çağıran (taşınan header'lardan) — parent'ın başlatanı değil; child timer ile bittiyse **yok** | Tamamlanma geri alınır ve yeniden teslim edilir; parent fault **olmaz** (fault yolunda başarısız mapping olarak loglanır, settlement devam eder) |
+| Task mapping'leri (OnEntry, OnExit, OnExecute, function task'ları), transition `mapping`, extension'lar, resource lock, event mapping'leri | — (erişilemez; okuma throw eder) | — |
+
+**Çağıran yoksa `IsAvailable` `false`'tur — asla boş küme değildir.** System hop'ları (ateşlenen timer, SubFlow resume, continuation) çağıran taşımaz. Bu yüzden otomatik kurallarda ve timer betiklerinde okumadan önce `IsAvailable`'ı kontrol edip bir varsayılan seçin:
+
+```csharp
+public class ApproverWindowTimer : ITimerMapping
+{
+    public async Task<TimerSchedule> Handler(ScriptContext context)
+    {
+        var approver = context.Caller.IsAvailable && await context.Caller.HasRoleAsync("rule-schema.approver");
+        return TimerSchedule.FromDuration(TimeSpan.FromHours(approver ? 48 : 24));
+    }
+}
+```
+
+**Maliyet — lazy.** Bir betik rolleri okuyana kadar hiçbir şey çözülmez; rolleri hiç okumayan kural sağlayıcı çağrısı yapmaz. Bir istek içinde sağlayıcı **en fazla bir kez** cevap verir (accessor memoize eder; `morph-idm` zaten istek scope'u başına memoize eder ve bunu yetkilendirme ve cache anahtarlarıyla paylaşır). Inline çalışan otomatik hop zinciri tek bir scope ve tek bir çağrı paylaşır; her yeni scope (async job, SubFlow tamamlanması) kendi çağrısını yapar. İstekler arası cache yoktur.
+
+**Sağlayıcı cevap veremediğinde — fail-closed.** Bir kural rolleri okuduğunda sağlayıcı hata verirse (morph-idm hatası, timeout, açık circuit breaker) seçim sonraki girişe ya da fallback'e **düşmez**; istek `503` `Authorization:110006` (`CallerRolesUnavailable`, yeniden denenebilir) ile başarısız olur. Kural exception'ı yutup `true` dönse bile sonuç aynıdır — seçim döngüleri her kuraldan sonra `ResolutionFailed`'ı kontrol eder. Rolleri okumayan kurallar kesinti sırasında çalışmaya devam eder; başarısız bir seçim cache'lenmez. Sıradan bir betik hatası (bug) ise eskisi gibi atlanır.
+
+:::warning[Rol ile seçim yetkilendirme değildir]
+Role göre bir form ya da payload kontratı seçmek bir UX / kontrat kararıdır; hiçbir şeyi korumaz. Erişim kararları gateway'de ve `queryRoles`'tadır ([Yetkilendirme](/docs/concepts/authorization)). Kuralları pozitif test olarak yazın (`HasRoleAsync("x")`) ve kuralsız fallback'i **en az yetkili** kontrat yapın. Accessor yalnızca düz rol adlarını cevaplar: ön tanımlı roller (`$InstanceStarter`, `$PreviousUser`, …), dinamik grant'ler ve `allOf` / `anyOf` kombinatörleri genişletilmez.
+
+**Dağıtım ön koşulu:** her iki sağlayıcıda da istemcinin gönderdiği `role` header'ı olduğu gibi kabul edilir (`default`: token'da rol claim'i yoksa; `morph-idm`: kimlik servisinin cevabının yerine geçer). Gateway, istemciden gelen `role` header'ını **silmeli ya da üzerine yazmalıdır**. `RolesFromHeader`, debug sırasında hangi kaynağın cevap verdiğini gösterir.
+:::
+
+Çalışan örnekler: [vnext-example `caller-roles-lab`](https://github.com/burgan-tech/vnext-example/tree/master/core/Workflows/caller-roles-lab) (otomatik kural, timer, SubFlow output mapping) ve [`rule-schema-lab/src/IsApproverRole.csx`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/rule-schema-lab/src/IsApproverRole.csx) (transition `schemas`).
 
 ## ScriptResponse Kullanımı
 

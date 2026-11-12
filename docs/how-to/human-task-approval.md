@@ -87,21 +87,25 @@ Ayrıntı: [Yetkilendirme → Grant değerlendirme](../concepts/authorization).
 
 ## 3. Listede görünecek metin — `humanTask` veri bloğu
 
-Liste, başlık ve açıklamayı instance'ın **en son data satırının kökündeki** `humanTask` nesnesinden okur:
+Liste, başlık ve açıklamayı (ve <sup>New</sup> v0.0.104 itibarıyla son tarih ile önceliği) instance'ın **en son data satırının kökündeki** `humanTask` nesnesinden okur:
 
 ```json
 {
   "humanTask": {
     "title": "50.000 TL EFT onayı",
-    "description": "Ahmet Yılmaz — TR33 0006 ..."
+    "description": "Ahmet Yılmaz — TR33 0006 ...",
+    "dueBy": "2026-11-10T17:00:00+03:00",
+    "priority": 1
   }
 }
 ```
 
-| Alan | Tip | Açıklama |
-|---|---|---|
-| `humanTask.title` | string | Liste satırının başlığı |
-| `humanTask.description` | string | Liste satırının alt metni |
+| Alan | Tip | Zorunlu | Açıklama |
+|---|---|---|---|
+| `humanTask.title` | string | Hayır | Liste satırının başlığı |
+| `humanTask.description` | string | Hayır | Liste satırının alt metni |
+| `humanTask.dueBy` <sup>New</sup> v0.0.104 | string | Hayır | Son tarih: ISO 8601 date (`2026-11-10`) veya date-time (`2026-11-10T09:30:00+03:00`). Yanıtta offset'li date-time olarak döner |
+| `humanTask.priority` <sup>New</sup> v0.0.104 | number \| string | Hayır | Öncelik: JSON number (`1`) veya `.` ondalık ayraçlı numeric string (`"1.5"`). Virgüllü `"1,5"` yok sayılır. Yanıtta number olarak döner |
 
 Kurallar:
 
@@ -109,6 +113,8 @@ Kurallar:
 - Blok yoksa görev **yine listelenir**, ancak `title` ve `description` boş döner. Bu yüzden onay state'ine giren transition'ın mapping'inde bloğu doldurun (ya da state'in `onEntry` görevinde).
 - Onay bir SubFlow çocuğunda bekliyorsa blok **çocuğun** verisinden okunur; kök instance'ın verisindeki `humanTask` kullanılmaz.
 - Değer her state değişiminde güncellenebilir; liste TTL cache'i (varsayılan 60 sn) nedeniyle yeni değeri o süre içinde göstermeyebilir.
+- <sup>New</sup> v0.0.104 `dueBy` ve `priority` opsiyoneldir. Yoksa ya da biçimi yanlışsa (`"next week"`, bir obje) yanıtta `null` döner; hata üretmez ve görev **yine listelenir** — tek bir bozuk alan görevi listeden düşürmez.
+- Liste sıralaması **değişmedi**: `dueBy` veya `priority`'ye göre sıralama yoktur, satırlar hâlâ `createdAt`'e göre yeniden eskiye gelir. Önceliğe veya son tarihe göre sıralama/vurgulama client'ın işidir.
 
 ---
 
@@ -257,6 +263,8 @@ Gövde düz bir JSON dizisidir (zarf yok); en yeni önce sıralanır.
     "workflow": "payment-order",
     "title": "50.000 TL EFT onayı",
     "description": "Ahmet Yılmaz — TR33 0006 ...",
+    "dueBy": "2026-11-10T17:00:00+03:00",
+    "priority": 1,
     "createdAt": "2026-09-25T09:12:31Z",
     "vNext": true
   }
@@ -269,10 +277,14 @@ Gövde düz bir JSON dizisidir (zarf yok); en yeni önce sıralanır.
 | `id` | Instance'ın kendi kimliği; her zaman benzersiz. Satırları ayırt etmek ve state/ack çağrılarını adreslemek için bunu kullanın |
 | `workflow` | Kök instance'ın workflow anahtarı — state çağrısındaki `{workflow}` |
 | `title`, `description` | Leaf'in `humanTask` bloğundan; blok yoksa boş |
-| `createdAt` | Kök instance'ın oluşturulma zamanı |
+| `dueBy` <sup>New</sup> v0.0.104 | Leaf'in `humanTask.dueBy` değeri, offset'li date-time (`2026-11-10T17:00:00+03:00`). Opsiyonel: yoksa veya biçimi bozuksa `null` |
+| `priority` <sup>New</sup> v0.0.104 | Leaf'in `humanTask.priority` değeri, number. Opsiyonel: yoksa veya biçimi bozuksa (`"1,5"` dahil) `null` |
+| `createdAt` | Kök instance'ın oluşturulma zamanı — sıralama anahtarı (yeniden eskiye) |
 | `vNext` | Sabit `true` (tüketicinin eski platform görevleriyle ayırt etmesi için) |
 
 Yanıt başlıkları: `X-VNext-HumanTask-Truncated: true` liste `ResultCap` (varsayılan 500) ile kırpıldıysa gelir; `X-VNext-Cache-Override` isteğe eklenirse TTL cache atlanır. Flow başına en fazla 200 aday değerlendirilir.
+
+<sup>New</sup> v0.0.104 `dueBy` / `priority` eklemelidir (additive); alanları tanımayan tüketici onları yok sayar. Liste cache anahtarının nesli `human-task:v1` → `v2`'ye yükseldi; yeni alanlar olmadan yazılmış girdiler sunulmaz, cache deploy sonrası bir kez yeniden dolar. Daha eski runtime çalıştıran bir partner domain'deki leaf alanlar olmadan cevap verir; o satırda `null` okunur.
 
 ### Client'ın karar sonrası izlemesi gereken sinyal
 
@@ -310,6 +322,7 @@ Client bu bloğu gördüğünde: sonuç ekranını render eder, polling'i keser 
 | Görev listede hiç yok | `queryRoles` bildirilmemiş (log 20459) |
 | Görev listede hiç yok | Çağıranın rolleri state'in `queryRoles` grant'larıyla eşleşmiyor ya da bir `deny`'a takılıyor |
 | Satır var, başlık boş | Veri kökünde `humanTask` bloğu yok |
+| Satır var, `dueBy` / `priority` `null` | Alan yazılmamış ya da biçimi bozuk (ör. `"1,5"`, `"next week"`) — veri kökündeki `humanTask` değerini kontrol edin |
 | Mobilde bekleme ekranı çıkıyor | View kuralı `false` döndü — kanal başlığı gelmiyor olabilir |
 | Mobil durmuyor, akışı izlemeye devam ediyor | Interaction kuralı reddetti; sık sebebi `context.Body` okuyan kopyalanmış kural |
 | Sinyal geldi ama ack 403 | Ayırt edici bilgi query parametresinde — ack yalnızca header iletir |

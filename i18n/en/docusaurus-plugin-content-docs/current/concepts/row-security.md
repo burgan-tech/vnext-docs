@@ -56,7 +56,7 @@ In a flow that declares `rowSecurity`, **a caller no static rule matches sees no
 - **Identity-bound reserved roles:**
   - `$InstanceStarter` → row predicate `createdBy eq <caller's ActorUserName>`
   - `$InstanceBehalfOfStarter` → `createdByBehalfOf eq <caller's UserName>`
-- Rejected at publish: `$PreviousUser` / `$PreviousBehalfOfUser` (RS-E01), dynamic grants `$user.`, `$userBehalfOf.`, `$role.` (RS-E02), any other reserved role (RS-E05). An `allOf` / `anyOf` object cannot be used in `roles` — the schema expects a list of strings, and the runtime answers `400` `App:900006` at JSON binding.
+- Rejected at publish: `$PreviousUser` / `$PreviousBehalfOfUser` (RS-E01), dynamic grants `$user.`, `$userBehalfOf.`, `$role.` (RS-E02), any other reserved role (RS-E05) — <sup>New</sup> v0.0.105 including [`$Everyone`](/docs/concepts/authorization#everyone--every-caller). "X sees everything" is written as an explicit, unfiltered static-role rule. An `allOf` / `anyOf` object cannot be used in `roles` — the schema expects a list of strings, and the runtime answers `400` `App:900006` at JSON binding.
 - A static role and a reserved role may not share one rule's `roles` (RS-E04): split them into two rules.
 
 ### `rules[].filter`
@@ -194,7 +194,7 @@ Header values a rule reads (for example `x-branch-code`) can appear in request l
 | RS-E02 | error | Dynamic grant (`$user.`, `$userBehalfOf.`, `$role.`) used as a rule role |
 | RS-E03 | (reserved) | `allOf` / `anyOf` — not emitted by the runtime; refused at JSON binding (`400` `App:900006`), reported first by vnext-schema |
 | RS-E04 | error | Static and reserved roles mixed in one rule |
-| RS-E05 | error | Reserved role other than `$InstanceStarter` / `$InstanceBehalfOfStarter` |
+| RS-E05 | error | Reserved role other than `$InstanceStarter` / `$InstanceBehalfOfStarter` (for example <sup>New</sup> v0.0.105 `$Everyone`) |
 | RS-E06 | error | Instance-starter shorthand on a column it does not belong to |
 | RS-E07 | error | Malformed `$.context.` path, unknown source (`Route`, `Query`) or unknown `CurrentUser` field |
 | RS-E08 | error | Filter on, or above, an `x-encryption: encrypt` path |

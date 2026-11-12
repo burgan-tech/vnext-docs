@@ -167,6 +167,9 @@ public sealed class ScriptContext
     public Definitions.Workflow Workflow { get; private set; }
     public Transition Transition { get; private set; }
     
+    // Caller (v0.0.105) — never null
+    public ICallerAccessor Caller { get; private set; }
+
     // Runtime information
     public IRuntimeInfoProvider Runtime { get; private set; }
     public Dictionary<string, dynamic> Definitions { get; private set; }
@@ -301,6 +304,74 @@ var uploads = await context.Related.SubsAsync("doc-upload"); // all matching, ol
 ```
 
 Absence returns `null` / an empty list; a read failure or cap breach throws `RelatedInstanceAccessException`. Results are memoized per script context and capped (`Workflow:Scripting:RelatedAccess:MaxResolutionsPerContext`, default 10). Reads are unfiltered by design — do not copy `x-roles`-restricted fields into this instance's data.
+
+#### Caller
+
+<sup>New</sup> v0.0.105 `context.Caller` exposes the caller's roles **as the runtime resolved them**. Its main use is selection rules: transition `schemas`, function `inputSchema` / `outputSchema` / `inputView` / `outputView`, and state/transition `views` rules ([IConditionMapping](#iconditionmapping)).
+
+```csharp
+public class IsApprover : ScriptBase, IConditionMapping
+{
+    public async Task<bool> Handler(ScriptContext context) =>
+        await context.Caller.HasRoleAsync("morph-idm.approver");
+}
+```
+
+The role set comes from the configured caller-role provider — the same set the runtime uses for its own role decisions and for caller-keyed cache keys:
+
+| Provider | Source |
+|----------|--------|
+| `default` | Token claims (`ICurrentUser.Roles`), otherwise the `role` header sent by the gateway |
+| `morph-idm` | The identity service (`get-roles`); a non-empty `role` header **replaces** that answer |
+
+Use `context.Caller` instead of parsing `Headers["role"]`: under `morph-idm` the header is not the caller's role set unless the gateway put it there.
+
+**API** — `ScriptContext.Caller` is an `ICallerAccessor` (`BBT.Workflow.Scripting.Caller`) and is never `null`:
+
+| Member | Signature | Meaning |
+|--------|-----------|---------|
+| `HasRoleAsync` | `Task<bool> HasRoleAsync(string role)` | `true` if the caller has `role` (ordinal comparison) |
+| `RolesAsync` | `Task<IReadOnlyList<string>> RolesAsync()` | The caller's roles; an empty list when the caller has none |
+| `IsAvailable` | `bool IsAvailable { get; }` | Whether this surface has a caller whose roles can be asked; `false` otherwise |
+| `ResolutionFailed` | `bool ResolutionFailed { get; }` | `true` if a read failed because the provider could not answer (sticky) |
+| `RolesFromHeader` | `bool? RolesFromHeader { get; }` | After a successful read: whether the set came from the request's `role` header. `null` before a read. **Diagnostics only** — do not branch on it |
+
+On a surface without a caller, or when the provider cannot answer, reads (`HasRoleAsync`, `RolesAsync`) throw `CallerRolesUnavailableException`.
+
+**Availability per surface:**
+
+| Surface | Whose roles | On provider failure |
+|---------|-------------|---------------------|
+| Selection rules (transition `schemas`, function contract slots, state/transition `views`) | The caller making the request | Selection fails: `503` `Authorization:110006` |
+| Automatic transition `rule` | The caller driving the hop (the request, the async-accept job, the inline auto chain); **none** on System hops | The step fails (`110006`, goes through the error boundary); the DefaultAutoTransition is **not** taken |
+| Timer script (`ITimerMapping`) | The caller **entering** the state (computed when the timer is armed); **none** when a fired timer is re-armed | The step fails (`110006`) |
+| SubFlow output mapping | The caller that settled the child (from the carried headers) — not the parent's starter; **none** if the child finished by a timer | Completion is rolled back and redelivered; the parent is **not** faulted (on the fault path it is logged as a failed mapping and settlement continues) |
+| Task mappings (OnEntry, OnExit, OnExecute, function tasks), transition `mapping`, extensions, resource lock, event mappings | — (not available; reads throw) | — |
+
+**Without a caller `IsAvailable` is `false` — never an empty set.** System hops (a fired timer, SubFlow resume, continuation) carry no caller. So in automatic rules and timer scripts check `IsAvailable` before reading and pick a default:
+
+```csharp
+public class ApproverWindowTimer : ITimerMapping
+{
+    public async Task<TimerSchedule> Handler(ScriptContext context)
+    {
+        var approver = context.Caller.IsAvailable && await context.Caller.HasRoleAsync("rule-schema.approver");
+        return TimerSchedule.FromDuration(TimeSpan.FromHours(approver ? 48 : 24));
+    }
+}
+```
+
+**Cost — lazy.** Nothing is resolved until a script reads the roles; a rule that never reads them makes no provider call. Within a request the provider answers **at most once** (the accessor memoizes; `morph-idm` already memoizes per request scope and shares it with authorization and cache keys). An inline automatic hop chain shares one scope and one call; each new scope (async job, SubFlow completion) makes its own call. There is no cross-request cache.
+
+**When the provider cannot answer — fail-closed.** If a rule reads the roles and the provider fails (morph-idm error, timeout, open circuit breaker), selection does **not** fall through to the next entry or the fallback; the request fails with `503` `Authorization:110006` (`CallerRolesUnavailable`, retryable). The outcome is the same even if the rule swallows the exception and returns `true` — the selection loops check `ResolutionFailed` after every rule. Rules that do not read roles keep working during an outage; a failed selection is not cached. An ordinary script error (a bug) is still skipped as before.
+
+:::warning[Selecting by role is not authorization]
+Picking a form or payload contract by role is a UX / contract decision; it protects nothing. Access decisions belong at the gateway and in `queryRoles` ([Authorization](/docs/concepts/authorization)). Write rules as positive tests (`HasRoleAsync("x")`) and make the rule-less fallback the **least-privileged** contract. The accessor answers plain role names only: predefined roles (`$InstanceStarter`, `$PreviousUser`, …), dynamic grants and the `allOf` / `anyOf` combinators are not expanded.
+
+**Deployment prerequisite:** with both providers a client-sent `role` header is taken as is (`default`: when the token has no role claim; `morph-idm`: it replaces the identity service's answer). The gateway must **strip or overwrite** a client-supplied `role` header. `RolesFromHeader` shows which source answered while debugging.
+:::
+
+Working examples: [vnext-example `caller-roles-lab`](https://github.com/burgan-tech/vnext-example/tree/master/core/Workflows/caller-roles-lab) (automatic rule, timer, SubFlow output mapping) and [`rule-schema-lab/src/IsApproverRole.csx`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/rule-schema-lab/src/IsApproverRole.csx) (transition `schemas`).
 
 > 🚧 Full English translation is pending. See the [Turkish page](/docs/components/mappings) for the complete method table, `IsCompleted` vs `CorrelationCompleted` semantics, transaction behavior, and cross-domain routing notes.
 

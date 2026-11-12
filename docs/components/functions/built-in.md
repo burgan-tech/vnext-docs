@@ -277,7 +277,7 @@ v0.0.99 öncesinde `timeout.target` düz bir **string** (hedef state key'i) idi;
 | `transitions[].view` | `object` | Transition için view bilgisi |
 | `transitions[].view.hasView` | `boolean` | Bu transition için view olup olmadığı |
 | `transitions[].schema` | `object` | Transition için şema linki (tanımlıysa) |
-| `transitions[].schema.hasSchema` | `boolean` | Bu transition için şema olup olmadığı |
+| `transitions[].schema.hasSchema` | `boolean` | Bu transition için şema olup olmadığı. <sup>New</sup> v0.0.105 Yalnızca **bildirime** bakar (`schema` ya da boş olmayan `schemas`), `hasView` gibi — kural tabanlı `schemas` listesinde bu çağıran için hiçbir entry eşleşmese bile `true` olabilir; o durumda schema fonksiyonu `404` döner |
 | `transitions[].schema.href` | `string` | transitionKey ile Schema fonksiyon endpoint URL'i |
 | `incident` <sup>New</sup> | `object` | Instance'ın hata/incident durumunu anlatan link bloğu — bkz. [Incident bloğu](#incident-bloğu) v0.0.92 |
 | `eTag` | `string` | Cache doğrulama için ETag |
@@ -559,6 +559,20 @@ Content-Type: application/json
   "eTag": "W/\"v2\""
 }
 ```
+
+#### ETag instance state'ini de kapsar
+
+<sup>New</sup> v0.0.105 Data fonksiyonunun representation ETag'i artık yalnızca veri parmak izinden değil, instance'ın **state**'inden (`effectiveState`) de türetilir:
+
+```
+etag = h(generation | instanceId | latestDataEtag | effectiveState | flowVersion | callerHash)
+```
+
+Önceden ETag yalnızca veri değişimini izliyordu. Veri yazmayan bir state geçişinden sonra (örn. otomatik transition hop'u) ETag aynı kalıyor, `If-None-Match` ile gelen client `304` alıp **önceki state'in extension çıktısını** kullanmaya devam ediyordu — extension'lar `ScriptContext` üzerinden mevcut state'i okuyabildiği için bu çıktı bayatlamış olur (sahada client'ın önceki state'in `nextTransition` değerini tekrar gönderip `403` almasıyla gözlendi). Artık state değişince ETag değişir ve client taze extension çıktısıyla `200` alır.
+
+- **Gövde cache'i etkilenmez.** Cache'te saklanan girdi yalnızca alan-filtrelenmiş `data` yüküdür ve kendi geçerlilik kimliği (`dataEtag`) state'i **içermez**; veri yazmayan bir hop'tan sonra gelen `200` gövdeyi cache'ten, extension çıktısını taze hesaplar.
+- **Kabul edilen bayatlık değişmedi:** ETag veri ve state'i izler, extension çıktısının kendisini izlemez. Cevabı bu ikisinin dışında bir şeye (saat, harici çağrı) bağlı bir extension bir sonraki veri yazımına, state değişikliğine veya flow migration'ına kadar `304` ile sunulabilir; böyle çıktıyı her zaman taze isteyen client `If-None-Match` göndermemelidir.
+- Schema fonksiyonunun ETag'i `effectiveState`'i zaten taşıyordu; data fonksiyonu bu asimetriyi kapattı. Yükseltme sonrası mevcut ETag'ler bir kez değişir (tek seferlik `200`).
 
 #### Authorization-aware ETag
 
@@ -933,6 +947,22 @@ Accept: application/json
 
 > **İpucu:** State fonksiyonu yanıtındaki `transitions[].schema.hasSchema` alanını kontrol ederek, gereksiz schema istekleri ve 404 hatalarından kaçının.
 
+### Kural tabanlı şema seçimi (`schemas`)
+
+<sup>New</sup> v0.0.105 Bir transition, tek bir `schema` referansı yerine `views` ile aynı modelde kural tabanlı bir **`schemas`** listesi bildirebilir (ilk eşleşen `rule` kazanır, kuralsız entry son fallback'tir; `schemas` varsa `schema`'yı ezer). Schema fonksiyonu bu durumda **kuralla seçilen entry'yi** döner:
+
+| Durum | Schema fonksiyonu | `hasSchema` |
+|---|---|---|
+| Transition `schema` bildiriyor | O şema (değişmedi) | `true` |
+| Transition `schemas` bildiriyor, bir entry eşleşti | Eşleşen entry'nin şeması | `true` |
+| Transition `schemas` bildiriyor, hiçbir entry eşleşmedi | `404` (`No schema entry matched for transition {key} in state {state}`) | `true` (yalnızca bildirime bakar) |
+| Şema bildirilmemiş | `404` | `false` |
+
+- **`hasSchema` yalnızca bildirime bakar** (declared-only), `hasView` gibi: kurallar state fonksiyonunda değerlendirilmez. `true` görüp `404` alan client, bu çağıran için eşleşen entry olmadığı sonucunu çıkarmalıdır.
+- **Kural bağlamı:** workflow, instance, runtime, transition, `body` (instance'ın son verisi; yoksa `{}`) ve istek header'ları; query parametresi yoktur. Kural `context.Caller` ile çağıranın rollerini okuyabilir; rol sağlayıcı cevap veremezse fallback sunulmaz, `503` `Authorization:110006` döner (geçici, yeniden denenebilir).
+- **Cache key ve ETag istek header'larını kapsar.** Header'a bağlı bir kural başka bir header değerinin entry'sini ya da yanlış bir `304` almasın diye schema fonksiyonunun cache key'i ve ETag'i, volatile olmayan istek header'larının hash'ini içerir (Human Task fonksiyonu cache'iyle paylaşılan `RequestHeaderHash`). Tracing id'leri, transport gürültüsü ve koşullu / cache-directive header'ları (`If-None-Match`, `Cache-Control`, …) hariçtir — aksi halde revalidate eden client kendi ETag'ini hiç eşleştiremezdi. `x-forwarded-for` / `x-real-ip` bir kural okuyabileceği için **dahildir**.
+- Yazma yolunda aynı seçim transition isteğini doğrular: `schemas` bildirilmiş ama eşleşen entry yoksa istek `400` `Transition:100025` ile reddedilir (instance state'ini korur, fault edilmez). Ayrıntı: [REST API → Hata kodları](/docs/api-reference/rest-api).
+
 ## Master Fonksiyonu
 
 Instance'ın bağlı olduğu **flow seviyesindeki master şemayı** (`Workflow.Schema`) döndürür. Schema Fonksiyonu transition'a özel input şemasını verirken, Master Fonksiyonu instance data'nın **şablon yapısını** tanımlayan master şemayı verir. Client, workflow tanımını bilmeden instance'ın master şemasına State fonksiyonu yanıtındaki `master.href` linki üzerinden ulaşır.
@@ -1123,7 +1153,40 @@ Bir onay adımını bu listeye düşürmek (`subType: 6`, `queryRoles`, `humanTa
 | `HumanTaskFunctionCache:TtlSeconds` | `60` | Düz TTL (fingerprint doğrulaması yok — B'nin tamamladığı task A'ya 60 sn daha listelenebilir) |
 | `HumanTaskFunctionCache:AllowClientOverride` | `true` | `X-VNext-Cache-Override` header'ının kabul edilip edilmediği |
 
-Cache anahtarı `domain + caller scope + auth-header hash`'tir; rol, kimlik, kültür ve volatile olmayan tüm header'lar anahtara girer (dynamic role grant'lar yazarın seçtiği header'ı okuyabildiği için).
+Cache anahtarı `domain + caller scope + auth-header hash`'tir (`human-task:v2:{domain}:{callerScope}:{authHeaderHash}`); rol, kimlik, kültür ve volatile olmayan tüm header'lar anahtara girer (dynamic role grant'lar yazarın seçtiği header'ı okuyabildiği için). <sup>New</sup> v0.0.104 Anahtar nesli `v1` → `v2`'ye yükseldi: yeni alanlar olmadan yazılmış girdiler sunulmaz, cache deploy sonrası **bir kez** yeniden dolar.
+
+### Yanıt satırı
+
+Yanıt gövdesi düz bir JSON dizisidir, `createdAt`'e göre yeniden eskiye sıralı:
+
+```json
+[
+  {
+    "instanceId": "eft-2026-000123",
+    "id": "3f2c9a1e-5b7d-4c1a-9e2f-0a1b2c3d4e5f",
+    "workflow": "payment-order",
+    "title": "50.000 TL EFT onayı",
+    "description": "Ahmet Yılmaz — TR33 0006 ...",
+    "dueBy": "2026-11-10T17:00:00+03:00",
+    "priority": 1,
+    "createdAt": "2026-09-25T09:12:31Z",
+    "vNext": true
+  }
+]
+```
+
+| Alan | Kaynak | Yoksa |
+|---|---|---|
+| `instanceId` | Root'un business key'i; SubProcess veya key'siz instance için root'un kendi id'si | — |
+| `id` | Root'un kendi id'si (her zaman tekil) | — |
+| `workflow` | Root'un flow key'i | — |
+| `title` / `description` | Leaf'in son verisi, `humanTask.title` / `.description` | `""` |
+| `dueBy` <sup>New</sup> v0.0.104 | Leaf'in son verisi, `humanTask.dueBy`: ISO 8601 date (`2026-11-10`) veya date-time (`2026-11-10T09:30:00+03:00`) string. Offset'li date-time olarak döner | `null` |
+| `priority` <sup>New</sup> v0.0.104 | Leaf'in son verisi, `humanTask.priority`: JSON number veya `.` ondalık ayraçlı numeric string (`"1.5"`). Virgüllü `"1,5"` yok sayılır | `null` |
+| `createdAt` | Root'un oluşturulma zamanı — sıralama anahtarı | — |
+| `vNext` | Her zaman `true` | — |
+
+`dueBy` ve `priority` opsiyoneldir ve domain tarafından yazılır. Yanlış biçimli bir değer (`"next week"`, bir obje) hata değil **yok** (`null`) olarak okunur; satır yine listelenir — tek bir bozuk alan bir task'ı bankacının listesinden düşürmemelidir. **Sıralama değişmedi:** liste hâlâ `createdAt`'e göre yeniden eskiye sıralanır; `dueBy` veya `priority`'ye göre sıralama yoktur. Daha eski bir runtime çalıştıran partner domain'deki leaf bu alanlar olmadan cevap verir; o satırda `null` okunur. `humanTask` veri bloğunun yazımı: [Human Task ve "Bekleyen Onaylarım"](/docs/how-to/human-task-approval).
 
 ### Header'lar
 
@@ -1318,14 +1381,42 @@ Böylece bir instance, bulunduğu state'e göre farklı izleyici kitlelerine aç
 
 ### Flow Authorize
 
-Verilen rolün, flow üzerinde verilen transition (veya function) için izinli olup olmadığını kontrol eder. İsteğe bağlı `version`; verilmezse latest kullanılır.
+<sup>New</sup> v0.0.105 Workflow kapsamlı `authorize` rotası tek bir soruyu cevaplar: **bu çağıran bu flow'dan instance başlatabilir mi?** Start öncesi adreslenecek bir instance olmadığı için instance rotası bu soruyu cevaplayamaz; bu rota cevabı flow'un kendi `startTransition.roles` tanımından verir. Gateway `POST …/instances/start` isteğini, diğer transition'lar gibi bu cevaba göre kabul eder ya da reddeder.
 
 ```http
-GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?transitionKey=submit-account-details&role=morph-idm.maker&version=1.0.0
+GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?type=instance[&version=x][&role=r]
 ```
 
-**Yanıt 200:** `{ "allowed": true }`  
-**Yanıt 403:** `{ "allowed": false }`
+| Parametre | Gerekli | Açıklama |
+|---|---|---|
+| `type` | Evet | Neyin yetkilendirildiği. Bugün desteklenen tek değer `instance` (yeni instance başlatma); parametre ileride başka workflow kapsamlı sorular eklenebilsin diye vardır. Büyük/küçük harf duyarlı eşleşir, varsayılanı yoktur: eksik ya da bilinmeyen değer `400` `Authorization:110005` (`AuthorizeUnsupportedType`, mesaj desteklenen değerleri listeler). Instance listesi filtresi `instanceType` (`R`/`S`/`P`) ile karıştırmayın |
+| `version` | Hayır | Tanım versiyonunu sabitler; start isteğinin kendi `version`'ını iletin ki ikisi aynı rolleri okusun |
+| `role` | Hayır | Instance rotasıyla aynı bileşim (aşağıdaki *`role` parametresinin bileşimi*) |
+
+**Yanıt 200:** `{ "allowed": true }` — **Yanıt 403:** `{ "allowed": false }` — **400:** `Authorization:110005` — **404:** bilinmeyen flow veya versiyon. Gateway start transition'ın key'ini bilmek zorunda değildir; rota onu tanımdan çözer.
+
+Değerlendirme, grant değerlendiricisinin **instance'sız** yoludur:
+
+| Grant | Start'ta |
+|---|---|
+| Statik rol | Çağıranın rolleriyle karşılaştırılır; tüm küme üzerinde DENY, ALLOW'u geçersiz kılar |
+| `$Everyone` | Her çağıranla eşleşir |
+| `$InstanceStarter`, `$PreviousUser`, `$InstanceBehalfOfStarter`, `$PreviousBehalfOfUser` | **Hiçbir zaman eşleşmez** — karşılaştırılacak instance yok |
+| `$user.` / `$userBehalfOf.` / `$role.` context referansları | **Hiçbir zaman eşleşmez** — `Instance.Data` henüz yok, istek gövdesi yetkilendirme bağlamına girmez |
+
+Hiç eşleşmeyen bir grant ne kabul ne red üretir: onun ALLOW'u kimseyi kabul etmez, DENY'ı kimseyi reddetmez, onu içeren bir `allOf` sağlanamaz. Bu yüzden **yalnızca `allow $InstanceStarter`** ile korunan bir start transition herkese **kapalıdır** (fail-closed); `[allow $InstanceStarter, allow maker]` ise `maker` ile karar verir. Grant yoksa izinlidir. `availableIn` ve state gate'i uygulanmaz — start transition hiçbir state'e ait değildir. Runtime `POST …/instances/start`'ta `startTransition.roles`'u kendisi denetlemez; karar gateway'dedir. Audit logunda soru `start:{key}` olarak, instance id boş yazılır.
+
+Gateway (APISIX check-authorize) kuralı örneği — orchestrator host'u ortama özeldir; start isteği `version` taşıyorsa iletin:
+
+```csharp
+Utils.CallApiGet("http://<orchestrator-host>/api/v1/"+path.var1+"/workflows/"+path.var2+"/functions/authorize?type=instance", header, allHeader).IsSuccessStatusCode == true
+```
+
+:::warning[Eski `?transitionKey=` örneği geçersiz]
+Bu sayfanın önceki sürümleri workflow kapsamlı rotayı `?transitionKey=…&role=…` ile gösteriyordu. v0.0.105'te bu rota yalnızca `type`, `version` ve `role` parametrelerini kabul eder; `type` olmadan yapılan çağrı `400` `Authorization:110005` döner. Transition yetkisi için instance rotasını (`…/instances/{instance}/functions/authorize?transitionKey=`) kullanın.
+:::
+
+Kavramsal ayrıntı: [Yetkilendirme](/docs/concepts/authorization). Örnek testler: [vnext-example — `StartAuthorizeTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/RoleMatrixLab/StartAuthorizeTests.cs).
 
 ### Instance Authorize
 
@@ -1337,6 +1428,16 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/autho
 ```
 
 **Yanıt 200:** `{ "allowed": true }` — **Yanıt 403:** `{ "allowed": false }`. Karar **her iki durumda da gövdededir**; yalnızca 200'ü okuyan bir tüketici her reddi "cevap yok"a çevirir. Rol çözümü başarısız olursa (provider ulaşılamaz, 5xx, timeout) bu bir **hata**dır (4xx/5xx zarfı), ret değil.
+
+<sup>New</sup> v0.0.104 **Opsiyonel `reason` alanı.** Adreslenen instance yüklenemediğinde yanıt `403` ile birlikte `reason: "instance-not-found"` taşır — hiçbir grant değerlendirilmemiştir:
+
+```json
+{ "allowed": false, "reason": "instance-not-found" }
+```
+
+Alanın tek değeri `instance-not-found`'dur; sıradan bir karar (izin ya da grant reddi) `reason` **taşımaz**, gövde önceki gibi `{"allowed": true|false}`'dur. Gateway / client için: doğrudan adreslenen bir instance'ta `reason: "instance-not-found"` içeren `403`, çağıranın rolü eksik demek değil, instance'ın **(henüz) var olmadığı** demektir.
+
+<sup>New</sup> v0.0.104 **Child henüz oluşturulmamışken `queryRoles`.** Parent SubFlow correlation'ını kendi transaction'ında commit eder; child satırı ise sonrasında post-commit job ile yaratılır. Bu pencerede (yük altında yüzlerce milisaniye, start başarısız olursa süresiz) child yüklenemez ve `reason: "instance-not-found"` ile cevap verir; parent bu durumda **kendi** `queryRoles` çözümüyle (damgalı parent override → state `queryRoles` → workflow `queryRoles`) leaf'miş gibi karar verir — state fonksiyonunun aynı pencerede gösterdiği görünümle aynı. Yani karar veren leaf, **var olan en derin instance**'tır. v0.0.103'e kadar bu penceredeki her `queryRoles` sorgusu reddediliyor ve gateway client'ın state poll'una `403` dönüyordu. Yalnızca `queryRoles` fallback yapar: var olmayan bir child'a iletilen `transitionKey` / `functionKey` reddedilmeye devam eder. Fallback `reason` alanını okuduğu için cross-domain descent'te de çalışır; daha eski runtime'daki bir child alanı göndermez ve eski davranış geçerli olur. Fallback kararı `WorkflowLogs.AuthorizeLeafMissingFallback` (EventId 50046) ile loglanır ve `Authorization.Decide` span'i `vnext.auth.fallback = leaf-missing` taşır. Örnek: [vnext-example — `LeafNotCreatedYetTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/AuthorizationChainLab/LeafNotCreatedYetTests.cs).
 
 | Selector | Değerlendirdiği | Aktif SubFlow'a iner mi? |
 |---|---|---|

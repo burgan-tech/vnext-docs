@@ -88,9 +88,90 @@ Since v0.0.99 a workflow may declare **at most one** Initial state; it is no lon
 
 Publish errors: `Workflow may contain at most one initial state. Found: N.` · `State key '$start' is reserved by the runtime.` · `StartTransition must declare a target state.` · `The 'target' value in StartTransition does not match any state 'X'.` Requires vnext-schema `0.0.55`.
 
+### Rule-based schema selection (`schemas`)
+
+<sup>New</sup> v0.0.105 Every transition kind — state transitions, `sharedTransitions`, `startTransition`, `cancel`, `updateData` and `exit` — may declare a rule-based `schemas` list next to the single `schema` reference. The shape is the one the function `inputSchema` slot already uses, and the selection semantics match [rule-based view selection](/docs/how-to/view-selection) (`views`): the request body is validated against the schema of the entry whose rule matches.
+
+```json
+{
+  "key": "submit",
+  "target": "done",
+  "triggerType": 0,
+  "versionStrategy": "Major",
+  "labels": [{ "label": "Submit", "language": "en-US" }],
+  "schemas": [
+    {
+      "rule": { "location": "./src/IsCorporate.csx", "code": "<base64>", "encoding": "B64" },
+      "schema": { "key": "corporate-payload", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" }
+    },
+    {
+      "schema": { "key": "retail-payload", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" }
+    }
+  ]
+}
+```
+
+The list may be written as a bare array or in the wrapped `{ "schemas": [...] }` form (the runtime always writes the wrapped form back). Each entry carries only `rule` (optional) and `schema` (required).
+
+**Selection rules:**
+
+1. Entries are evaluated **in declaration order**; the **first entry** whose `rule` matches **wins**.
+2. An entry without a `rule` always matches — it is the fallback and must be the **last entry**.
+3. When `schemas` is declared it **overrides** `schema`.
+4. Automatic (`triggerType: 1`) and scheduled (`triggerType: 2`) transitions **may not** declare `schemas` (there is no request carrying a body).
+5. A rule that cannot be evaluated (throws) is logged and skipped — except when the caller's roles cannot be read (see below).
+
+**Outcomes (write path):**
+
+| Case | Result |
+|------|--------|
+| An entry matched | The body is validated against that entry's schema; violation → `400` with field-level errors (same format as a single `schema`) |
+| `schemas` declared, no entry matched | `400` `Transition:100025` — regardless of the body. The instance keeps its state, is **not** faulted, and no transition record is written |
+| Neither `schema` nor `schemas` declared | The request is accepted without validation (unchanged) |
+
+**Rule context.** The rule is an [IConditionMapping](/docs/components/interfaces#iconditionmapping) script. Its context carries the workflow, instance, runtime, transition, `body` (the instance's **latest data**; `{}` when there is none) and the request headers. There are **no query parameters**, and the rule **does not see the request body** — a caller cannot pick its own schema through the body. The rule may read the caller's runtime-resolved roles through `context.Caller`; if the role provider cannot answer, selection does not fall through to the fallback but fails with `503` `Authorization:110006` — see [Mappings → Caller](/docs/components/mappings#caller).
+
+On `startTransition` the instance has no data yet, so `body` is `{}`: select by header (or by role through `context.Caller`).
+
+```csharp
+public class IsCorporate : ScriptBase, IConditionMapping
+{
+    public Task<bool> Handler(ScriptContext context)
+    {
+        string segment = context.Headers?["x-segment"]?.ToString();
+        return Task.FromResult(string.Equals(segment, "corporate", StringComparison.OrdinalIgnoreCase));
+    }
+}
+```
+
+:::note[Validation order]
+Schema resolution (rule scripts included) runs **before** the state-machine / actor-type policy check. A request in the wrong state (or from the wrong actor) that matches no entry therefore gets `400` `Transition:100025` first. Role authorization is not decided on this write path (the gateway decides), so there is no `403` to take precedence here.
+:::
+
+**Read path.** The transition schema function returns the matched entry's schema, or `404` when nothing matches. `hasSchema` in the state function's transition lists looks at the **declaration** only (`schema` or a non-empty `schemas`), like `hasView`. The schema function's cache key and ETag include the non-volatile request headers, so a header-driven rule never serves the entry selected for another header value.
+
+| Code | HTTP | When |
+|------|------|------|
+| `Transition:100025` | 400 | `schemas` declared, no entry matched (`TransitionSchemaNotMatched`) |
+| `Authorization:110006` | 503 (retryable) | A rule read the caller's roles and the role provider could not answer (`CallerRolesUnavailable`) |
+
+:::tip[Selection is not authorization]
+Selecting a schema by role or header is a contract choice, not an access decision. Write rules as positive tests (`HasRoleAsync("x")`) and make the rule-less fallback the **least-privileged** contract.
+:::
+
+The function `inputSchema` slot uses the same mechanism; the only difference is that no match returns `Function:800006` — see [Custom Functions → When no rule-based entry matches](/docs/components/functions/custom#when-no-rule-based-entry-matches).
+
+Working example: [vnext-example `core/Workflows/rule-schema-lab/rule-schema-lab.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/rule-schema-lab/rule-schema-lab.json) (`src/IsApproverRole.csx` for the role-based entry). Schema package: vnext-schema `0.0.60`.
+
+### Start transition authorization (`startTransition.roles`)
+
+<sup>New</sup> v0.0.105 Until this release `startTransition.roles` was evaluated nowhere. Now the gateway, before forwarding `POST …/workflows/{workflow}/instances/start`, calls the workflow-scoped `GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?type=instance` function, which decides — before any instance exists — from `startTransition.roles`. The runtime does **not** check the roles itself during `instances/start`; as for every other transition, the gateway decides. Static roles and `$Everyone` compare as usual; instance-bound grants (`$InstanceStarter`, `$PreviousUser`, `$user.` / `$role.` context references, etc.) **never match** before a start — a start guarded only by `allow $InstanceStarter` is closed to everyone. Without `roles` the start is open to everyone. For the route, the `version` parameter and the gateway rule see [Authorization](/docs/concepts/authorization).
+
 ### Execution mode (`executionType`)
 
 Since v0.0.99 `executionType` (`"S"` sync / `"A"` async) may be set on the flow (`attributes.executionType`), on state transitions, `sharedTransitions` and `startTransition`. **Precedence:** transition → flow → the caller's `?sync` query (default `false` = async); when the definition sets a value the query parameter is ignored. Not applied to automatic transitions, runtime-internal paths or subflow start/forward. Effective sync → `200` + full instance; async → `202` `{ id, status }`. Trace tags: `vnext.execution.requested`, `vnext.execution.effective` (`SYNC`/`ASYNC`), `vnext.execution.overridden=true` only when the definition changed the caller's mode. Invalid value → publish error `Unknown execution type: X`. See [Sync vs Async execution](/docs/how-to/async-sync).
+
+<sup>New</sup> v0.0.104 A sync (`200`) start / transition response also carries `currentState` and `effectiveState` next to `status` / `effectiveStatus` — the same values as the instance GET's `metadata.currentState` / `metadata.effectiveState` (no SubFlow descent). An async `202` carries neither. For using them from a sync SubProcess task see [Sync SubProcess task output: child state](#sync-subprocess-task-output-child-state). `executionType` itself adds no response field.
 
 ```json
 { "key": "submit", "target": "review", "triggerType": 0, "executionType": "S" }
@@ -381,6 +462,23 @@ The old accept-time chain reserve (the `ChainReserved` claim, the `…/busy` and
 
 - **Resolved version** <sup>New</sup> v0.0.102: the parent writes the child's **resolved** version (the `flowVersion` of the child's start response) to the correlation — not the authored reference in `process.version` (`1.0`, `latest`). Later parent reads (forward, descent, human task, retry) never re-resolve the floating reference; a running child stays on its version even if the child flow's default version moves. An older remote runtime that returns no `flowVersion` keeps the authored reference. See [Flow Default Version](/docs/concepts/flow-default-version).
 - **Carried headers** <sup>New</sup> v0.0.102: the headers of the request that settled the child (finish/exit, cancel, or a fault on a request) travel to the parent. The parent's output mapping sees them as `context.Headers`, and by default the parent's resumed hop runs with them (auto conditions, onEntry tasks, the next subflow's input mapping). A child finished by a timer or timeout carries nothing. For the contents, the excluded headers and the opt-out see [Interfaces](/docs/components/interfaces).
+
+### Sync SubProcess task output: child state
+
+<sup>New</sup> v0.0.104 SubProcesses (`P`) are not started at state level but by a [SubProcess task](/docs/components/tasks/trigger#4-subprocesstask-type-14) (type `14`). When the task runs **sync** (`SetSync(true)`), its output now carries the child's `currentState` and `effectiveState`, so the output mapping can see where the child stopped without an extra read. The path depends on the route:
+
+```csharp
+// SubProcess (sync) OutputHandler
+var state = context.Body?.data?.value?.currentState   // same-domain start: the output is nested under data.value
+         ?? context.Body?.data?.currentState;         // cross-domain start: the remote body is passed through flat (data.*)
+```
+
+- These are the instance's **own persisted state** — same names and values as the instance GET's `metadata.currentState` / `metadata.effectiveState`; there is no SubFlow descent. They are **not** the state function's `state` (the active SubFlow leaf's state).
+- If the child auto-advances out of its initial state, the value is the state it **came to rest in**, not the one it was born in.
+- An **async** (`202`) response carries neither field. A pipeline that produced its response from a `ClientResponse` has no instance, so both stay `null`.
+- The same fields are returned on the sync start / transition response (`?sync=true` or `executionType: S`) — see [Execution mode](#execution-mode-executiontype).
+
+Working example: [vnext-example `sync-subprocess-state-lab`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/sync-subprocess-state-lab/src/SspStartChildMapping.csx) (task: [`ssp-start-child.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Tasks/sync-subprocess-state-lab/ssp-start-child.json)).
 
 ## History mode
 

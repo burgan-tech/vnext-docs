@@ -64,9 +64,23 @@ Direct database columns:
 | `effectiveStateType` | int | Effective state type code | eq, ne, gt, ge, lt, le, in, nin |
 | `effectiveStateSubType` | int | Effective state subtype code (+;: **7** = Cancelled, **8** = Timeout) | eq, ne, gt, ge, lt, le, in, nin |
 | `createdAt` | DateTime | Creation time | eq, ne, gt, ge, lt, le, between |
-| `modifiedAt` | DateTime | Modification time | eq, ne, gt, ge, lt, le, between |
+| `modifiedAt` | DateTime | The last time the instance changed. <sup>New</sup> v0.0.104 Moves on every transition and on every data row `updateData` writes — see [Meaning of `modifiedAt`](#meaning-of-modifiedat) | eq, ne, gt, ge, lt, le, between |
 | `completedAt` | DateTime | Completion time | eq, ne, gt, ge, lt, le, between |
 | `isTransient` | boolean | Transient flag | eq, ne |
+
+#### Meaning of `modifiedAt`
+
+<sup>New</sup> v0.0.104 `modifiedAt` is **the last time the instance changed**:
+
+- **Every transition** stamps it — a same-state one included — whether it leaves the instance Active, Busy, Completed (a `cancel` too) or Faulted. "Transition" means a hop a request, timer, event or chain fires; an internal SubFlow or long-poll resume that rests Busy moves it only through the status projection writes.
+- **`updateData`** stamps it with the `EnteredAt` of each data row it writes — its request body or its tasks' output, the last row winning. A change of stage, tags or key (on any transition, `updateData` included) moves it too.
+- An `updateData` that changes **nothing** (no data, stage, tags or key) writes nothing and does **not** move it.
+- Earlier runtimes moved it only on the set-based status writes, so a finished instance could show a time from before its final transition started.
+- **Rows written before the upgrade** keep their old value (no backfill); the new meaning applies from the next change.
+
+:::warning[Re-check consumers]
+Consumers that read `modifiedAt` as "the last **status** change" — `modifiedAt` filters and sorts, "idle for X minutes" reports, SLA calculations — should be re-checked: from v0.0.104 the value advances on every transition and every data write.
+:::
 
 :::note[Query tokens]
 The operators in this table are **query syntax** (the tokens a client sends in the `filter` parameter) and did not change in v0.0.100. A master-schema **declaration** in `x-filterOperators` uses the canonical names instead; see [Schema declaration vs. query token](#schema-declaration-vs-query-token).
@@ -218,7 +232,7 @@ Instance list and data endpoints support sorting via the `sort` or `orderBy` que
 | Field | Notes |
 |-------|-------|
 | `createdAt` | Creation timestamp |
-| `modifiedAt` | Modification timestamp |
+| `modifiedAt` | Last-change timestamp (<sup>New</sup> v0.0.104 every transition and data write — see [Meaning of `modifiedAt`](#meaning-of-modifiedat)) |
 | `completedAt` | Completion timestamp |
 | `status` | Instance status |
 | `effectiveStatus` <sup>New</sup> v0.0.94 | Client-observed status (stored column) |

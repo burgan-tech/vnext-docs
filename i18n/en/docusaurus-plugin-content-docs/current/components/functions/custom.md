@@ -280,6 +280,39 @@ As of v0.0.79 a function can declare a full client contract — all fields are o
 - Every slot accepts a single reference or **rule-based entries** (declaration order, first match wins, trailing rule-less fallback).
 - Discovery endpoints answer *may I run this, with which verb, and which view/schema applies now*: `GET .../functions/{function}/info`, `/view?target=input|output`, `/schema?target=input|output` — at domain and instance scope, guarded by the same scope/role policy as execution (`403` on denial).
 
+### When no rule-based entry matches
+
+A rule that cannot be evaluated is logged and **skipped** (not fatal). When no entry matches, the slot resolves to "**no contract**"; the outcome depends on the slot:
+
+| Surface | Slot | No match |
+|---------|------|----------|
+| Function execution | `inputSchema` | <sup>New</sup> v0.0.105 A request with a body is rejected with **400** `Function:800006`; a request without a body is accepted |
+| `/info` | all four | `hasView` / `hasSchema` are `false`; the href is still returned |
+| `/view?target=input\|output` | `inputView` / `outputView` | `404` |
+| `/schema?target=input\|output` | `inputSchema` / `outputSchema` | `404` |
+
+Views and `outputSchema` behave as before on no match; `outputSchema` is never enforced at runtime.
+
+:::danger[⚠️ Breaking (v0.0.105): an unmatched rule-based `inputSchema` now rejects]
+<sup>New</sup> v0.0.105 When every entry of an `inputSchema` list carries a `rule` and none matches, a request **with a body** is now rejected with `400` `Function:800006`. Up to v0.0.104 validation was **skipped** in this case and the body reached the tasks unvalidated (fail-open). There is no compatibility flag.
+
+**Migration:** to keep accepting unmatched callers, end the list with a **rule-less last entry** (fallback):
+
+```json
+"inputSchema": [
+  { "rule": { "location": "./src/IsCorporate.csx", "code": "<BASE64>" },
+    "schema": { "key": "corporate-input", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" } },
+  { "schema": { "key": "default-input", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" } }
+]
+```
+
+Details: [Breaking Changes — v0.0.105](/blog/breaking-changes/breaking-changes-v0-0-105).
+:::
+
+Rules see `Headers`, `QueryParameters`, `Instance` and `Body` in the function's `ScriptContext` (on the execution path `Body` is the request body; on the `/info`, `/view`, `/schema` discovery paths there is no body, so it is the instance's latest data). <sup>New</sup> v0.0.105 Rules can also read the caller's resolved roles through `context.Caller`; if the role provider cannot answer, selection does not fall through to the fallback and returns `503` `Authorization:110006` — see [Mappings → Caller](/docs/components/mappings#caller).
+
+The same rule-based schema selection exists on transitions (`schemas`); there a no-match returns `400` `Transition:100025` regardless of the body — see [Workflow → Rule-based schema selection](/docs/components/workflow#rule-based-schema-selection-schemas).
+
 > 🚧 Full English translation is pending. See the [Turkish page](/docs/components/functions/custom) for the complete contract tables, rule-slot semantics, and discovery endpoint details.
 
 ## System Functions

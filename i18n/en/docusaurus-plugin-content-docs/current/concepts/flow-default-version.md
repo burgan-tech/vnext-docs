@@ -107,6 +107,8 @@ Content-Type: application/json
 
 **Explicit always wins.** A full or artifact request is handled before the pointer is judged, so a pointer that matches nothing blocks only `latest` / empty and partial requests; explicit versions keep working — that is the way around a broken pointer until it is fixed. `sys-*` flows and full-version requests bypass the policy entirely.
 
+<sup>New</sup> v0.0.105 **An artifact request resolves to the highest package build.** A request or component reference by artifact version (for example `"1.0.0"`) resolves to the **highest `-pkg.`-stamped row** (`1.0.0-pkg.*`) even when an older bare `1.0.0` row exists for the same artifact; the bare row is returned only when no package-stamped row exists. Before, a case-insensitive exact-match shortcut let the bare row win, so a view (or any component) referenced by artifact version served a stale definition. Full-version, package-only, partial and major requests resolve as before.
+
 ### Scenario table
 
 Published: `2.0.0`, `2.1.0`, `2.1.3`, `2.2.0`, `2.3.0`, `3.0.0`. D = effective default.
