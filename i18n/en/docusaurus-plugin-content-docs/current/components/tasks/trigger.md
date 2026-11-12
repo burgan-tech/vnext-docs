@@ -659,15 +659,17 @@ Starts an independent subprocess instance that runs in parallel with the main wo
 ```json
 {
   "key": "start-audit-subprocess",
-  "flow": "sys-tasks",
-  "domain": "core",
   "version": "1.0.0",
+  "domain": "core",
+  "flow": "sys-tasks",
+  "flowVersion": "1.0.0",
   "tags": ["subprocess", "audit"],
   "attributes": {
     "type": "14",
     "config": {
       "domain": "audit",
-      "key": "transaction-audit",
+      "flow": "transaction-audit",
+      "key": "txn-audit-001",
       "version": "1.0.0",
       "sync": false,
       "body": {
@@ -684,13 +686,16 @@ Starts an independent subprocess instance that runs in parallel with the main wo
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `domain` | string | Yes | - | Target workflow domain |
-| `key` | string | Yes | - | Target workflow key |
-| `version` | string | No | - | SubFlow version |
-| `sync` | boolean | No | false | Pass-through to the subprocess start request `sync` query parameter |
+| `flow` | string | Yes | - | Target workflow (flow) name |
 | `body` | object | No | - | Data to send with the request |
-| `validateSsl` | boolean | No | true | SSL certificate validation |
+| `sync` | boolean | No | false | Pass-through to the subprocess start request `sync` query parameter |
+| `version` | string | No | - | SubFlow version |
+| `key` | string | No | - | Key of the new subprocess instance (instance business key) — not the target workflow; the workflow is chosen by `flow` |
+| `tags` | string[] | No | - | Instance tags |
 | `headers` | object | No | - | Custom HTTP headers to send with the request |
-| `timeoutSeconds` | number | No | 30 | Request timeout in seconds |
+| `timeoutSeconds` | integer | No | 30 | Request timeout in seconds |
+| `validateSsl` | boolean | No | true | SSL certificate validation |
+| `acceptedStatusCodes` | string[] | No | - | Error status codes treated as success (`"403"`, `"4xx"`, etc.) |
 
 ### SSL Configuration
 
@@ -700,7 +705,7 @@ Starts an independent subprocess instance that runs in parallel with the main wo
   "type": "14",
   "config": {
     "domain": "audit",
-    "key": "transaction-audit",
+    "flow": "transaction-audit",
     "version": "1.0.0",
     "validateSsl": true
   }
@@ -713,7 +718,7 @@ Starts an independent subprocess instance that runs in parallel with the main wo
   "type": "14",
   "config": {
     "domain": "audit",
-    "key": "transaction-audit",
+    "flow": "transaction-audit",
     "version": "1.0.0",
     "validateSsl": false
   }
@@ -733,7 +738,7 @@ Disable SSL validation only in development environment or trusted internal servi
   "type": "14",
   "config": {
     "domain": "audit",
-    "key": "transaction-audit",
+    "flow": "transaction-audit",
     "version": "1.0.0",
     "headers": {
       "X-Audit-Source": "payment-service",
@@ -750,7 +755,7 @@ Disable SSL validation only in development environment or trusted internal servi
   "type": "14",
   "config": {
     "domain": "audit",
-    "key": "transaction-audit",
+    "flow": "transaction-audit",
     "version": "1.0.0",
     "sync": false,
     "timeoutSeconds": 10
@@ -786,7 +791,7 @@ public class StartAuditSubProcessMapping : IMapping
         
         // Configure subprocess
         subProcessTask.SetDomain("audit");
-        subProcessTask.SetKey("transaction-audit");
+        subProcessTask.SetFlow("transaction-audit");
         subProcessTask.SetVersion("1.0.0");
         subProcessTask.SetSync(false);
         
@@ -817,11 +822,20 @@ public class StartAuditSubProcessMapping : IMapping
     {
         var response = new ScriptResponse();
         
-        // SubProcess is fire-and-forget
-        // Just track that it was initiated
+        // The child's id path depends on the route:
+        // same-domain start nests the start output under data.value,
+        // cross-domain start passes the remote body through flat (data.*)
+        object childId = null;
+        try { childId = context.Body?.data?.value?.id; } catch { }
+        if (childId == null)
+        {
+            try { childId = context.Body?.data?.id; } catch { }
+        }
+        
+        // SubProcess is fire-and-forget — just track that it was initiated
         response.Data = new
         {
-            auditSubProcessId = context.Body.data?.instanceId,
+            auditSubProcessId = childId?.ToString(),
             auditInitiated = true,
             initiatedAt = DateTime.UtcNow,
             status = "AUDIT_SUBPROCESS_LAUNCHED"
@@ -849,16 +863,38 @@ Details: [Workflow → Sync SubProcess task output: child state](/docs/component
 
 ### Successful Response
 
+The started child's id is at a different path depending on whether the target workflow is in the same domain:
+
+| Route | Child id in `OutputHandler` |
+|-------|-----------------------------|
+| Same-domain | `context.Body.data.value.id` (start output nested under `data.value`) |
+| Cross-domain | `context.Body.data.id` (remote body passed through flat) |
+
+**Same-domain:**
+
 ```json
 {
   "isSuccess": true,
   "data": {
-    "instanceId": "660e8400-e29b-41d4-a716-446655440001",
-    "state": "initial-state",
-    "launched": true
+    "value": {
+      "id": "660e8400-e29b-41d4-a716-446655440001"
+    }
   }
 }
 ```
+
+**Cross-domain:**
+
+```json
+{
+  "isSuccess": true,
+  "data": {
+    "id": "660e8400-e29b-41d4-a716-446655440001"
+  }
+}
+```
+
+Read both paths in the output mapping, as in the example above. Working example: [vnext-example `SspStartChildMapping.csx`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/sync-subprocess-state-lab/src/SspStartChildMapping.csx).
 
 ## Property Access
 
@@ -893,9 +929,11 @@ Each task type has its own setter methods:
 ### SubProcessTask Setter Methods
 
 - **SetDomain(string domain)**: Sets the target workflow domain
-- **SetKey(string key)**: Sets the target workflow key
+- **SetFlow(string flow)**: Sets the target workflow flow name
+- **SetKey(string key)**: Sets the key of the new subprocess instance (not the target workflow)
 - **SetVersion(string version)**: Sets the SubFlow version
 - **SetSync(bool sync)**: Sets the `sync` flag
+- **SetTags(string[] tags)**: Sets the instance tags
 - **SetBody(dynamic body)**: Sets the request body
 - **AddHeader(string name, string value)** / **RemoveHeader(string name)**: Add or remove a single header
 
@@ -1028,18 +1066,20 @@ Each task type has its own response structure:
 
 ### SubProcessTask Response
 
+Same-domain start shown; on a cross-domain start the remote body is passed through flat, so the id is at `data.id` instead of `data.value.id` (see [SubProcessTask](#4-subprocesstask-type-14) → Successful Response).
+
 ```json
 {
   "isSuccess": true,
   "data": {
-    "instanceId": "660e8400-e29b-41d4-a716-446655440001",
-    "state": "initial-state",
-    "launched": true
+    "value": {
+      "id": "660e8400-e29b-41d4-a716-446655440001"
+    }
   },
   "metadata": {
     "TaskType": "SubProcess",
     "Domain": "audit",
-    "Key": "transaction-audit"
+    "Flow": "transaction-audit"
   }
 }
 ```
@@ -1181,7 +1221,7 @@ private bool ShouldRetryError(string errorMessage)
 // Parent workflow doesn't need to wait for completion
 var subProcessTask = task as SubProcessTask;
 subProcessTask.SetDomain("audit");
-subProcessTask.SetKey("transaction-audit");
+subProcessTask.SetFlow("transaction-audit");
 
 // ✅ Use StartTask for workflows that may need future interaction
 // You get instanceId back and can trigger transitions later with DirectTriggerTask
@@ -1293,7 +1333,7 @@ public class CreateAuditTrail : IMapping
         var subProcessTask = task as SubProcessTask;
         
         subProcessTask.SetDomain("audit");
-        subProcessTask.SetKey("transaction-audit");
+        subProcessTask.SetFlow("transaction-audit");
         
         subProcessTask.SetBody(new {
             transactionId = context.Instance.Data.transactionId,

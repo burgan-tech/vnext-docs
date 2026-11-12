@@ -316,7 +316,7 @@ Ana iş akışı ile paralel çalışan bağımsız bir subprocess instance'ı b
 | `body` | object | Hayır | - | İstekle gönderilecek veri |
 | `sync` | boolean | Hayır | false | `sync` query parametresine pass-through |
 | `version` | string | Hayır | - | SubFlow versiyonu |
-| `key` | string | Hayır | - | Hedef iş akışı key'i |
+| `key` | string | Hayır | - | Başlatılacak subprocess instance'ının key'i (instance business key) — hedef iş akışı değildir; iş akışı `flow` ile seçilir |
 | `tags` | string[] | Hayır | - | Instance tag'leri |
 | `headers` | object | Hayır | - | HTTP header'ları |
 | `timeoutSeconds` | integer | Hayır | 30 | Timeout süresi (saniye) |
@@ -332,7 +332,7 @@ Ana iş akışı ile paralel çalışan bağımsız bir subprocess instance'ı b
 | `Body` | `SetBody(dynamic body)` | İstek body'si |
 | `TriggerSync` | `SetSync(bool sync)` | Sync flag |
 | `TriggerVersion` | `SetVersion(string version)` | SubFlow versiyonu |
-| `TriggerKey` | `SetKey(string? key)` | Hedef key |
+| `TriggerKey` | `SetKey(string? key)` | Yeni subprocess instance'ının key'i |
 | `TriggerTags` | `SetTags(string[] tags)` | Tag'ler |
 | `Headers` | `SetHeaders(Dictionary<string, string?> headers)` | Tüm header'lar |
 | - | `AddHeader(string key, string? value)` | Tekil header ekle |
@@ -361,6 +361,60 @@ Ayrıntı: [Workflow → Sync SubProcess task çıktısında child state'i](/doc
 - **StartTask**: Varsayılan olarak (v0.0.86'dan itibaren) asenkron enqueue edilir (`sync` varsayılanı `false`); `instanceId` yanıt olarak döner ve gelecekte etkileşim için kullanılabilir. Eski senkron davranış için `"sync": true` açıkça belirtilmelidir.
 
 :::
+
+### Başarılı Yanıt
+
+Başlatılan child'ın id'si, hedef iş akışının aynı domain'de olup olmamasına göre farklı yoldadır:
+
+| Rota | `OutputHandler`'da child id |
+|------|-----------------------------|
+| Aynı domain | `context.Body.data.value.id` (start çıktısı `data.value` altına sarılır) |
+| Cross-domain | `context.Body.data.id` (uzak gövde düz geçer) |
+
+**Aynı domain:**
+
+```json
+{
+  "isSuccess": true,
+  "data": {
+    "value": {
+      "id": "660e8400-e29b-41d4-a716-446655440001"
+    }
+  }
+}
+```
+
+**Cross-domain:**
+
+```json
+{
+  "isSuccess": true,
+  "data": {
+    "id": "660e8400-e29b-41d4-a716-446655440001"
+  }
+}
+```
+
+Output mapping'de iki yolu da okuyun:
+
+```csharp
+public Task<ScriptResponse> OutputHandler(ScriptContext context)
+{
+    object childId = null;
+    try { childId = context.Body?.data?.value?.id; } catch { }   // aynı domain
+    if (childId == null)
+    {
+        try { childId = context.Body?.data?.id; } catch { }      // cross-domain
+    }
+
+    return Task.FromResult(new ScriptResponse
+    {
+        Data = new { auditSubProcessId = childId?.ToString() }
+    });
+}
+```
+
+Çalışan örnek: [vnext-example `SspStartChildMapping.csx`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/sync-subprocess-state-lab/src/SspStartChildMapping.csx).
 
 ---
 
