@@ -102,6 +102,7 @@ Kural tabanlı view seçimi, çalışma zamanı koşullarına göre farklı view
 | `context.Transition` | string | Mevcut transition anahtarı (varsa) |
 | `context.CurrentTransition.Data` | dynamic | Orijinal transition istek gövdesi |
 | `context.CurrentTransition.Header` | dynamic | Orijinal transition istek başlıkları |
+| `context.Caller` | ICallerAccessor | <sup>New</sup> v0.0.105 Çağıranın runtime tarafından çözülmüş rolleri (`HasRoleAsync`, `RolesAsync`, `IsAvailable`, …) — bkz. [Örnek 4](#örnek-4-çağıran-rolüne-göre-view-seçimi-contextcaller) |
 
 ## Örnekler
 
@@ -178,6 +179,60 @@ Aynı `views` dizi formatı transition'larda da kullanılabilir:
 }
 ```
 
+### Örnek 4: Çağıran Rolüne Göre View Seçimi (`context.Caller`)
+
+<sup>New</sup> v0.0.105 Kural, çağıranın rollerini instance verisinden ya da `role` header'ından ayrıştırmak yerine runtime'ın çözdüğü rol kümesinden okuyabilir. Bu küme, runtime'ın kendi rol kararlarında kullandığı kümenin aynısıdır (`default` sağlayıcı: token claim'leri, yoksa gateway'in `role` header'ı; `morph-idm`: kimlik servisi).
+
+```csharp
+public class IsApprover : ScriptBase, IConditionMapping
+{
+    public async Task<bool> Handler(ScriptContext context) =>
+        await context.Caller.HasRoleAsync("morph-idm.approver");
+}
+```
+
+```json
+{
+  "views": [
+    {
+      "rule": { "location": "./src/IsApprover.csx", "code": "<BASE64>", "encoding": "B64" },
+      "view": { "domain": "hr", "key": "approval-approver-view", "version": "1.0.0", "flow": "sys-views" },
+      "loadData": true
+    },
+    {
+      "view": { "domain": "hr", "key": "approval-default-view", "version": "1.0.0", "flow": "sys-views" },
+      "loadData": true
+    }
+  ]
+}
+```
+
+- Roller **lazy** çözülür: rolleri okumayan kural hiçbir sağlayıcı çağrısı yapmaz; istek başına en fazla bir çağrı yapılır.
+- Rol sağlayıcısı cevap veremezse seçim fallback view'a **düşmez**: istek `503` `Authorization:110006` (yeniden denenebilir) ile başarısız olur.
+- **Seçim yetkilendirme değildir.** Role göre view seçmek bir UX kararıdır; hiçbir şeyi korumaz. Kuralları pozitif test olarak yazın ve kuralsız fallback'i en az yetkili view yapın.
+
+API, yüzey başına erişilebilirlik ve sağlayıcı kesintisi davranışı için bkz. [Mapping Rehberi → ScriptContext Kullanımı](/docs/components/mappings). Çalışan örnek: [vnext-example `rule-schema-lab/src/IsApproverRole.csx`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/rule-schema-lab/src/IsApproverRole.csx).
+
+## Transition Şemaları için Aynı Seçim (`schemas`)
+
+<sup>New</sup> v0.0.105 Bu sayfadaki seçim semantiği — **bildirim sırası**, **ilk eşleşen kazanır**, **kuralsız giriş fallback'tir ve sonda olmalıdır** — transition'ların payload şeması için de geçerlidir. Her transition türü (state, shared, `startTransition`, `cancel`, `updateData`, `exit`) `view`/`views` gibi `schema`/`schemas` tanımlayabilir; girişler `view` yerine `schema` referansı taşır, `loadData` ve `extensions` yoktur.
+
+```json
+"schemas": [
+  { "rule": { "location": "./src/IsCorporate.csx", "code": "<BASE64>", "encoding": "B64" },
+    "schema": { "key": "corporate-payload", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" } },
+  { "schema": { "key": "retail-payload", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" } }
+]
+```
+
+View seçiminden farkları:
+
+- Eşleşen giriş yoksa transition `400` `Transition:100025` ile **reddedilir** (instance state'ini korur, fault olmaz); hiç şema tanımlı değilse istek kabul edilir.
+- Kural bağlamında **query parametresi yoktur**; `body` instance'ın en son verisidir (yoksa `{}`), istek gövdesi değil.
+- Otomatik ve zamanlanmış transition'lar `schemas` tanımlayamaz.
+
+Tam referans: [Workflow → Transition Yapısı](/docs/components/workflow).
+
 ## En İyi Uygulamalar
 
 1. **Her zaman varsayılan view ekleyin**: Kuralı olmayan bir girişi dizinin sonuna fallback olarak koyun.
@@ -190,6 +245,7 @@ Aynı `views` dizi formatı transition'larda da kullanılabilir:
 
 - Hiçbir kural eşleşmez ve varsayılan view yoksa hata döner
 - Başarısız kural değerlendirmesi loglanır ve sonraki kurala geçilir
+- <sup>New</sup> v0.0.105 İstisna: kural `context.Caller` ile rolleri okuduysa ve rol sağlayıcısı cevap veremediyse seçim sonraki kurala ya da fallback'e geçmez; istek `503` `Authorization:110006` ile başarısız olur (kural exception'ı yutup `true` dönse bile)
 - Geçersiz kural sözdizimi kuralın başarısız olmasına neden olur (sonrakine devam edilir)
 
 ## İlgili Dokümantasyon

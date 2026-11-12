@@ -89,7 +89,7 @@ Since `@burgan-tech/vnext-schema@0.0.53` (shipped with runtime images from v0.0.
 | `join.minSuccess` | integer | Conditional | none | **Required** and `>= 1` when `policy` is `quorum`; parsing fails otherwise. Ignored (with no warning today) for the other policies |
 | `join.resultKey` | string | No | `"fanOutResults"` | Instance-data key the **default output packaging** writes item results under. Applies whenever the default packaging is in play: the task ships no mapping, **or** its mapping does not override `OutputHandler`. Ignored once a mapping overrides `OutputHandler` — that handler's data is the output, keys and all |
 | `join.ordered` | boolean | No | `true` | Accepted for forward compatibility with a future durable mode that may stream results in completion order. **In inline mode it is a no-op** — item results are always returned sorted by `Index`, and the executor never reads this flag |
-| `errorBoundary` | object | No | none | A normal `ErrorBoundary` (`onError` rules: `action`, `errorCodes`/`errorTypes`, `priority`, `retryPolicy`, `logOnly`) applied **independently to every item** through the **same** engine machinery a state or transition error boundary uses. A retry-exhausted item becomes one `Failed` entry in the result set; it does not, by itself, stop the batch — the join policy decides that |
+| `errorBoundary` | object | No | none | A normal `ErrorBoundary` (`onError` rules: `action`, `errorCodes`/`errorTypes`, `priority`, `retryPolicy`, `logOnly`) applied **independently to every item** through the **same** engine machinery a state or transition error boundary uses. A retry-exhausted item becomes one `Failed` entry in the result set; it does not, by itself, stop the batch — the join policy decides that. <sup>New</sup> v0.0.104 An item whose error is passed with `Ignore` (`action: 3`) or `Log` carries the inner task's normalized code (`Task:{taskType}:{taskKey}:{status}`), message and response `data`; `OutputHandler` can branch on the status (e.g. treat `:409` / `:404` as an expected rejection) — see [Error codes](#error-codes-and-branching-on-partial-failure) |
 
 \* Exactly **one** of `itemsPath` or the mapping's `ItemSelector` must be provided.
 
@@ -487,7 +487,32 @@ The codes below are a **public contract** — workflow authors branch on these s
 | `FanOut:BatchTimeout` | The item was cut short because the batch as a whole hit `batchTimeoutSeconds` |
 | `FanOut:ItemCancelled` | The item was cancelled by the join policy's early stop — `firstSuccess` already succeeded, or `all` already failed, and this item was still running |
 | `FanOut:ItemNotStarted` | The item was cancelled while still queueing for a concurrency slot, with no deadline or early stop to explain it |
-| `FanOut:ItemFailed` | Fallback: the item's inner task failed (or threw) with no more specific fan-out-level code — the inner task's own error code, when it has one, **passes through unchanged** instead |
+| `FanOut:ItemFailed` | Fallback — only when the inner task produced no error code: typically when **no error boundary** (task, state or global) applies to the inner task's failure (message and `data` are kept), or on an exception without a code. When the inner task did produce a code (handled with a blocking action such as `Abort` / `Rollback`, or — <sup>New</sup> v0.0.104 — with `Ignore` / `Log`), that code **passes through unchanged** |
+
+### Error code of an ignored item
+
+<sup>New</sup> v0.0.104 An item whose own `errorBoundary` passes the inner task's error with a non-blocking action (`Ignore` = `3`, or `Log`) keeps the inner task's answer on `FanOutItemResult`:
+
+| Field | Value |
+|-------|-------|
+| `IsSuccess` | `false` |
+| `ErrorCode` | The inner task's normalized code, `Task:{taskType}:{taskKey}:{status}` — e.g. `Task:DirectTrigger:notify-subprocesses-finalize:409` |
+| `ErrorMessage` | The inner task's own message |
+| `Data` | The inner task's response body (if it returned one) |
+
+Up to v0.0.103 such an item always arrived as `FanOut:ItemFailed` with the generic `FanOut item <key> failed.` message and `Data = null`, so `OutputHandler` could not tell an expected rejection (`409`, `404`) from other ignored errors. Errors handled with a blocking action such as `Abort` / `Rollback`, and the no-boundary path, are **unchanged**; no field was added to `FanOutItemResult`.
+
+```json
+"errorBoundary": { "onError": [ { "action": 3, "errorCodes": ["400", "404", "409"], "priority": 1 } ] }
+```
+
+Under this boundary an item whose target returns `409` reaches `OutputHandler` with `IsSuccess = false`, `ErrorCode = "Task:DirectTrigger:<taskKey>:409"` and the inner task's message — the `ErrorCode.Contains("409")` check in [Example 2](#example-2--itemselector--a-directtrigger-inner-task) now really sees the inner status.
+
+:::warning[Migration: `OutputHandler`s that catch an ignored rejection via `FanOut:ItemFailed`]
+An `OutputHandler` that detects a rejection passed with `Ignore` / `Log` through `item.ErrorCode == "FanOut:ItemFailed"` no longer matches on v0.0.104. Check the inner status code instead (e.g. `item.ErrorCode?.EndsWith(":409")`). `FanOut:ItemFailed` remains only for cases where the inner task produces no code.
+:::
+
+Verifying scenario: [vnext-example `fanout-case-item-boundary-ignore-task.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Tasks/fan-out-config-matrix/fanout-case-item-boundary-ignore-task.json) — the `PerItemErrorBoundary_Ignore_KeepsTheInnerTasksErrorCodeAndMessage` test in `FanOutConfigMatrixTests`.
 
 ### The recommended partial-failure pattern
 

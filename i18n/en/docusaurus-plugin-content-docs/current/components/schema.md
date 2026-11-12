@@ -89,9 +89,19 @@ This role enum applies only to the **schema component** (`flow: sys-schemas`). T
 
 The same system roles and JSONPath grant prefixes (`$user.` / `$userBehalfOf.` / `$role.`) apply; see [Authorization](/docs/concepts/authorization). `x-encryption` is in the same field-governance scope. <sup>New</sup> v0.0.100 — `source` selects who encrypts: `runtime` (the default; at rest, as described here) or `client` (in transit; the client seals the value to the recipient's public key before sending, and the runtime **never handles** the rule). For `source: runtime`, `hash` digests the value on write under a per-instance salt (the database stores the digest), and `encrypt` stores the value AES-256-GCM-encrypted in instance data and decrypts it for the `allow` exemption roles only on every read surface — instance GET, list, data function, sync response and the Get* tasks, which are evaluated as the header set the task presents: its mapping headers plus the caller's credential (`sub`, `act_sub`, `position`, `client_id`, `role`) where unset — `role` only as the caller sent it, never a role morph-idm resolved. Scripts see an encrypt field as its token and open it with `context.Instance.DecryptAsync(path)` (`persisted` / `transport` were removed).
 
+<sup>New</sup> v0.0.105 To hide a field from **every** caller, use the predefined [`$Everyone`](/docs/concepts/authorization#everyone--every-caller) role (it matches every caller, with or without roles, with or without an instance). The spelling is ordinal — `$everyone` is a publish error. The older `deny $InstanceStarter` + `allow $InstanceStarter` workaround keeps working.
+
+```json
+{
+  "x-roles": [
+    { "role": "$Everyone", "grant": "deny" }
+  ]
+}
+```
+
 Since v0.0.99 an `x-roles` entry may also be an `allOf` / `anyOf` combinator instead of a single `role`; see [Authorization](/docs/concepts/authorization). Malformed `x-roles` entries are now rejected at publish.
 
-`x-masking` (v0.0.99) keeps the value plain in storage and transforms it on read: `operator: "mask"` (`keepFirst`, `keepLast`, `maskingChar`; output keeps the input length, value unchanged when `keepFirst + keepLast` ≥ length) or `operator: "replace"` (`params.value`). `roles` is an allow-only exemption list (no combinators); a matching caller sees the raw value. Reads apply `x-roles` → `x-masking` → `x-encryption` (`source: runtime` only) → `x-computed` (`evaluatedBy: runtime`, <sup>New</sup> v0.0.100); `x-masking` / `x-encryption` are allowed only on nested-`properties` `type: "string"` fields, one transform per field, and never together with `x-filterOperators` / `x-sortable` / `x-indexed`.
+`x-masking` (v0.0.99) keeps the value plain in storage and transforms it on read: `operator: "mask"` (`keepFirst`, `keepLast`, `maskingChar`; output keeps the input length, value unchanged when `keepFirst + keepLast` ≥ length) or `operator: "replace"` (`params.value`). `roles` is an allow-only exemption list (no combinators); a matching caller sees the raw value. <sup>New</sup> v0.0.105 `$Everyone` is refused at publish in `x-masking.roles` and `x-encryption.roles` — it would exempt every caller; the read path drops it too (fail closed). Reads apply `x-roles` → `x-masking` → `x-encryption` (`source: runtime` only) → `x-computed` (`evaluatedBy: runtime`, <sup>New</sup> v0.0.100); `x-masking` / `x-encryption` are allowed only on nested-`properties` `type: "string"` fields, one transform per field, and never together with `x-filterOperators` / `x-sortable` / `x-indexed`.
 
 Schema `attributes.labels` are returned as `labels` by the schema and master functions since v0.0.99 (all languages; omitted when none are declared).
 

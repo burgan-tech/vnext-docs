@@ -56,7 +56,7 @@ Bu örnek vnext-schema 0.0.58'deki `rowSecurity` tanımına göre doğrulanmış
 - **Kimliğe bağlı ayrılmış roller:**
   - `$InstanceStarter` → satır yüklemi `createdBy eq <çağıranın ActorUserName'i>`
   - `$InstanceBehalfOfStarter` → `createdByBehalfOf eq <çağıranın UserName'i>`
-- Publish'te reddedilir: `$PreviousUser` / `$PreviousBehalfOfUser` (RS-E01), dinamik grant'lar `$user.`, `$userBehalfOf.`, `$role.` (RS-E02), diğer ayrılmış roller (RS-E05). `allOf` / `anyOf` nesnesi `roles`'ta kullanılamaz — şema bir string listesi bekler, runtime JSON binding'de `400` `App:900006` döner.
+- Publish'te reddedilir: `$PreviousUser` / `$PreviousBehalfOfUser` (RS-E01), dinamik grant'lar `$user.`, `$userBehalfOf.`, `$role.` (RS-E02), diğer ayrılmış roller (RS-E05) — <sup>New</sup> v0.0.105 [`$Everyone`](/docs/concepts/authorization#everyone--her-çağıran) dahil. "X her şeyi görür" niyeti açık, filtresiz bir statik-rol kuralıyla yazılır. `allOf` / `anyOf` nesnesi `roles`'ta kullanılamaz — şema bir string listesi bekler, runtime JSON binding'de `400` `App:900006` döner.
 - Bir statik rol ile bir ayrılmış rol aynı kuralın `roles`'unda bulunamaz (RS-E04): iki kurala bölün.
 
 ### `rules[].filter`
@@ -194,7 +194,7 @@ Header değerleri (ör. `x-branch-code`), deployment `Telemetry:Logging:Body:Add
 | RS-E02 | hata | Kural rolü olarak dinamik grant (`$user.`, `$userBehalfOf.`, `$role.`) |
 | RS-E03 | (ayrılmış) | `allOf` / `anyOf` — runtime üretmez; JSON binding'de reddedilir (`400` `App:900006`), önce vnext-schema raporlar |
 | RS-E04 | hata | Statik ve ayrılmış roller tek kuralda |
-| RS-E05 | hata | `$InstanceStarter` / `$InstanceBehalfOfStarter` dışında ayrılmış rol |
+| RS-E05 | hata | `$InstanceStarter` / `$InstanceBehalfOfStarter` dışında ayrılmış rol (ör. <sup>New</sup> v0.0.105 `$Everyone`) |
 | RS-E06 | hata | Instance-starter kısaltması ait olmadığı kolonda |
 | RS-E07 | hata | Hatalı `$.context.` yolu, bilinmeyen kaynak (`Route`, `Query`) ya da bilinmeyen `CurrentUser` alanı |
 | RS-E08 | hata | `x-encryption: encrypt` yolunda ya da üstünde filtre |

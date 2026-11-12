@@ -832,6 +832,21 @@ public class StartAuditSubProcessMapping : IMapping
 }
 ```
 
+### Reading the child's state (sync)
+
+<sup>New</sup> v0.0.104 When the task runs **sync** (`"sync": true` / `SetSync(true)`), its output carries the child's `currentState` and `effectiveState`, so the output mapping can see where the child stopped without an extra read. The path depends on the route:
+
+```csharp
+// SubProcess (sync) OutputHandler
+var state = context.Body?.data?.value?.currentState   // same-domain start: the output is nested under data.value
+         ?? context.Body?.data?.currentState;         // cross-domain start: the remote body is passed through flat (data.*)
+```
+
+- The values are the child instance's **own persisted state** (the instance GET's `metadata.currentState` / `metadata.effectiveState`) — **not** the state function's `state` (the active SubFlow leaf's state). If the child auto-advances out of its initial state, the value is the state it **came to rest in**.
+- An **async** (`sync: false`, `202`) response carries neither field.
+
+Details: [Workflow → Sync SubProcess task output: child state](/docs/components/workflow#sync-subprocess-task-output-child-state). Working example: [vnext-example `sync-subprocess-state-lab`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/sync-subprocess-state-lab/src/SspStartChildMapping.csx) (task: [`ssp-start-child.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Tasks/sync-subprocess-state-lab/ssp-start-child.json)).
+
 ### Successful Response
 
 ```json

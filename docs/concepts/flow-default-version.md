@@ -107,6 +107,8 @@ Content-Type: application/json
 
 **Açık istek her zaman kazanır.** Tam ya da artifact bir istek pointer değerlendirilmeden önce ele alınır; bu yüzden eşleşmeyen bir pointer yalnızca `latest` / boş ve kısmi istekleri bloklar, açık sürümler çalışmaya devam eder — bozuk bir pointer düzeltilene kadar etrafından dolaşmanın yolu budur. `sys-*` flow'ları ve tam sürüm istekleri politikayı tamamen atlar.
 
+<sup>New</sup> v0.0.105 **Artifact isteği en yüksek paket build'ine çözülür.** Artifact sürümüyle (ör. `"1.0.0"`) yapılan bir istek ya da bileşen referansı, aynı artifact için eski bir çıplak `1.0.0` satırı bulunsa bile **en yüksek `-pkg.` damgalı satıra** (`1.0.0-pkg.*`) çözülür; çıplak satır yalnızca o artifact için hiç paket damgalı satır yoksa döner. Önceden büyük/küçük harf duyarsız birebir eşleşme kısayolu çıplak satırı öne alıyor ve artifact sürümüyle referanslanan bir view (ya da başka bir bileşen) bayat tanımı sunuyordu. Tam sürüm, yalnız-paket, kısmi ve major istekler eskisi gibi çözülür.
+
 ### Senaryo tablosu
 
 Yayınlanmış sürümler: `2.0.0`, `2.1.0`, `2.1.3`, `2.2.0`, `2.3.0`, `3.0.0`. D = etkin varsayılan.

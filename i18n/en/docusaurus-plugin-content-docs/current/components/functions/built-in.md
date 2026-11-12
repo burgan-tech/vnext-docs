@@ -185,7 +185,7 @@ GET /{domain}/workflows/{workflow}/instances/{instance}/functions/state
 | `transitions[].view` | `object` | View info for the transition |
 | `transitions[].view.hasView` | `boolean` | Whether a view exists for this transition |
 | `transitions[].schema` | `object` | Schema link for the transition (if defined) |
-| `transitions[].schema.hasSchema` | `boolean` | Whether a schema exists for this transition |
+| `transitions[].schema.hasSchema` | `boolean` | Whether a schema exists for this transition. <sup>New</sup> v0.0.105 Declared-only (`schema` or a non-empty `schemas`), like `hasView` — it can be `true` even when no rule-based `schemas` entry matches this caller; the schema function then answers `404` |
 | `transitions[].schema.href` | `string` | Schema function endpoint URL with transitionKey |
 | `eTag` | `string` | ETag for cache validation |
 
@@ -380,6 +380,20 @@ Content-Type: application/json
   "eTag": "W/\"v2\""
 }
 ```
+
+#### The ETag covers the instance state
+
+<sup>New</sup> v0.0.105 The data function's representation ETag is now derived from the instance **state** (`effectiveState`) as well as its data fingerprint:
+
+```
+etag = h(generation | instanceId | latestDataEtag | effectiveState | flowVersion | callerHash)
+```
+
+Before, the ETag tracked data changes only. After a state transition that wrote no data (an automatic hop, for example) the ETag stayed the same, and a client sending `If-None-Match` got `304` and kept using the **previous state's extension output** — extensions can read the current state through `ScriptContext`, so that output was stale (seen in the field as a client replaying the previous state's `nextTransition` and getting `403`). Now a state change moves the ETag and the client gets a `200` with fresh extension output.
+
+- **The body cache is unaffected.** A cached entry holds only the field-filtered `data` payload, and its own validity identity (`dataEtag`) deliberately leaves the state out; a `200` after a data-less hop serves the body from the cache and computes the extension output fresh.
+- **Accepted staleness is unchanged:** the ETag tracks data and state, not extension output itself. An extension whose answer depends on anything else (the clock, an external call) can still be served `304` until the next data write, state change or flow migration; clients that need it fresh should not send `If-None-Match`.
+- The schema function's ETag already carried `effectiveState`; the data function closed that asymmetry. Existing ETags change once after the upgrade (a one-off `200`).
 
 #### Master Function
 
@@ -671,6 +685,33 @@ Host: api.example.com
 Accept: application/json
 ```
 
+## Schema Function: rule-based `schemas`
+
+<sup>New</sup> v0.0.105 A transition can declare a rule-based **`schemas`** list instead of a single `schema` reference, on the same model as `views` (the first matching `rule` wins, a rule-less entry is the last fallback, `schemas` wins over `schema`). `GET …/instances/{instance}/functions/schema?transitionKey=` then serves the **rule-selected entry**:
+
+| Case | Schema function | `hasSchema` |
+|---|---|---|
+| Transition declares `schema` | That schema (unchanged) | `true` |
+| Transition declares `schemas`, an entry matched | The matched entry's schema | `true` |
+| Transition declares `schemas`, no entry matched | `404` (`No schema entry matched for transition {key} in state {state}`) | `true` (declared-only) |
+| No schema declared | `404` | `false` |
+
+- **`hasSchema` is declared-only**, like `hasView`: the state function does not evaluate the rules. A client that sees `true` and gets `404` should read it as "no entry matches this caller".
+- **Rule context:** workflow, instance, runtime, transition, `body` (the instance's latest data, `{}` when none) and the request headers; no query parameters. A rule can read the caller's roles through `context.Caller`; when the role provider cannot answer, no fallback is served — `503` `Authorization:110006` (transient, retryable).
+- **The cache key and ETag cover the request headers.** So that a header-driven rule never gets another header value's entry or a false `304`, the schema function's cache key and ETag hash the non-volatile request headers (`RequestHeaderHash`, shared with the human-task function cache). Tracing ids, transport noise and the conditional / cache-directive headers (`If-None-Match`, `Cache-Control`, …) are excluded — otherwise a revalidating client would never match its own ETag. `x-forwarded-for` / `x-real-ip` stay **in**, because a rule may read them.
+- On the write path the same selection validates the transition request: `schemas` declared but no entry matches → `400` `Transition:100025` (the instance keeps its state and is not faulted).
+
+## Human Task Function: `dueBy` and `priority`
+
+<sup>New</sup> v0.0.104 Each row of `GET /api/v1/{domain}/functions/human-task` carries two optional fields next to `title` and `description`, read from the same place — the `humanTask` object at the root of the **leaf** instance's latest data:
+
+| Field | Source | Absent |
+|---|---|---|
+| `dueBy` | `humanTask.dueBy`: an ISO 8601 date (`2026-11-10`) or date-time (`2026-11-10T09:30:00+03:00`) string; served as a date-time with offset | `null` |
+| `priority` | `humanTask.priority`: a JSON number, or a numeric string with a `.` decimal point (`"1.5"`; comma-decimal `"1,5"` reads as absent) | `null` |
+
+A value of the wrong shape (`"next week"`, an object) reads as `null`, never as an error — the row is still listed. **Ordering is unchanged:** the list is still sorted by `createdAt`, newest first; there is no ordering by `dueBy` or `priority`. The response cache key generation moved `human-task:v1` → `v2`, so the cache refills once after deploy. A leaf in a partner domain on an older runtime answers without the fields (`null` for that row).
+
 ## Instance Correlation Function
 
 (v0.0.99) Answers *what did this instance spawn, and what did those spawn?* It walks `InstanceCorrelation` rows **parent → child** recursively and returns a tree rooted at the queried instance (never its ancestors). SubFlow (`S`) and SubProcess (`P`) links appear, completed ones included. Replaces the removed `hierarchy` function (no alias; old path → `404`; MCP tool `get_instance_hierarchy` → `get_instance_correlation`; span `Instance.Read/instanceCorrelation`).
@@ -861,29 +902,65 @@ GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/permi
 
 ### Flow Authorize
 
-Checks whether the given role is allowed for the given transition (or function) on the flow. Optional `version`; if omitted, latest is used.
+<sup>New</sup> v0.0.105 The workflow-scoped `authorize` route answers one question: **may this caller start an instance of this flow?** Before a start there is no instance to address, so the instance route cannot answer it; this route answers from the flow's own `startTransition.roles`, and the gateway gates `POST …/instances/start` on it the same way it gates transitions.
 
 ```http
-GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?transitionKey=submit-account-details&role=morph-idm.maker&version=1.0.0
+GET /api/v1/{domain}/workflows/{workflow}/functions/authorize?type=instance[&version=x][&role=r]
 ```
 
-**Response 200:** `{ "allowed": true }`  
-**Response 403:** `{ "allowed": false }`
+| Parameter | Required | Description |
+|---|---|---|
+| `type` | Yes | What is authorized. `instance` (start a new instance) is the only supported value today; the parameter exists so other workflow-scoped questions can be added. Matched ordinally, no default: missing or unknown → `400` `Authorization:110005` (`AuthorizeUnsupportedType`, the message lists the supported values). Not the instance-list filter `instanceType` (`R`/`S`/`P`) |
+| `version` | No | Pins the definition; forward the start request's own `version` so both read the same roles |
+| `role` | No | Composed as on the instance route |
+
+**Response 200:** `{ "allowed": true }` — **Response 403:** `{ "allowed": false }` — **400:** `Authorization:110005` — **404:** unknown flow or version. The gateway does not need the start transition's key; the route resolves it.
+
+| Grant | At start |
+|---|---|
+| Static role | Compared with the caller's roles; DENY wins over ALLOW across the whole set |
+| `$Everyone` | Matches every caller |
+| `$InstanceStarter`, `$PreviousUser`, `$InstanceBehalfOfStarter`, `$PreviousBehalfOfUser` | **Never match** — there is no instance to compare against |
+| `$user.` / `$userBehalfOf.` / `$role.` context references | **Never match** — `Instance.Data` does not exist yet, and the request body is never part of the authorization context |
+
+A grant that never matches neither admits nor refuses. A start transition guarded **only** by `allow $InstanceStarter` is therefore closed to everyone (fail-closed), while `[allow $InstanceStarter, allow maker]` is decided by `maker`. No grants → allowed. `availableIn` and the state gate do not apply. The runtime itself does not check `startTransition.roles` at `POST …/instances/start`; the gateway decides.
+
+Gateway (APISIX check-authorize) rule example — the orchestrator host is environment-specific; forward `version` when the start request carries it:
+
+```csharp
+Utils.CallApiGet("http://<orchestrator-host>/api/v1/"+path.var1+"/workflows/"+path.var2+"/functions/authorize?type=instance", header, allHeader).IsSuccessStatusCode == true
+```
+
+:::warning[The old `?transitionKey=` example is invalid]
+Earlier versions of this page showed the workflow-scoped route with `?transitionKey=…&role=…`. In v0.0.105 this route accepts only `type`, `version` and `role`; a call without `type` returns `400` `Authorization:110005`. For transition permission use the instance route (`…/instances/{instance}/functions/authorize?transitionKey=`).
+:::
+
+Example tests: [vnext-example — `StartAuthorizeTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/RoleMatrixLab/StartAuthorizeTests.cs).
 
 ### Instance Authorize
 
-Same response as Flow Authorize. With `queryRoles=true`, permission is evaluated against the instance’s current state (flow and state queryRoles). For instances in a subflow, (v0.0.99) only the deepest active leaf decides — the levels above are not ANDed.
+**Response 200:** `{ "allowed": true }` — **Response 403:** `{ "allowed": false }`. With `queryRoles=true`, permission is evaluated against the instance’s current state (flow and state queryRoles). For instances in a subflow, (v0.0.99) only the deepest active leaf decides — the levels above are not ANDed.
 
 ```http
 GET /api/v1/{domain}/workflows/{workflow}/instances/{instanceId}/functions/authorize?queryRoles=true&role=morph-idm.viewer
 ```
+
+<sup>New</sup> v0.0.104 **Optional `reason` field.** When the addressed instance could not be loaded, the `403` body carries `reason: "instance-not-found"` — no grant was evaluated:
+
+```json
+{ "allowed": false, "reason": "instance-not-found" }
+```
+
+`instance-not-found` is the field's only value; an ordinary decision (allow or grant refusal) carries no `reason` and the body stays `{"allowed": true|false}`. For gateways and clients: a `403` with `reason: "instance-not-found"` on a directly addressed instance means the instance does not exist (yet), not that the caller lacks a role.
+
+<sup>New</sup> v0.0.104 **`queryRoles` while a SubFlow child is being created.** A parent commits its SubFlow correlation in its own transaction; the child's row is created afterwards by a post-commit job. In that window the child cannot be loaded and answers with `reason: "instance-not-found"`; the parent then decides with its **own** `queryRoles` resolution (stamped parent override → state `queryRoles` → workflow `queryRoles`), as if it were the leaf — the same view the state function serves in that window. The deciding leaf is the **deepest instance that exists**. Up to v0.0.103 every `queryRoles` probe in the window was refused and the gateway answered `403` to the client's state poll. Only `queryRoles` falls back: a `transitionKey` / `functionKey` forwarded to a missing child stays refused. The fallback reads the `reason` field, so it works across a cross-domain descent too; a child on an older runtime omits it and the previous behaviour applies. It is logged as `WorkflowLogs.AuthorizeLeafMissingFallback` (EventId 50046) and its `Authorization.Decide` span carries `vnext.auth.fallback = leaf-missing`. Example: [vnext-example — `LeafNotCreatedYetTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/AuthorizationChainLab/LeafNotCreatedYetTests.cs).
 
 ### Authorize Query Parameters
 
 | Parameter | Description |
 |-----------|-------------|
 | `role` | The role to check. |
-| `version` | Optional. Flow version; default is latest. |
+| `version` | Optional. Pins the workflow definition version; omitted means the instance's own. |
 | `transitionKey` | Transition to check (transition-level roles). |
 | `functionKey` | Function to check (function-level roles). |
 | `queryRoles` | When true, check flow and state queryRoles for the instance’s current state. (v0.0.99) In a subflow chain only the deepest active leaf decides: parent stamp ?? leaf state ?? leaf workflow `queryRoles`. |

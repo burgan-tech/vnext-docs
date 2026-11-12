@@ -102,6 +102,7 @@ Inside the `Handler` method, you have access to `ScriptContext` with:
 | `context.Transition` | string | Current transition key (if applicable) |
 | `context.CurrentTransition.Data` | dynamic | Original transition request body |
 | `context.CurrentTransition.Header` | dynamic | Original transition request headers |
+| `context.Caller` | ICallerAccessor | <sup>New</sup> v0.0.105 The caller's roles as resolved by the runtime (`HasRoleAsync`, `RolesAsync`, `IsAvailable`, …) — see [Example 4](#example-4-selecting-by-the-callers-role-contextcaller) |
 
 ## Examples
 
@@ -229,6 +230,60 @@ The same `views` array format can be used in transitions:
 }
 ```
 
+### Example 4: Selecting by the Caller's Role (`context.Caller`)
+
+<sup>New</sup> v0.0.105 Instead of parsing roles out of instance data or the `role` header, a rule can read the role set the runtime resolved. It is the same set the runtime uses for its own role decisions (`default` provider: token claims, else the gateway's `role` header; `morph-idm`: the identity service).
+
+```csharp
+public class IsApprover : ScriptBase, IConditionMapping
+{
+    public async Task<bool> Handler(ScriptContext context) =>
+        await context.Caller.HasRoleAsync("morph-idm.approver");
+}
+```
+
+```json
+{
+  "views": [
+    {
+      "rule": { "location": "./src/IsApprover.csx", "code": "<BASE64>", "encoding": "B64" },
+      "view": { "domain": "hr", "key": "approval-approver-view", "version": "1.0.0", "flow": "sys-views" },
+      "loadData": true
+    },
+    {
+      "view": { "domain": "hr", "key": "approval-default-view", "version": "1.0.0", "flow": "sys-views" },
+      "loadData": true
+    }
+  ]
+}
+```
+
+- Roles are resolved **lazily**: a rule that never reads them makes no provider call, and a request makes at most one.
+- If the role provider cannot answer, the selection does **not** fall through to the fallback view: the request fails with `503` `Authorization:110006` (retryable).
+- **Selection is not authorization.** Picking a view by role is a UX decision; it protects nothing. Write rules as positive tests and make the rule-less fallback the least privileged view.
+
+For the API, per-surface availability and outage behaviour see [Mapping Guide → ScriptContext](/docs/components/mappings). Working example: [vnext-example `rule-schema-lab/src/IsApproverRole.csx`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/rule-schema-lab/src/IsApproverRole.csx).
+
+## The Same Selection for Transition Schemas (`schemas`)
+
+<sup>New</sup> v0.0.105 The selection semantics on this page — **declaration order**, **first match wins**, **a rule-less entry is the fallback and must be last** — also apply to a transition's payload schema. Every transition kind (state, shared, `startTransition`, `cancel`, `updateData`, `exit`) can declare `schema`/`schemas` the way it declares `view`/`views`; entries carry a `schema` reference instead of `view`, with no `loadData` or `extensions`.
+
+```json
+"schemas": [
+  { "rule": { "location": "./src/IsCorporate.csx", "code": "<BASE64>", "encoding": "B64" },
+    "schema": { "key": "corporate-payload", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" } },
+  { "schema": { "key": "retail-payload", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" } }
+]
+```
+
+How it differs from view selection:
+
+- With no matching entry the transition is **rejected** with `400` `Transition:100025` (the instance keeps its state and is not faulted); with no schema declared at all the request is accepted.
+- The rule context has **no query parameters**; `body` is the instance's latest data (`{}` when none), not the request payload.
+- Automatic and scheduled transitions cannot declare `schemas`.
+
+Full reference: [Workflow → Transition structure](/docs/components/workflow).
+
 ## Best Practices
 
 1. **Always include a default view**: Place an entry without a `rule` at the end of the array as a fallback.
@@ -241,6 +296,7 @@ The same `views` array format can be used in transitions:
 
 - If no rule matches and no default view exists, an error is returned
 - Failed rule evaluation is logged and the next rule is evaluated
+- <sup>New</sup> v0.0.105 Exception: when a rule read roles through `context.Caller` and the role provider could not answer, the selection does not move on to the next rule or the fallback; the request fails with `503` `Authorization:110006` (even if the rule swallowed the exception and returned `true`)
 - Invalid rule syntax causes the rule to fail (continues to next)
 
 ## Related Documentation

@@ -316,3 +316,17 @@ Yapılandırma ayrıntısı: [Python Runtime Yapılandırması](/docs/configurat
 | `LockExpirySeconds` | integer | `900` | Bir şemanın migration'ı etrafında tutulan distributed lock'un süresi. `CommandTimeoutSeconds`'tan **büyük** olmalıdır — aksi halde bir migration statement'ı hâlâ çalışırken lock süresi dolabilir ve ikinci bir migrator aynı şemayı eşzamanlı başlatabilir |
 
 Helm chart üzerinden `db-migrator.appEnvConfig` altında `SchemaMigration__CommandTimeoutSeconds` / `SchemaMigration__LockExpirySeconds` ortam değişkenleriyle override edilebilir; isteğe bağlıdır, tanımlanmazsa yukarıdaki kod varsayılanları geçerlidir. Migrator, herhangi bir şema başarısız olursa non-zero exit code ile çıkar.
+
+:::warning[Runtime v0.0.105 — DbMigrator hostlardan önce]
+<sup>New</sup> v0.0.105 `Instances` tablosuna nullable `ContinuationClaimedAt` kolonu eklenir (migration `20261109120000_AddInstanceContinuationClaim`; park edilmiş Busy continuation'ının tek sefer claim edilmesi için — bkz. [Transition Pipeline](/docs/concepts/transition-pipeline)). `db-migrator` Job'ını orchestrator ve worker'lar yayılmadan **önce** çalıştırın. Konfigürasyon değişikliği gerekmez.
+:::
+
+## PostgreSQL Bağlantı Adı (`Application Name`)
+
+<sup>New</sup> v0.0.105 Her host, PostgreSQL connection string'lerini (`ConnectionStrings:Default` ve her `ConnectionStrings:Domains:*` girdisi) başlangıçta normalize eder: connection string'de `Application Name` **yoksa** ekler. Ad şu sırayla çözülür:
+
+1. `OTEL_SERVICE_NAME`
+2. `DAPR_APP_ID`
+3. Host'un sabit adı: `vnext-orchestration`, `vnext-db-migrator`, `vnext-worker-inbox`, `vnext-worker-outbox`
+
+Böylece `pg_stat_activity` ve PgBouncer `SHOW CLIENTS` çıktısında bağlantının hangi host'a ait olduğu görünür (önceden `application_name` boştu). Connection string'de zaten bir `Application Name` varsa o kazanır; string'in geri kalanı **değiştirilmez**. Pool boyutu bilinçli olarak runtime'a eklenmedi — production'da hostlar PgBouncer üzerinden bağlanır ve sunucu tarafı bağlantı limiti PgBouncer'dadır; pool ayarlarını connection string'de / deployment'ta tutmaya devam edin.

@@ -89,6 +89,12 @@ Provider, `authorize` fonksiyonunun `?role=` parametresinin nasıl bileşeceğin
 
 Ayrıntı: [Built-in Functions → Instance Authorize](../components/functions/built-in#instance-authorize).
 
+## Gateway ön koşulu: `role` header'ı
+
+:::warning[İstemcinin `role` header'ı olduğu gibi alınır]
+Her iki provider'da da istemcinin gönderdiği `role` header'ı **olduğu gibi** kabul edilir: `default` altında rollerin kaynağı zaten bu header'dır, `morph-idm` altında ise boş olmayan bir header servis cevabının yerine geçer. Bu yüzden runtime'ın önündeki gateway, istemciden gelen `role` header'ını **strip etmeli ya da token'dan üzerine yazmalıdır** (asla olduğu gibi iletmemeli ya da append etmemeli). Bu bir dağıtım ön koşuludur; runtime header'ın kaynağını doğrulamaz.
+:::
+
 :::warning[Custom function çağrılarında `function.roles` artık gate değil]
 v0.0.88 itibarıyla custom function çağrılarını yetkilendirmek middle-tier'ın sorumluluğudur; vNext'in işi görünürlük (discovery yanıtlarında `roles`'un görünmesi) ve `authorize` fonksiyonudur. `function.roles`, artık **yalnızca `authorize` fonksiyonu tarafından** değerlendirilir — doğrudan function çağrısında bir gate olarak kullanılmaz. **Scope** kontrolü (Domain/Flow/Instance) değişmeden kalır; bu, yetkilendirme değil call-shape doğrulamasıdır. Ayrıntı için bkz. [Authorization → Çağıran rollerinin çözümlenmesi](../concepts/authorization#çağıran-rollerinin-çözümlenmesi-caller-role-provider).
 :::

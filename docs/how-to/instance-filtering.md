@@ -64,9 +64,23 @@ Doğrudan veritabanı kolonları:
 | `effectiveStateType` | int | Etkin state tipi kodu | eq, ne, gt, ge, lt, le, in, nin |
 | `effectiveStateSubType` | int | Etkin state alt tipi kodu (+;: **7** = İptal, **8** = Zaman aşımı) | eq, ne, gt, ge, lt, le, in, nin |
 | `createdAt` | DateTime | Oluşturulma zamanı | eq, ne, gt, ge, lt, le, between |
-| `modifiedAt` | DateTime | Değiştirilme zamanı | eq, ne, gt, ge, lt, le, between |
+| `modifiedAt` | DateTime | Instance'ın son değiştiği an. <sup>New</sup> v0.0.104 Her transition'da ve `updateData`'nın yazdığı her data satırında hareket eder — bkz. [`modifiedAt` anlamı](#modifiedat-anlamı) | eq, ne, gt, ge, lt, le, between |
 | `completedAt` | DateTime | Tamamlanma zamanı | eq, ne, gt, ge, lt, le, between |
 | `isTransient` | boolean | Geçici işaret | eq, ne |
+
+#### `modifiedAt` anlamı
+
+<sup>New</sup> v0.0.104 `modifiedAt` **instance'ın son değiştiği andır**:
+
+- **Her transition** onu günceller — aynı state'te kalan transition dahil; instance'ı Active, Busy, Completed (`cancel` dahil) veya Faulted bıraksa da. "Transition", bir istek, timer, event veya zincirin ateşlediği hop'tur; Busy'de dinlenen dahili bir SubFlow veya long-poll resume'u onu yalnızca status projeksiyon yazımlarıyla hareket ettirir.
+- **`updateData`** onu yazdığı **her data satırının** `EnteredAt` değeriyle günceller — istek gövdesi ya da task output'u; son satır kazanır. Stage, tags veya key değiştiğinde de (her transition'da, `updateData` dahil) güncellenir.
+- Hiçbir şeyi (data, stage, tags, key) **değiştirmeyen** bir `updateData` hiçbir şey yazmaz ve `modifiedAt`'i **hareket ettirmez**.
+- Önceki runtime'lar onu yalnızca set-based status yazımlarında güncelliyordu; bu yüzden tamamlanmış bir instance, son transition'ı başlamadan önceki bir zamanı gösterebiliyordu.
+- **Yükseltme öncesi satırlar** eski değerlerini korur (backfill yapılmaz); yeni anlam ilk değişiklikten itibaren uygulanır.
+
+:::warning[Tüketicileri kontrol edin]
+`modifiedAt`'i "son **status** değişikliği" olarak okuyan tüketiciler — `modifiedAt` filtreleri/sıralamaları, "X dakikadır hareketsiz" raporları, SLA hesapları — v0.0.104 sonrası değerin her transition'da ve her data yazımında ilerlediğini hesaba katarak tekrar kontrol edilmelidir.
+:::
 
 :::note[Sorgu token'ları]
 Bu tablodaki operatörler **sorgu sözdizimidir** (istemcinin `filter` parametresinde gönderdiği token'lar) ve v0.0.100 ile değişmedi. Master şemada `x-filterOperators` ile yapılan **beyan** ise kanonik adlarla yazılır; eşleme için bkz. [Şema beyanı ve sorgu token'ı](#şema-beyanı-ve-sorgu-tokenı).
@@ -220,7 +234,7 @@ Instance listesi ve data endpoint'leri `sort` veya `orderBy` query parametresi i
 | Alan | Notlar |
 |------|--------|
 | `createdAt` | Oluşturulma zamanı |
-| `modifiedAt` | Değiştirilme zamanı |
+| `modifiedAt` | Son değişiklik zamanı (<sup>New</sup> v0.0.104 her transition ve data yazımı — bkz. [`modifiedAt` anlamı](#modifiedat-anlamı)) |
 | `completedAt` | Tamamlanma zamanı |
 | `status` | Instance durumu |
 | `effectiveStatus` <sup>New</sup> v0.0.94 | Dışarıya görünen durum (saklanan kolon) |

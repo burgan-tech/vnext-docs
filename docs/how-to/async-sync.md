@@ -24,6 +24,43 @@ POST /api/v1/{domain}/workflows/{wf}/instances/start?sync=true
 
 Response: instance ID + güncel state + tüm output data.
 
+### Senkron yanıttaki state alanları
+
+<sup>New</sup> v0.0.104 Senkron (`?sync=true` veya etkin `executionType: "S"`) start / transition yanıtı, `status` / `effectiveStatus` yanında **`currentState`** ve **`effectiveState`** alanlarını da taşır. Client artık yeni state'i öğrenmek için ayrıca instance GET veya state function çağırmak zorunda değildir.
+
+```json
+// POST /api/v1/core/workflows/account-opening/instances/start?sync=true — 200
+{
+  "id": "8d83c1f2-…",
+  "status": "A",
+  "effectiveStatus": "A",
+  "currentState": "otp-waiting",
+  "effectiveState": "otp-waiting",
+  "attributes": { "…": "…" },
+  "eTag": "\"…\"",
+  "extensions": {}
+}
+```
+
+| Alan | Anlamı |
+|---|---|
+| `currentState` | Instance'ın **kendisinin** senkron çalışma sonunda durduğu state — instance GET'teki `metadata.currentState` ile aynı ad ve değer |
+| `effectiveState` | Aktif bir SubFlow varken o SubFlow'un state'i, yoksa `currentState` — instance GET'teki `metadata.effectiveState` ile aynı (persist edilmiş kolon) |
+
+- **SubFlow'a inilmez.** Değerler persist edilmiş kolonlardır; state function'ın `state` alanı (en derin aktif SubFlow leaf'inin state'i) **değildir**. Alanların adı bu yüzden bilinçli olarak `state` değildir.
+- **Ek DB okuması yoktur.** Değerler pipeline'ın zaten elinde tuttuğu instance'tan okunur. Yanıtı bir `ClientResponse` ile üreten (instance'ı olmayan) bir pipeline'da iki alan da `null` kalır.
+- **Asenkron `202` yanıtında iki alan da yoktur** — durum için state function'ı long-poll edin.
+- Değişiklik eklemelidir (additive). Yanıt gövdesine yeni alan eklendiği için senkron yanıtın representation ETag'i bir kez değişir; state function gövdesi değişmedi.
+- Runtime-internal senkron çağrıların kimlik-only yanıtı (cross-domain `sub/instances/start`, subflow forward) da iki alanı taşır; bu sayede **senkron bir SubProcess task'ının output'u child'ın state'ini içerir**. Output mapping'de yol, başlatma yoluna göre değişir:
+
+```csharp
+// SubProcess (sync) output mapping
+var state = context.Body?.data?.value?.currentState   // aynı domain start
+         ?? context.Body?.data?.currentState;         // cross-domain start
+```
+
+Çalışan örnek: [vnext-example — `sync-subprocess-state-lab`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/sync-subprocess-state-lab/ssp-parent.json) (child start task'ı [`ssp-start-child.json`](https://github.com/burgan-tech/vnext-example/blob/master/core/Tasks/sync-subprocess-state-lab/ssp-start-child.json), mapping [`SspStartChildMapping.csx`](https://github.com/burgan-tech/vnext-example/blob/master/core/Workflows/sync-subprocess-state-lab/src/SspStartChildMapping.csx), testler [`SyncSubProcessStateLabTests.cs`](https://github.com/burgan-tech/vnext-example/blob/master/tests/Core.IntegrationTests/Tests/SyncSubProcessStateLab/SyncSubProcessStateLabTests.cs)).
+
 :::tip[Workflow `output` mapping]
 Workflow tanımında [`attributes.output`](/docs/components/workflow#output-mapping) tanımlıysa, `sync=true` yanıtı standart zarf yerine **doğrudan output script'in ürettiği gövde** olur — script'in belirlediği status code ve header'lar ile. Flow böylece kendi API sözleşmesini şekillendirebilir. Subflow instance'ları hariçtir.
 :::

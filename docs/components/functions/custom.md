@@ -288,6 +288,7 @@ Bir fonksiyon, client'ların keşfedebileceği **deklaratif bir kontrat** taşı
 |-------|-------|
 | `inputSchema` tanımsız veya request body yok | Doğrulama yapılmaz |
 | `inputSchema` tanımlı ve body var | Body, çözümlenen şemaya karşı valide edilir; hata → **400** + alan bazlı hatalar |
+| Rule-based `inputSchema`, hiçbir öğe eşleşmedi ve body var | <sup>New</sup> v0.0.105 **400** `Function:800006` — ⚠️ breaking (önceden doğrulama atlanıyordu); bkz. aşağıdaki uyarı |
 | `outputSchema` | Hiçbir zaman valide edilmez — yalnızca deklaratiftir |
 
 Şema ihlalleri, transition şema doğrulamasıyla **aynı formatta** raporlanır (culture çözümlemesi dahil).
@@ -300,7 +301,36 @@ Bir fonksiyon, client'ların keşfedebileceği **deklaratif bir kontrat** taşı
 2. **Rule-based dizi** — her öğe `rule` (IConditionMapping uygulayan ScriptCode) + `view`/`schema` referansı taşır. Öğeler **bildirim sırasında** değerlendirilir, **ilk eşleşen kazanır**; `rule`'suz öğe her zaman eşleşir, bu yüzden **son öğe** olmalıdır (fallback).
 3. **Sarmalı form** — `{ "views": [...] }` / `{ "schemas": [...] }`.
 
-Değerlendirilemeyen bir rule loglanır ve **atlanır** (fatal değildir). Hiçbir öğe eşleşmezse slot "**kontrat yok**" olarak çözülür — bu bir hata değildir: doğrulama atlanır, `/info` `hasView`/`hasSchema` alanlarını `false` raporlar, içerik rotaları `404` döner.
+Değerlendirilemeyen bir rule loglanır ve **atlanır** (fatal değildir). Hiçbir öğe eşleşmezse slot "**kontrat yok**" olarak çözülür; bunun sonucu slot'a göre değişir:
+
+| Yüzey | Slot | Eşleşme yoksa |
+|-------|------|---------------|
+| Fonksiyon çalıştırma | `inputSchema` | <sup>New</sup> v0.0.105 Body'li istek **400** `Function:800006` ile reddedilir; body'siz istek kabul edilir |
+| `/info` | dördü de | `hasView` / `hasSchema` `false`; href yine verilir |
+| `/view?target=input\|output` | `inputView` / `outputView` | `404` |
+| `/schema?target=input\|output` | `inputSchema` / `outputSchema` | `404` |
+
+View'lar ve `outputSchema` eşleşmesizlikte eskisi gibi davranır; `outputSchema` runtime'da hiçbir zaman enforce edilmez.
+
+:::danger[⚠️ Breaking (v0.0.105): eşleşmeyen rule-based `inputSchema` artık reddeder]
+<sup>New</sup> v0.0.105 Tüm öğeleri `rule` taşıyan bir `inputSchema` listesinde hiçbir kural eşleşmezse, **body taşıyan** istek artık `400` `Function:800006` ile reddedilir. v0.0.104 ve öncesinde bu durumda doğrulama **atlanıyor** ve body hiç doğrulanmadan task'lara ulaşıyordu (fail-open). Uyumluluk bayrağı yoktur.
+
+**Migration:** eşleşmeyen çağıranları kabul etmeye devam etmek için listeyi **rule'suz bir son öğe** (fallback) ile bitirin:
+
+```json
+"inputSchema": [
+  { "rule": { "location": "./src/IsCorporate.csx", "code": "<BASE64>" },
+    "schema": { "key": "corporate-input", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" } },
+  { "schema": { "key": "default-input", "domain": "core", "flow": "sys-schemas", "version": "1.0.0" } }
+]
+```
+
+Ayrıntı: [Breaking Changes — v0.0.105](/blog/breaking-changes/breaking-changes-v0-0-105).
+:::
+
+Kurallar fonksiyonun `ScriptContext`'inde `Headers`, `QueryParameters`, `Instance` ve `Body`'yi görür (çalıştırma yolunda `Body` istek gövdesidir; `/info`, `/view`, `/schema` keşif yollarında gövde olmadığından instance'ın en son verisidir). <sup>New</sup> v0.0.105 Kurallar çağıranın çözülmüş rollerini `context.Caller` ile de okuyabilir; rol sağlayıcısı cevap veremezse seçim fallback'e düşmez, `503` `Authorization:110006` döner — bkz. [Mappings → ScriptContext Kullanımı](/docs/components/mappings).
+
+Aynı kural tabanlı şema seçimi transition'larda da vardır (`schemas`); orada eşleşmesizlik `400` `Transition:100025` döner ve gövdeden bağımsızdır — bkz. [Workflow → Transition Yapısı](/docs/components/workflow).
 
 :::warning[Ölü inputSchema]
 Yalnızca body taşıyamayan verb'ler bildiren bir fonksiyonda (`"verbs": ["GET"]` gibi) `inputSchema` tanımlamak **doğrulama hatasıdır** — şema hiçbir zaman değerlendirilemez.

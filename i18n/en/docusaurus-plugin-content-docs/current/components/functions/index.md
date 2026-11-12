@@ -40,6 +40,12 @@ A function typically contains:
 
 The `IOutputHandler` interface is implemented for output mapping; see [Interfaces](../interfaces).
 
+A function may also declare a client contract — `verbs`, `inputSchema`, `outputSchema`, `inputView`, `outputView` — each slot a single reference or a rule-based list; see [Custom Functions](/docs/components/functions/custom). When `inputSchema` is declared, the request body is **validated** against the schema that wins rule evaluation (violation → `400`).
+
+:::warning[⚠️ Breaking (v0.0.105): `inputSchema` with no matching entry]
+<sup>New</sup> v0.0.105 When no entry of a rule-based `inputSchema` list matches, a request with a body is rejected with `400` `Function:800006` (previously validation was skipped). End the list with a rule-less last entry to keep accepting unmatched callers — see [Custom Functions → When no rule-based entry matches](/docs/components/functions/custom#when-no-rule-based-entry-matches) and [v0.0.105 Breaking Changes](/blog/breaking-changes/breaking-changes-v0-0-105).
+:::
+
 ## Typical Use Cases
 
 - **Cross-domain data**: pulling data from domain A to domain B

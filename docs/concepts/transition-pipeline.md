@@ -105,6 +105,26 @@ Scheduler arming (timer kurma) bu lock'un dışındadır (v0.0.85) — timer arm
 v0.0.86'dan önce updateData da accept lock'unu alıyordu; bu, N paralel notifier'ın (örn. subprocess → parent güncellemesi) parent'ın status lock'u üzerinde birbirleriyle çakışmasına ve her kaybedenin işe yaramayan bir lock için error-boundary retry backoff'u yakmasına yol açıyordu. v0.0.86, updateData'yı bu yarıştan tamamen çıkardı.
 :::
 
+### Park edilmiş Busy continuation'ı tek sefer claim edilir
+
+<sup>New</sup> v0.0.105 `updateData` lock almadığı için, Busy'de **park edilmiş** (canlı sahibi olmayan bir etkileşim beklemesi) bir instance'ı bulan N paralel `updateData` isteğinin hepsi `HasLiveTransitionOwnerAsync` kontrolünü geçip aynı continuation'ı `TakeOverAsync` ile devralabiliyordu: otomatik zincir **N kez** çalışıyor, parent'a birden fazla bildirim ve finalize çağrısı gidiyor, geç kalan bir kopya da yerleşmiş state'in üzerine bayat bir `Status=B` yazabiliyordu (contract domain'inde eşzamanlılık 10'da 20 sözleşmenin 14'ünde ölçüldü).
+
+Artık takeover'dan **önce** `TransitionPipeline`, yeni nullable `Instances.ContinuationClaimedAt` kolonu üzerinde tek bir set-tabanlı `UPDATE` ile continuation'ı **claim** eder. Koşul:
+
+```
+Status = 'B'  AND  CurrentState = @state  AND  60 sn'den genç bir claim yok
+```
+
+- **Kazanan** zinciri koşar ve zincir bittiğinde (`finally`) claim'i temizler.
+- **Kaybeden** continuation'ını düşürür ve log `10182` (`UpdateDataContinuationClaimLost`) yazar.
+- `ChangeStateStep` yeni state'i hemen persist ettiği için, zincir ilerledikten sonra gelen bir continuation TTL'i beklemez; `CurrentState` koşulunda elenir. Çöken bir sahibin claim'i 60 sn sonra kendiliğinden düşer.
+- Active'den yapılan reserve'e claim gerekmez (`ReserveAsync` onu zaten serileştirir).
+- Claim **`modifiedAt`'i oynatmaz** — salt bookkeeping'dir; `modifiedAt`'i zincirin kendi yazımları damgalar.
+
+:::warning[Deploy sırası]
+Kolon `20261109120000_AddInstanceContinuationClaim` migration'ı ile eklenir. Hostları yaymadan **önce DbMigrator'ı çalıştırın**. Konfigürasyon değişikliği gerekmez.
+:::
+
 Kaynak: [Kaynak Kilitleme](../how-to/resource-lock) sayfasındaki `resourceLock` (order 25) bu admission modelinden **ayrıdır** — o, transition tanımına opt-in eklenen bir business-level kilittir, admission'ın Busy-mutex'i değildir.
 
 ## Subflow Chain Reserve <sup>New</sup> v0.0.80
