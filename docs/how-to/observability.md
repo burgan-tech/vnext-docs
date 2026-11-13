@@ -188,6 +188,7 @@ Yeni bir `ActivitySource` tanımlayan her değişiklik, **aynı commit'te** o ka
 | `workflow_fanout_batch_duration_seconds` | histogram | `task_key`, `workflow` |
 | `workflow_fanout_item_failures_total` | counter | `task_key`, `workflow` — batch başına **bir kez**, başarısız öğe sayısı kadar artar (öğe başına değil) |
 | `workflow_longpoll_resume_total` <sup>New</sup> v0.0.103 | counter | `vnext.domain`, `vnext.flow.key`, `vnext.activation.trigger` (`ack` \| `ack-timeout`), `vnext.longpoll.ack_resume.outcome` — duraklatılmış bir long-poll pipeline'ının her resume isteği. Bkz. [Async/Sync → Long-poll resume'unu izleme](./async-sync#long-poll-resumeunu-izleme) |
+| `workflow_resource_lock_hold_duration_ms` <sup>New</sup> v0.0.106 | histogram | `vnext.domain`, `vnext.flow.key` — transition-seviyesi resource lock'un alımdan bırakılmaya kadar tutulduğu süre (ms). Üst persentiller TTL'e yaklaşıyorsa kilitler bırakılmıyor, süresi dolarak düşüyordur. Bkz. [Kaynak Kilitleme](./resource-lock) |
 
 :::danger[Deprecated: `script_executions_total`]
 `script_executions_total` her zaman **compile** yolunda artırılmıştır (cache hit'ler dahil) — script'in gerçekten **çalıştırılmasında** değil. Geriye dönük uyumluluk için değişmeden emitlenmeye devam eder. Grafana panellerini şuna taşıyın:

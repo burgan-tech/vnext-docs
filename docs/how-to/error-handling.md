@@ -188,6 +188,41 @@ Incident'ın `retryCount` alanı **her zaman `0`** döner — çözülmüş retr
 
 ---
 
+## Lock conflict'i yönlendirme
+
+<sup>New</sup> v0.0.106 Error boundary yalnızca task hatalarını değil, **resource-lock conflict**'ini de ele alabilir. `onConflict: "Abort"` olan bir `resourceLock` kilidi alamadığında üretilen `Execution:200010` hatası için state veya global seviyede, `transition` belirten bir kural tanımlanırsa instance **fault edilmez**, o transition'a yönlendirilir:
+
+```json
+{
+  "errorBoundary": {
+    "onError": [
+      {
+        "action": 0,
+        "errorCodes": ["Execution:200010"],
+        "transition": "wait-for-lock",
+        "priority": 10
+      }
+    ]
+  }
+}
+```
+
+- Değerlendirme sırası task hatalarıyla aynıdır: önce state, sonra global (task seviyesi boundary'ler lock conflict'i görmez — hata bir task'tan gelmez).
+- Kilit adımı state'ten çıkmadan önce çalıştığı için instance aynı state'tedir; hedef transition otomatik bir zincir adımı gibi çalışır. Yönlendirme bir incident (`errorLayer: Pipeline`) yazar; yönlendirme tamamlanınca incident çözülür.
+- Bugün yalnızca `Execution:200010` bu yolla yönlendirilebilir; diğer pipeline-adımı hataları eskisi gibi fault eder.
+
+Publish doğrulaması:
+
+| Kural | Sonuç |
+|---|---|
+| `Execution:200010` / `Execution:200014` adını veren bir kuralda `Retry` (`action: 1`) | **Hata** — kilit hâlâ başkasındayken her deneme aynı şekilde düşer |
+| Lock kodu ele alan state boundary'si o state'ten erişilemeyen bir transition'a yönlendiriyor | **Hata** (diğer kurallarda **uyarı**) |
+| Boundary hedefi transition kendi `resourceLock`'unu tanımlıyor | **Uyarı** — ErrorBoundary profili resource-lock adımını atlar |
+
+Alternatif: instance'ı hiç ilerletmeden çağırana yeniden denetmek için `onConflict: "Reject"` kullanılır (`409 Execution:200014`). Ayrıntı: [Kaynak Kilitleme → Conflict politikaları](/docs/how-to/resource-lock#conflict-politikaları).
+
+---
+
 ## Örnekler
 
 ### 1. Global Seviye ErrorBoundary

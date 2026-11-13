@@ -1341,7 +1341,9 @@ Host seviyesi cache katmanları (component cache, state function cache, secret c
 
 ### Resource Lock
 
-Transition tanımına eklenen `resourceLock` bloğu, paylaşılan bir kaynağı (koltuk, günlük limit, hesap vb.) birden fazla instance'ın aynı anda değiştirmesini engelleyen **dağıtık kilit** mekanizmasıdır (Dapr `lock.redis`). `start`, state-level ve `sharedTransitions` transition'larında geçerlidir ve yalnızca **Manual** profilde çalışır. Önerilen model, kilidi giriş transition'ında `Acquire` ile almak ve bırakmayı runtime'a devretmektir (instance terminal olduğunda otomatik release). Tam davranış modeli, `keyExpression` yazımı, conflict/409 ve örnekler için bkz. **[Kaynak Kilitleme (Resource Lock)](/docs/how-to/resource-lock)**.
+Transition tanımına eklenen `resourceLock` bloğu, paylaşılan bir kaynağı (koltuk, günlük limit, hesap vb.) birden fazla instance'ın aynı anda değiştirmesini engelleyen **dağıtık kilit** mekanizmasıdır (varsayılan Dapr `lock.redis`; v0.0.106 ile isteğe bağlı Postgres lease sağlayıcısı). `start`, state-level ve `sharedTransitions` transition'larında geçerlidir ve yalnızca **Manual** profilde çalışır. Önerilen model, kilidi giriş transition'ında `Acquire` ile almak ve bırakmayı runtime'a devretmektir (instance terminal olduğunda otomatik release). Tam davranış modeli, `keyExpression` yazımı, conflict/409 ve örnekler için bkz. **[Kaynak Kilitleme (Resource Lock)](/docs/how-to/resource-lock)**.
+
+<sup>New</sup> v0.0.106 `onConflict` iki değer alır: `Abort` (varsayılan — instance fault olur, `409 Execution:200010`) ve `Reject` (schema 0.0.61 — instance dokunulmadan kalır, `409 Execution:200014`, aynı çağrı tekrarlanabilir). `Abort` ile birlikte `Execution:200010` için bir `errorBoundary` kuralı tanımlanırsa kaybeden instance fault edilmeden kuralın `transition`'ına yönlendirilir. `Acquire`/`Extend` için `ttlSeconds` > 0 publish'te zorunludur.
 
 ### MasterSchema
 

@@ -261,7 +261,9 @@ See the [Event-Driven Workflows guide](/docs/how-to/event-driven-workflows) for 
 
 ### Resource Lock
 
-Start, state-level, and shared transitions may declare an optional `resourceLock` block — a distributed lock (Dapr `lock.redis`) that prevents concurrent instances from mutating a shared resource. It runs in the **Manual** profile only. The recommended model is to `Acquire` on the entry transition and let the runtime auto-release the lock when the instance reaches a terminal state. See the [Resource Lock guide](/docs/how-to/resource-lock) for the full behavioral model, `keyExpression` authoring, conflict/409 handling, and examples.
+Start, state-level, and shared transitions may declare an optional `resourceLock` block — a distributed lock (Dapr `lock.redis` by default; an optional Postgres lease provider since v0.0.106) that prevents concurrent instances from mutating a shared resource. It runs in the **Manual** profile only. The recommended model is to `Acquire` on the entry transition and let the runtime auto-release the lock when the instance reaches a terminal state. See the [Resource Lock guide](/docs/how-to/resource-lock) for the full behavioral model, `keyExpression` authoring, conflict/409 handling, and examples.
+
+<sup>New</sup> v0.0.106 `onConflict` takes two values: `Abort` (default — the instance faults, `409 Execution:200010`) and `Reject` (schema 0.0.61 — the instance is left untouched, `409 Execution:200014`, the same call can be retried). With `Abort`, an `errorBoundary` rule for `Execution:200010` that names a `transition` reroutes the losing instance instead of faulting it. `ttlSeconds` > 0 is required at publish for `Acquire` / `Extend`.
 
 ### Query Roles
 

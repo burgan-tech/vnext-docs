@@ -109,6 +109,8 @@ Content-Type: application/json
 
 <sup>New</sup> v0.0.105 **An artifact request resolves to the highest package build.** A request or component reference by artifact version (for example `"1.0.0"`) resolves to the **highest `-pkg.`-stamped row** (`1.0.0-pkg.*`) even when an older bare `1.0.0` row exists for the same artifact; the bare row is returned only when no package-stamped row exists. Before, a case-insensitive exact-match shortcut let the bare row win, so a view (or any component) referenced by artifact version served a stale definition. Full-version, package-only, partial and major requests resolve as before.
 
+<sup>New</sup> v0.0.106 **Floating resolution reads version names only.** A floating request (`1.0.0`, `1.0`, `1`, `latest` or none) now picks the winner from the stored **version strings** and loads **one** body. Before, every cache miss and every publish loaded and deserialized the body of **every** published version: large flows with many versions ran pods out of memory, and a row that failed to deserialize silently dropped out of the list, so an older version could win and be cached for up to an hour (starts ran an old flow version with no error). An unreadable winner now fails the request and is not cached. A full version without build metadata (`1.0.0-pkg.1.0.123` for a stored `…+core`) is also found by floating resolution. The rules above are unchanged. Workaround on 0.0.103–0.0.105: reference the full version (`1.0.0-pkg.1.0.N+domain`) from consuming flows — restarting pods does not help, the wrong answer lives in Redis.
+
 ### Scenario table
 
 Published: `2.0.0`, `2.1.0`, `2.1.3`, `2.2.0`, `2.3.0`, `3.0.0`. D = effective default.

@@ -109,6 +109,8 @@ Content-Type: application/json
 
 <sup>New</sup> v0.0.105 **Artifact isteği en yüksek paket build'ine çözülür.** Artifact sürümüyle (ör. `"1.0.0"`) yapılan bir istek ya da bileşen referansı, aynı artifact için eski bir çıplak `1.0.0` satırı bulunsa bile **en yüksek `-pkg.` damgalı satıra** (`1.0.0-pkg.*`) çözülür; çıplak satır yalnızca o artifact için hiç paket damgalı satır yoksa döner. Önceden büyük/küçük harf duyarsız birebir eşleşme kısayolu çıplak satırı öne alıyor ve artifact sürümüyle referanslanan bir view (ya da başka bir bileşen) bayat tanımı sunuyordu. Tam sürüm, yalnız-paket, kısmi ve major istekler eskisi gibi çözülür.
 
+<sup>New</sup> v0.0.106 **Kayan sürüm çözümlemesi yalnızca sürüm adlarına bakar.** Kayan bir istek (`1.0.0`, `1.0`, `1`, `latest` ya da boş) artık kazananı yalnızca saklanan **sürüm string'lerinden** seçer ve **tek bir** body yükler. Önceden her cache miss'te ve her publish'te yayınlanmış **tüm** sürümlerin body'si yüklenip deserialize ediliyordu: çok sürümlü büyük flow'larda pod'lar bellek yetersizliğinden (OOM) düşüyor, deserialize edilemeyen satırlar listeden sessizce çıktığı için daha eski bir sürüm kazanıp bir saate kadar cache'leniyordu (hatasız biçimde eski flow sürümüyle start). Artık okunamayan bir kazanan isteği **hata ile** düşürür ve cache'lenmez. Build metadata'sız tam sürüm (`…+core` olarak saklanan `1.0.0-pkg.1.0.123`) kayan çözümlemede de bulunur. Yukarıdaki kurallar değişmedi. 0.0.103–0.0.105 çalıştıran ortamlarda geçici çözüm: tüketen flow'lardan tam sürüme (`1.0.0-pkg.1.0.N+domain`) referans vermek — pod restart'ı yetmez, yanlış cevap Redis'tedir.
+
 ### Senaryo tablosu
 
 Yayınlanmış sürümler: `2.0.0`, `2.1.0`, `2.1.3`, `2.2.0`, `2.3.0`, `3.0.0`. D = etkin varsayılan.
