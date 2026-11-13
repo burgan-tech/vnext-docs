@@ -172,6 +172,41 @@ Configure retry behavior for the `Retry` action.
 
 ---
 
+## Routing a lock conflict
+
+<sup>New</sup> v0.0.106 An error boundary can handle a **resource-lock conflict** as well as task errors. When a `resourceLock` with `onConflict: "Abort"` cannot acquire its lock, it fails with `Execution:200010`. A state-level or global rule for that code that names a `transition` **reroutes** the instance to it instead of faulting it:
+
+```json
+{
+  "errorBoundary": {
+    "onError": [
+      {
+        "action": 0,
+        "errorCodes": ["Execution:200010"],
+        "transition": "wait-for-lock",
+        "priority": 10
+      }
+    ]
+  }
+}
+```
+
+- The resolution order is the one task errors use: state first, then global (task-level boundaries never see a lock conflict — it does not come from a task).
+- The lock step runs before the instance leaves its state, so the target transition starts from the same state and runs like an automatic hop. The reroute writes an incident (`errorLayer: Pipeline`), resolved once the reroute lands.
+- Only `Execution:200010` is routable this way today; other pipeline-step failures fault as before.
+
+Publish validation:
+
+| Rule | Result |
+|---|---|
+| `Retry` (`action: 1`) on a rule naming `Execution:200010` / `Execution:200014` | **Error** — every attempt fails the same way while the lock is held |
+| A state boundary handling a lock code routes to a transition not available from that state | **Error** (a **warning** for other rules) |
+| The boundary target transition declares its own `resourceLock` | **Warning** — the ErrorBoundary profile skips the resource-lock step |
+
+Alternative: to hand the retry back to the caller without moving the instance, use `onConflict: "Reject"` (`409 Execution:200014`). See [Resource Lock](/docs/how-to/resource-lock).
+
+---
+
 ## Examples
 
 ### 1. Global Level ErrorBoundary

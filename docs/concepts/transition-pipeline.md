@@ -19,7 +19,7 @@ Pipeline, her adımı `LifecycleOrder` değerine göre sırayla çalıştırır.
 | 19 | Set Busy | Transition yürütmesi boyunca instance'ı Busy işaretler |
 | 20 | Create transition | Transition attempt'i kalıcılaştırır; duplicate guard |
 | 21 | Parent update-data data-only | Parent'ta açık bir SubFlow correlation varsa update data'yı kalıcılaştırır, state lifecycle/epilogue'u atlar |
-| 25 | Resource lock | Business resource lock'ları alır, bırakır veya uzatır |
+| 25 | Resource lock | Business resource lock'ları alır, bırakır veya uzatır. <sup>New</sup> v0.0.106 `onConflict: Reject` conflict'i instance'ı fault etmeden döner (Busy rezervasyonu geri verilir); `Abort` conflict'i (`Execution:200010`) state/global `errorBoundary` ile başka transition'a yönlendirilebilir — bkz. [Kaynak Kilitleme](../how-to/resource-lock#conflict-politikaları) |
 | 30 | OnExecute | State'ten çıkmadan önce transition task'larını çalıştırır |
 | 38 | Apply timeout state | Çıkmadan önce timeout hedefini context'e uygular |
 | 39 | Cancel scheduled jobs | Terk edilen state'in timer job'larını iptal eder |

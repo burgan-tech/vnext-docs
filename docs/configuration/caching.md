@@ -40,6 +40,10 @@ Tanım bileşenleri için iki katmanlı önbellek: paylaşımlı (L2, Redis) ve 
 
 **L1**, generation-anahtarlı in-process envelope cache'idir; publish'te token bump ile bayat girişler erişilemez hale gelir — ayrı bir invalidation protokolü yoktur.
 
+:::info[Yalın sürüm çözümlemesi ve `s3` anahtar şekli — v0.0.106]
+Kayan bir sürüm (`latest`, `1`, `1.2`, artifact `1.0.0`) çözülürken cache artık yalnızca **sürüm string'lerini** okur ve kazanan için **tek** body'yi full-version yolundan (L1 → L2 → tek satır) getirir; publish yolu da sürüm kontrolünü string'lerle yapar. Önceden her ikisi de tüm sürüm body'lerini yüklüyordu (OOM ve sessizce eski sürüm). Cache anahtar şekli `s2` → `s3` oldu: yükseltmeden sonra her bileşen pod başına bir kez veritabanından çözülür, eski `s2` anahtarları TTL ile düşer ve eski pod'ların cache'lediği yanlış cevaplar hiç okunmaz. Yapılandırma değişikliği gerekmez. Bkz. [Flow Varsayılan Sürümü → Çözümleme](/docs/concepts/flow-default-version#çözümleme).
+:::
+
 ### Generation memo penceresi
 
 `GenerationMemoSeconds`, her sürüm çözümlemesinde gereken tek kalan uzak okumayı (generation token) process içinde N saniye boyunca memoize eder. Bunun bedeli, publish eden pod dışındaki pod'ların **≤N saniye** boyunca eski generation'ı sunabilmesidir:
