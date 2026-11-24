@@ -8,6 +8,10 @@ description: Kavramsal rehber — input/output haritalama, ScriptContext, Script
 
 Bu doküman, workflow betikleriyle **girdi/çıktı haritalaması** yapmayı ve `ScriptContext`, `ScriptResponse`, `ScriptBase` kullanımını kavramsal olarak anlatır. Arabirim sözleşmelerinin tam listesi ve imza detayları **[Interfaces](./interfaces)** sayfasındadır.
 
+:::tip Bildirimsel alternatif
+Bir task binding'i için `.csx` yazmadan önce [Bildirimsel Task Mapping'leri](./declarative-mappings) sayfasına bakın: `input` / `output` blokları (`select`, `into`, `set`) çoğu kopyalama ve tek ifadelik hesaplamayı `.csx` olmadan karşılar.
+:::
+
 ## İçindekiler
 
 1. [Mapping Nedir?](#mapping-nedir)
