@@ -26,7 +26,6 @@ expression". Write an [`IMapping`](./interfaces) `.csx` for:
 
 | Need | Why blocks cannot do it |
 |---|---|
-| An environment-driven URL (`API_BASEURL` placeholder, `GetConfigValue`) | No URL surface and no config access; input targets are `$.body`, `$.headers`, `$.query` only |
 | Secrets, file reads, related-instance reads | Expressions see variables only, no I/O |
 | Loops, multi-step branching, helper classes | One expression per target |
 | FanOut, Notification and Human tasks | The runtime **rejects** blocks on these |
@@ -56,7 +55,7 @@ publish.
 | Field | Type | Description |
 |---|---|---|
 | `select` | string | Read path. Input: starts with a variable (`$.data.customer`); output: reads `result` (default `$.body`) |
-| `into` | string | Write path. Input: a request surface; output: instance data (not the root `$`) |
+| `into` | string | Write path. Input: a field of the task's `config`; output: instance data (not the root `$`) |
 | `set` | object | Write path → expression. Applied after `into`, in declaration order (a later key wins) |
 
 A string literal is a quoted expression: `"\"web\""`. At most 8000 characters per expression.
@@ -66,17 +65,34 @@ target has no index or wildcard and arrays are written whole. No filters, no rec
 
 ## Input block — shaping the request
 
-- Targets start with a request surface: `$.body`, `$.headers`, `$.query` (`$.route` is rejected). Each
-  surface starts from the task definition's static value; fields no target touches are kept.
-- `select` and `into` appear together.
+- **Targets are fields of the task's own `config`**, named as in the task JSON: `$.url`, `$.method`,
+  `$.body.customer`, `$.headers.x-channel`, `$.timeoutSeconds`, a DaprService's `$.queryString`. Anything a
+  C# `InputHandler` could set is reachable; the root `$` is rejected.
+- The block edits a copy of the configured `config` (untouched fields keep their value) and hands it back
+  through the task type's own parser, as if the task definition had carried it. A value the parser rejects
+  (`"$.url": "42"`) fails the task.
+- A path into a field that is not an object (`$.body.x` over an array body) fails; target the field whole to
+  replace it. An absent or `null` field becomes an object. Header values are written as strings.
+- A field the task type does not read is **ignored**, as in the task definition; check field names against
+  the task's schema.
+- `select` and `into` appear together; `select` starts with a JSON variable (`$.data.x`, `$.task.body`).
 
-| Task type | body | headers | query |
-|---|---|---|---|
-| Http, DirectTrigger, Start, SubProcess | ✓ | ✓ | – |
-| DaprService | ✓ | ✓ | ✓ |
-| DaprHttpEndpoint, DaprBinding, DaprPubSub | ✓ | – | – |
-| Soap, GetInstance, GetInstanceData, GetInstances | – | ✓ | – |
-| Script, Python, MCP, CacheAside | output block only | | |
+### URL from configuration
+
+The `API_BASEURL` placeholder a `.csx` resolves with `GetConfigValue` is one expression:
+
+```json
+"input": {
+  "set": {
+    "$.url": "task.url.ToString().Replace(\"API_BASEURL\", config.get(\"Example:ApiBaseUrl\", \"http://localhost:3001\")) + \"/\" + urlEncode(data.customer.id)"
+  }
+}
+```
+
+- `task.url` is a JSON view; call `.ToString()` before string methods. There is no `$"..."` interpolation:
+  use `+` or `string.Format`.
+- Splice data into a path or query through `urlEncode(...)`. `data.amount.AsDouble().ToString("0.00")`
+  follows the server culture; `urlEncode(data.amount)` or `"" + data.amount` uses the JSON text.
 
 ## Output block — writing the result
 
@@ -96,8 +112,12 @@ target has no index or wildcard and arrays are written whole. No filters, no rec
 | `now` | one timestamp per mapping | `now` |
 | `user` | the caller: `available`, `roles`, `hasRole("x")` | `user.available && user.hasRole("approver")` |
 | `context` | the legacy rule context (PascalCase, unchanged) | `context.Instance.CurrentState` |
+| `task` | the task's `config` (JSON view); in the output phase, as the input phase left it | `task.url` |
+| `config` | host configuration, same reach as `GetConfigValue` | `config.get("Example:ApiBaseUrl", "http://localhost:3001")` |
 | `result` | output only: `body`, `headers`, `statusCode` | `result.body.score` |
 
+- `urlEncode(value)` percent-encodes one URL component. `task`, `config` and `urlEncode` exist in task
+  mappings only, not in condition rules.
 - Names are **case-sensitive**; `instance.CurrentState` is a publish error.
 - JSON values need a conversion for comparison and arithmetic: `data.amount.AsDouble() > 1000`,
   `.AsInt32()`, `.AsBoolean()`, `.AsArrayLength()`.

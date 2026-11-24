@@ -25,7 +25,6 @@ ifadeyle hesapla" düzeyindeyse yeterlidir. Aşağıdaki durumlarda [`IMapping`]
 
 | İhtiyaç | Neden blokla olmaz |
 |---|---|
-| Ortama göre değişen URL (`API_BASEURL` yer tutucusu, `GetConfigValue`) | URL yüzeyi ve config erişimi yok; input hedefleri yalnız `$.body`, `$.headers`, `$.query` |
 | Secret, dosya okuma, ilişkili instance okuma | İfadeler yalnız değişken görür, I/O yapmaz |
 | Döngü, çok adımlı dallanma, yardımcı sınıflar | Hedef başına tek ifade |
 | FanOut, Notification ve Human task'ları | Runtime bu task'larda blokları **reddeder** |
@@ -55,7 +54,7 @@ tarafından reddedilir.
 | Alan | Tip | Açıklama |
 |---|---|---|
 | `select` | string | Okuma path'i. Input'ta bir değişkenle başlar (`$.data.customer`); output'ta `result`'tan okur (varsayılan `$.body`) |
-| `into` | string | Yazma path'i. Input'ta bir istek yüzeyi; output'ta instance verisi (kök `$` değil) |
+| `into` | string | Yazma path'i. Input'ta task `config`'inin bir alanı; output'ta instance verisi (kök `$` değil) |
 | `set` | object | Yazma path'i → ifade. `into`'dan sonra, bildirim sırasıyla uygulanır (sonraki kazanır) |
 
 Sabit bir metin tırnaklı ifadedir: `"\"web\""`. İfade başına en fazla 8000 karakter.
@@ -66,17 +65,34 @@ descent yoktur.
 
 ## Input bloğu — isteği şekillendirmek
 
-- Hedefler bir istek yüzeyiyle başlar: `$.body`, `$.headers`, `$.query` (`$.route` reddedilir). Her yüzey
-  task tanımındaki statik değerden başlar; hedeflenmeyen alanlar korunur.
-- `select` ve `into` birlikte yazılır.
+- **Hedefler task'ın kendi `config` alanlarıdır**, task JSON'undaki adlarıyla: `$.url`, `$.method`,
+  `$.body.customer`, `$.headers.x-channel`, `$.timeoutSeconds`, DaprService'te `$.queryString`. C#
+  `InputHandler`'ın değiştirebildiği her alana erişilir; kök `$` reddedilir.
+- Blok, tanımdaki `config`'in bir kopyasını düzenler (dokunulmayan alanlar değerini korur) ve sonucu task
+  tipinin kendi parser'ına verir; task tanımı bu değeri taşısaydı ne olacaksa o olur. Parser'ın reddettiği
+  bir değer (`"$.url": "42"`) task'ı hatalı bitirir.
+- Nesne olmayan bir alanın içine path (dizi gövdede `$.body.x`) hatadır; değiştirmek için alanı bütün olarak
+  hedefleyin. Olmayan ya da `null` alan nesne olur. Header değerleri string olarak yazılır.
+- Task tipinin okumadığı bir alan, task tanımında olduğu gibi **yok sayılır**; alan adlarını task'ın
+  şemasıyla karşılaştırın.
+- `select` ve `into` birlikte yazılır; `select` bir JSON değişkeniyle başlar (`$.data.x`, `$.task.body`).
 
-| Task tipi | body | headers | query |
-|---|---|---|---|
-| Http, DirectTrigger, Start, SubProcess | ✓ | ✓ | – |
-| DaprService | ✓ | ✓ | ✓ |
-| DaprHttpEndpoint, DaprBinding, DaprPubSub | ✓ | – | – |
-| Soap, GetInstance, GetInstanceData, GetInstances | – | ✓ | – |
-| Script, Python, MCP, CacheAside | yalnız output bloğu | | |
+### Config'ten URL
+
+`.csx`'in `GetConfigValue` ile çözdüğü `API_BASEURL` yer tutucusu tek ifadedir:
+
+```json
+"input": {
+  "set": {
+    "$.url": "task.url.ToString().Replace(\"API_BASEURL\", config.get(\"Example:ApiBaseUrl\", \"http://localhost:3001\")) + \"/\" + urlEncode(data.customer.id)"
+  }
+}
+```
+
+- `task.url` bir JSON görünümüdür; string metotlarından önce `.ToString()` çağırın. `$"..."` interpolasyonu
+  yoktur: `+` ya da `string.Format` kullanın.
+- Veriyi path ya da query'ye `urlEncode(...)` ile ekleyin. `data.amount.AsDouble().ToString("0.00")` sunucu
+  kültürüne uyar; `urlEncode(data.amount)` ya da `"" + data.amount` JSON metnini kullanır.
 
 ## Output bloğu — sonucu yazmak
 
@@ -96,8 +112,12 @@ descent yoktur.
 | `now` | mapping başına tek zaman damgası | `now` |
 | `user` | çağıran: `available`, `roles`, `hasRole("x")` | `user.available && user.hasRole("approver")` |
 | `context` | eski rule context'i (PascalCase, değişmedi) | `context.Instance.CurrentState` |
+| `task` | task'ın `config`'i (JSON görünümü); output'ta input aşamasının bıraktığı hali | `task.url` |
+| `config` | host yapılandırması, `GetConfigValue` ile aynı erişim | `config.get("Example:ApiBaseUrl", "http://localhost:3001")` |
 | `result` | yalnız output: `body`, `headers`, `statusCode` | `result.body.score` |
 
+- `urlEncode(value)` tek bir URL parçasını yüzde-kodlar. `task`, `config` ve `urlEncode` yalnız task
+  mapping'lerinde vardır, koşul kurallarında yoktur.
 - Adlar **büyük-küçük harfe duyarlıdır**; `instance.CurrentState` publish hatasıdır.
 - JSON değerleri karşılaştırma ve aritmetikte dönüşüm ister: `data.amount.AsDouble() > 1000`,
   `.AsInt32()`, `.AsBoolean()`, `.AsArrayLength()`.
