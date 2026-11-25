@@ -54,7 +54,7 @@ Doğru kullanım: kilidi **giriş (check) transition'ında `Acquire`** ile al; b
 
 | Alan | Tip | Zorunlu | Varsayılan | Açıklama |
 |------|-----|---------|-----------|----------|
-| `keyExpression` | ScriptCode (`ITransitionMapping`) | **Evet** | — | Kilit anahtarını üreten script. `Handler(ScriptContext)` bir string döndürmelidir. |
+| `keyExpression` | ScriptCode | **Evet** | — | Kilit anahtarını üreten ifade ya da script: `location: "dynamicExpresso"` ise string döndüren bir Dynamic Expresso ifadesi, aksi halde `Handler(ScriptContext)` string döndüren bir `ITransitionMapping` C# script'i. |
 | `action` | `Acquire` \| `Release` \| `Extend` | **Evet** | — | Yapılacak kilit işlemi. |
 | `ttlSeconds` | integer | Hayır | `300` | Acquire/Extend için kilidin yaşam süresi (saniye). Korunan işlemin tamamını kapsayacak şekilde boyutlandırılmalıdır. |
 | `onConflict` | `Abort` \| `Reject` | Hayır | `Abort` | Kilit alınamadığında politika. `Reject` v0.0.106 / schema 0.0.61 ile gelir. Bkz. [Conflict politikaları](#conflict-politikaları). |
@@ -80,6 +80,24 @@ public class Mapping : ITransitionMapping
     }
 }
 ```
+
+#### Dynamic Expresso ifadesi
+
+Anahtar tek bir ifadeyle üretilebiliyorsa `.csx` gerekmez; `location: "dynamicExpresso"` ve `encoding: "NAT"` ile ifade
+satır içinde yazılır. İfade `context` üzerinden okur (`context.Body`, `context.Headers`, `context.QueryParameters`,
+`context.Instance.Data`, `context.Transition`) ve **string** sonucu kilit anahtarıdır:
+
+```json title="keyExpression — Dynamic Expresso"
+"keyExpression": {
+  "location": "dynamicExpresso",
+  "encoding": "NAT",
+  "code": "\"limit:\" + context.Instance.Data[\"accountId\"] + \":\" + context.Instance.Data[\"transactionDate\"]"
+}
+```
+
+- Boş ya da yalnız boşluk sonuç `Execution:200011` (anahtar boş) verir; ifade hatası `Execution:200012`.
+- Bu etiketi taşıyan eski bir C# script'i (etiket önceden yok sayılıyordu) ifade olarak çalışmazsa script olarak
+  çalışmaya devam eder ve bir uyarı loglanır; etiketi kaldırın ya da ifadeye çevirin.
 
 :::warning[Anahtar kararlılığı (gece-yarısı bug'ı)]
 Kilit anahtarını üretirken `DateTime.UtcNow` gibi **her çağrıda değişen** değerler kullanma. Aksi halde 23:59'da alınan kilidin anahtarı ile 00:00'da hesaplanan anahtar farklı olabilir. Anahtarı, akış başında verilere yazılmış **kalıcı bir değerden** (ör. `transactionDate`) türet. Otomatik release, alım anındaki anahtarı instance'a kaydettiği için bu sınıf hataya karşı ayrıca korumalıdır — ama yine de deterministik anahtar üret.

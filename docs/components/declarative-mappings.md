@@ -77,6 +77,55 @@ descent yoktur.
   şemasıyla karşılaştırın.
 - `select` ve `into` birlikte yazılır; `select` bir JSON değişkeniyle başlar (`$.data.x`, `$.task.body`).
 
+### Birden fazla header
+
+Her header için bir `set` anahtarı yazılır. Task tanımında
+`"headers": { "Content-Type": "application/json", "x-channel": "mobile" }` olsun:
+
+```json
+"input": {
+  "set": {
+    "$.headers.x-channel": "\"web\"",
+    "$.headers.x-customer-id": "data.customer.id",
+    "$.headers.x-request-id": "instance.id",
+    "$.headers.x-amount": "data.amount",
+    "$.headers['x-correlation.id']": "instance.key",
+    "$.headers.Accept-Language": "data.lang ?? \"tr-TR\"",
+    "$.headers.x-approver": "user.available && user.hasRole(\"approver\") ? \"yes\" : \"no\""
+  }
+}
+```
+
+Task'a giden header'lar:
+
+```json
+{
+  "Content-Type": "application/json",
+  "x-channel": "web",
+  "x-customer-id": "c-42",
+  "x-request-id": "8b1f…",
+  "x-amount": "1250.5",
+  "x-correlation.id": "BASVURU-001",
+  "Accept-Language": "tr-TR",
+  "x-approver": "no"
+}
+```
+
+| Durum | Sonuç |
+|---|---|
+| Tanımda olup bloğun dokunmadığı header (`Content-Type`) | Korunur |
+| Tanımda olup blokta da yazılan header (`x-channel`) | Bloktaki değer kazanır |
+| String olmayan değer (`data.amount`) | JSON metniyle gider (`1250.5` → `"1250.5"`; nesne → JSON'u) |
+| Adında tire var | Düz yazılır: `$.headers.x-channel` |
+| Adında nokta ya da boşluk var | Köşeli parantez: `$.headers['x-correlation.id']` |
+| İfade `null` döner ya da eksik değeri okur | Hiçbir şey yazılmaz; tanımdaki değer kalır |
+| Tanımda `headers` yok (ya da `null`) | Önce nesne oluşturulur |
+| Tanımdaki `headers` nesne değil | Task hatalı biter |
+
+- **`into: "$.headers"` nesnenin tamamını değiştirir** — `{ "select": "$.data.outgoingHeaders", "into": "$.headers" }`
+  `Content-Type`'ı düşürür. `into` hedefini olduğu gibi yazar, birleştirmez; header'ları tek tek `set` ile ekleyin.
+- Bir header silinemez: `null` "yazma" demektir. Boş değer için `"\"\""` gönderin ya da header'ı task tanımına koymayın.
+
 ### Config'ten URL
 
 `.csx`'in `GetConfigValue` ile çözdüğü `API_BASEURL` yer tutucusu tek ifadedir:
@@ -101,6 +150,102 @@ descent yoktur.
   `select` yoksa `into` `result.body`'yi alır.
 - Workflow'da tüm yazımlar **tek** instance-data append'idir (x-encryption, sürümleme ve ETag aynen geçerli).
   Function ve extension'da blok sonucu, bir `OutputHandler`'ın döndüreceği task çıktısıdır.
+
+### Hangi parça neyi okur, neyi yazar
+
+| Parça | Okuduğu | Yazdığı |
+|---|---|---|
+| `select` | Yalnız task cevabı: `result` = `{ body, headers, statusCode }`; `$` = `result`, varsayılan `$.body` | — |
+| `into` | `select`'in bulduğu değer | Delta (instance verisi değil) |
+| `set` anahtarı | — | Aynı delta |
+| `set` değeri | Tüm değişkenler: `result`, `data`, `input`, `instance`, `now`, `user`, `task`, `config`, `context` | — |
+
+Blok instance verisini doğrudan değiştirmez: bir delta kurar, delta en sonda tek seferde merge edilir. Bu yüzden
+`set` içindeki `data`, task'tan **önceki** veridir — `into`'nun delta'ya yazdığı değer `data`'dan görünmez; onu
+`result`'tan okuyun.
+
+### Adım adım örnek
+
+Task'tan önceki instance verisi ve task cevabı:
+
+```json
+{ "customer": { "id": "c-42", "name": "Ayşe" },
+  "kyc": { "level": "basic", "score": 10, "history": [1, 2] } }
+```
+
+```json
+{ "statusCode": 200,
+  "headers": { "x-request-id": "r-991" },
+  "body": { "score": 87, "band": "A", "checks": ["id", "address"] } }
+```
+
+Blok:
+
+```json
+"output": {
+  "select": "$.body.score",
+  "into": "$.kyc.score",
+  "set": { "$.kyc.checkedAt": "now", "$.kyc.state": "instance.currentState" }
+}
+```
+
+1. Delta boş başlar.
+2. `select` + `into`: `result.body.score` = `87`, `$.kyc.score`'a yazılır (olmayan nesneler açılır) →
+   `{ "kyc": { "score": 87 } }`.
+3. `set`, yazılış sırasıyla →
+   `{ "kyc": { "score": 87, "checkedAt": "2026-11-24T10:15:03.123Z", "state": "kyc-check" } }`.
+4. Delta son veriye merge edilir ve yeni bir veri sürümü olarak saklanır:
+
+```json
+{ "customer": { "id": "c-42", "name": "Ayşe" },
+  "kyc": { "level": "basic", "score": 87, "history": [1, 2],
+           "checkedAt": "2026-11-24T10:15:03.123Z", "state": "kyc-check" } }
+```
+
+`kyc.level` ve `kyc.history` korunur (delta'da yoklar), `kyc.score` 10 → 87 olur, `band` ve `checks` yazılmaz
+(`select` yalnız `score`'u aldı).
+
+### `select` / `into` kombinasyonları
+
+Yukarıdaki cevapla:
+
+| Yazılan | Davranış | Delta |
+|---|---|---|
+| `select` + `into` | Seçilen değer `into`'ya | `"select": "$.body.band", "into": "$.kyc.band"` → `{ "kyc": { "band": "A" } }` |
+| Yalnız `into` | `select` varsayılanı `$.body` | `"into": "$.kyc.response"` → `{ "kyc": { "response": { "score": 87, "band": "A", "checks": [...] } } }` |
+| Yalnız `select` | Seçilen **nesnenin alanları** verinin köküne merge edilir | `"select": "$.body"` → `{ "score": 87, "band": "A", "checks": [...] }` |
+| Yalnız `select`, değer nesne değil | Task hatalı biter | `"select": "$.body.score"` → `87` köke merge edilemez |
+| İkisi de yok | Yalnız `set` çalışır | `set` ne yazarsa |
+
+Cevabın header'ları ve durum kodu da okunabilir:
+
+```json
+"set": {
+  "$.audit.requestId": "result.headers[\"x-request-id\"]",
+  "$.audit.httpStatus": "result.statusCode",
+  "$.kyc.approved": "result.body.score.AsInt32() >= 70"
+}
+```
+
+### Çakışmalar ve sınır durumları
+
+- **Sonraki kazanır:** `into: "$.kyc.score"` ardından `set: { "$.kyc.score": "result.body.score.AsInt32() * 2" }` → `174`.
+- **Üst path delta'daki alt ağacın tamamını değiştirir:** `"$.kyc"` anahtarlı bir `set`, `into`'nun `kyc` altına
+  yazdığını değiştirir; saklı `kyc.level` yine korunur, çünkü son merge derindir.
+- **Nesne olmayanın içine yazılamaz:** `into` `$.kyc.score`'a `87` yazdıktan sonra `"$.kyc.score.detail"` anahtarı task'ı
+  hatalı bitirir (`'score' exists and is not a JSON object`).
+- **`data` önceki değerdir:** `{ "$.kyc.previousScore": "data.kyc.score" }` → `10` yazar.
+- **Hata ya hep ya hiç:** eksik değer dışındaki her hata ([Eksik değer ve hata](#eksik-değer-ve-hata)) delta'nın hiçbir
+  parçasını yazmaz.
+
+### Instance verisine etkisi
+
+1. **Nesneler anahtar anahtar, derinlemesine merge edilir**; delta'da olmayan alan silinmez.
+2. **Diziler bütün olarak değiştirilir**: `{ "$.kyc.history": "result.body.checks" }`, `[1, 2]` yerine
+   `["id", "address"]` yazar. Yazma path'lerinde `[n]` / `[*]` olmamasının nedeni budur; `select` `"$.body.checks[0]"` okuyabilir.
+3. **Alan silinemez**: `set`'ten gelen `null` hiçbir şey yazmaz, merge de var olan bir anahtarı `null` ile temizlemez.
+   "Temizlendi" anlamı gerekiyorsa bir değer kullanın (`""`, `false`, `"cleared"`).
+4. **Hiçbir şey yazılmazsa yeni sürüm oluşmaz.**
 
 ## İfade değişkenleri
 

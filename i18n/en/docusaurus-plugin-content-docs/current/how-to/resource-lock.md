@@ -13,7 +13,7 @@ Key points:
 
 - Runs in the pipeline as `ResourceLockStep` (**order 25**), **only in the Manual profile** (excluded from AutoChain / Scheduled / Event / ErrorBoundary).
 - Valid on **start, state-level, and shared** transitions. The lock **owner** is always the `instanceId`.
-- The lock key is produced at runtime by an `ITransitionMapping` script (`keyExpression`) returning a string. Locks are always **TTL-bounded**.
+- The lock key is produced at runtime by `keyExpression`: an inline Dynamic Expresso expression (`location: "dynamicExpresso"`, e.g. `"limit:" + context.Instance.Data["accountId"]`) or an `ITransitionMapping` script, either returning a string. Locks are always **TTL-bounded**.
 - **Recommended model:** `Acquire` on the check/entry transition and let the runtime release it — when the instance reaches a terminal state (Completed / Faulted / Cancelled) its locks are **released automatically**, so you don't add manual `Release` to every terminal transition.
 - **Actions:** `Acquire`, `Release` (idempotent, best-effort — never rolls back a successful business transition), `Extend` (unreliable on the Dapr provider — Redis `SET NX` refuses even the owner, so size the TTL to cover the whole operation; on the `postgres` provider it renews the owner's lease). `Acquire` / `Extend` need `ttlSeconds` > 0 (publish error since v0.0.106).
 - **Conflict policies (`onConflict`):**
