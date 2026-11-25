@@ -253,7 +253,7 @@ Response headers and status code are readable too:
 | Variable | Meaning | Example |
 |---|---|---|
 | `data` | the instance's latest data | `data.customer.id` |
-| `input` | the transition request body | `input.amount` |
+| `input` | the request body of the hop (not the task payload); `null` on timers, continuations and SubFlow resume — see [`input` and `headers`](#input-and-headers) | `input.amount` |
 | `instance` | read-only view, **camelCase**: `id`, `key`, `flow`, `version`, `currentState`, `effectiveState`, `effectiveStateType`, `effectiveStateSubType`, `effectiveStatus`, `type`, `data` | `instance.currentState` |
 | `now` | one timestamp per mapping | `now` |
 | `user` | the caller: `available`, `roles`, `hasRole("x")` | `user.available && user.hasRole("approver")` |
@@ -261,6 +261,7 @@ Response headers and status code are readable too:
 | `task` | the task's `config` (JSON view); in the output phase, as the input phase left it | `task.url` |
 | `config` | host configuration, same reach as `GetConfigValue` | `config.get("Example:ApiBaseUrl", "http://localhost:3001")` |
 | `result` | output only: `body`, `headers`, `statusCode` | `result.body.score` |
+| `headers` | the **incoming request's** headers, read-only; names are case-insensitive | `headers["x-channel"]`, `headers.has("x-channel")` |
 
 - `urlEncode(value)` percent-encodes one URL component. `task`, `config` and `urlEncode` exist in task
   mappings only, not in condition rules.
@@ -274,6 +275,28 @@ Response headers and status code are readable too:
 `user.hasRole` fails the task — always guard: `user.available ? user.hasRole("x") : false`. Functions and
 extensions always see `available == false`.
 
+## `input` and `headers`
+
+`input` is **one value per hop**: the raw request body that triggered the hop. Every step of the hop reads the same value; task outputs never change it, and it is neither the merged instance data nor a task response.
+
+| Trigger | `input` |
+|---|---|
+| Manual transition, instance start, `updateData`, retry, event | the request body (`null` on a retry with no body) |
+| Fired timer, automatic continuation hop, SubFlow resume (completion, fault, cancellation) | `null` |
+| Read paths (view selection, state / data functions) | `null` |
+
+A rule tells the triggering hop from a continuation with `input == null`.
+
+- **`x-encryption` fields arrive in plaintext** (`encrypt` and `hash`): encryption and hashing happen in the instance-data write funnel, after `input` was captured. Writing the field back to **its own path** keeps the protection; copying it to an **unprotected path** stores plaintext, and the runtime neither refuses nor logs it. `data.email` is the stored token and cannot be written to another path. Forge warns about these copies when the master schema is in the project.
+- **`x-storage` fields arrive as the stored handle** (never the bytes). Exception: the transition / start `schemas[]` rule sees the request **as sent** (with `content`), because it validates the write shape; do not select a schema by file metadata, read a member the client sends next to the file.
+- Headers and query parameters are not part of `input`.
+
+`headers` is a read-only view of the incoming request's headers. It reads the same dictionary as `context.Headers`, so `Workflow:HeaderExposure:Deny` applies unchanged (a denied name is absent).
+
+- Use the indexer for a hyphenated name: `headers["x-channel"]` (`null` when absent); `headers.has("x-channel")` returns a bool. `headers.x-channel` parses as a subtraction and does not compile. A value is text.
+- **`task.headers` is not `headers`**: `task.headers` is the task's own configured **outgoing** headers (written with `"$.headers.x-channel"` targets); `headers` is the **incoming** request's. To forward one: `"set": { "$.headers.x-channel": "headers[\"x-channel\"]" }`.
+- `headers` is not a `select` root (`"select": "$.headers.x"` is a publish error); read it with a `set` expression.
+
 ## Missing values and errors
 
 - A missing `select` path, a missing leaf, `?.`, or a read through a missing intermediate
@@ -281,6 +304,81 @@ extensions always see `available == false`.
 - Every other failure (a bad conversion, an unwritable path, a role read on a System hop) **fails the
   task**: the error boundary applies, and with none the instance faults; no part of the delta is written.
 - A non-JSON response body is a string: `result.body.x` reads as missing, a `select` without `into` fails.
+- **Methods are not called on JSON values; convert first**: `input.name.ToString().Substring(0, 3)`, `data.amount.AsDouble()`. An unknown method call on a present value (`input.name.Substring(40)`, `.ToUpper()`) fails the mapping; the same call through a missing intermediate (`data.missing.name.ToUpper()`) is still a missing source and writes nothing.
+
+## Blocks outside task bindings
+
+Three more sites take a declarative block in place of a C# `mapping` script: a transition's `output`, a SubFlow state's `input` and its `output`. The block grammar (`select`, `into`, `set`) and the expression rules are those of a task binding; what differs is the variables, the target document and where the result goes.
+
+- `input` builds what goes **to** a callee, `output` writes what comes **back**. A single-block site rejects the other block at publish (an `input` member on a transition is a publish error: `'input' is not supported on a transition; use 'output'.`).
+- `select` reads `result` when the site has one, otherwise the variables except `headers` (`$.data…`, `$.input…`); `headers` is never a `select` root.
+- A block and a C# `mapping` on the same site is a publish error.
+
+| Site | Target | Delta starts | Result goes to |
+|---|---|---|---|
+| Transition `output` | instance data | empty; `"select": "$.input"` keeps the whole request | transition record body, the single data append |
+| SubFlow `input` | the child's start document `{ attributes, headers, key, tags }` | empty | the child start request |
+| SubFlow `output` | instance data | empty | the parent's single data append |
+
+Variables: `data`, `input`, `instance`, `now`, `user`, `context`, `headers` for transition `output` and SubFlow `input`. SubFlow `output` adds `result` (the `select` root, default `$.data`); there `input` is `null`, and `headers` / `user` are the child settler's.
+
+### Transition `output`
+
+Applies to `transitions[]`, `startTransition`, shared transitions and the well-known `cancel` / `updateData` / `exit`. Automatic and scheduled transitions reject `output`, like `mapping`: an automatic hop has no request to map. An empty delta is no data version.
+
+```json
+{
+  "key": "submit",
+  "target": "review",
+  "output": {
+    "select": "$.input.customer",
+    "into": "$.customer",
+    "set": { "$.submittedAt": "now", "$.reviewedByAuditor": "user.available && user.hasRole(\"auditor\")" }
+  }
+}
+```
+
+### SubFlow `input`
+
+For `type: S` only; a `P` SubProcess rejects both blocks (it is started by its own task). The target document is `{ attributes, headers, key, tags }`:
+
+- `select` needs `into`; `key` must be a string and `tags` an array of strings, anything else fails the start before a child is created.
+- `$.headers.sub` written blank stays blank (the instance-call credential rule).
+- `input` is the request of the hop that entered the SubFlow state: `null` on an automatic chain and on a retry restart (on a retry, `user` and `headers` are the retrying requester's).
+
+```json
+"subFlow": {
+  "type": "S",
+  "process": { "key": "kyc-check", "domain": "core", "version": "1.0.0", "flow": "sys-flows" },
+  "input": {
+    "set": {
+      "$.attributes.customerId": "data.customer.id",
+      "$.attributes.amount": "input.amount",
+      "$.headers.x-channel": "\"web\"",
+      "$.key": "data.customer.id",
+      "$.tags": "new string[] { \"kyc\" }"
+    }
+  }
+}
+```
+
+### SubFlow `output`
+
+Runs on completion **and** on fault; `result.status` (`"completed"` or `"faulted"`) tells them apart. `result` is `{ data, status }`. Child data arrives in plaintext. Script `Mutations` have no block equivalent.
+
+```json
+"subFlow": {
+  "type": "S",
+  "process": { "key": "kyc-check", "domain": "core", "version": "1.0.0", "flow": "sys-flows" },
+  "output": {
+    "select": "$.data.score",
+    "into": "$.kyc.score",
+    "set": { "$.kyc.outcome": "result.status", "$.kyc.settledAt": "now" }
+  }
+}
+```
+
+On failure each site fails with its script's error code (transition `output`: the transition mapping error; SubFlow `input`: `SubFlowInputMappingFailed`; SubFlow `output`: `SubFlowOutputMappingFailed`). A role-provider failure stays `Authorization:110006`; reading `user.roles` with no caller is a permanent failure.
 
 ## Example
 
