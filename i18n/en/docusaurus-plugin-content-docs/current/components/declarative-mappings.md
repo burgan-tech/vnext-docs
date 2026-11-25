@@ -342,7 +342,7 @@ Applies to `transitions[]`, `startTransition`, shared transitions and the well-k
 
 For `type: S` only; a `P` SubProcess rejects both blocks (it is started by its own task). The target document is `{ attributes, headers, key, tags }`:
 
-- `select` needs `into`; `key` must be a string and `tags` an array of strings, anything else fails the start before a child is created.
+- `select` needs `into`; `key` must be a string and `tags` an array of strings, anything else fails the start before a child is created. Convert a number with `.ToString()` (`"\"kyc-\" + data.customer.id.ToString()"`).
 - `$.headers.sub` written blank stays blank (the instance-call credential rule).
 - `input` is the request of the hop that entered the SubFlow state: `null` on an automatic chain and on a retry restart (on a retry, `user` and `headers` are the retrying requester's).
 
@@ -355,7 +355,7 @@ For `type: S` only; a `P` SubProcess rejects both blocks (it is started by its o
       "$.attributes.customerId": "data.customer.id",
       "$.attributes.amount": "input.amount",
       "$.headers.x-channel": "\"web\"",
-      "$.key": "data.customer.id",
+      "$.key": "\"kyc-\" + data.customer.id.ToString()",
       "$.tags": "new string[] { \"kyc\" }"
     }
   }

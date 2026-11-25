@@ -341,7 +341,7 @@ Değişkenler: transition `output` ve SubFlow `input` için `data`, `input`, `in
 
 Yalnız `type: S` için; `P` SubProcess iki bloğu da reddeder (kendi task'ıyla başlar). Hedef doküman `{ attributes, headers, key, tags }`:
 
-- `select` için `into` gerekir; `key` string, `tags` string dizisi olmalıdır, aksi halde child oluşmadan start başarısız olur.
+- `select` için `into` gerekir; `key` string, `tags` string dizisi olmalıdır, aksi halde child oluşmadan start başarısız olur. Sayıyı `.ToString()` ile çevirin (`"\"kyc-\" + data.customer.id.ToString()"`).
 - `$.headers.sub` boş yazılırsa boş kalır (instance-call credential kuralı).
 - `input`, SubFlow state'ine giren hop'un isteğidir: otomatik zincirde ve retry yeniden başlatmasında `null`'dır (retry'da `user` ve `headers` yeniden deneyen istekçinindir).
 
@@ -354,7 +354,7 @@ Yalnız `type: S` için; `P` SubProcess iki bloğu da reddeder (kendi task'ıyla
       "$.attributes.customerId": "data.customer.id",
       "$.attributes.amount": "input.amount",
       "$.headers.x-channel": "\"web\"",
-      "$.key": "data.customer.id",
+      "$.key": "\"kyc-\" + data.customer.id.ToString()",
       "$.tags": "new string[] { \"kyc\" }"
     }
   }
