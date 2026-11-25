@@ -76,6 +76,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'components/mappings',
+        'components/declarative-mappings',
         'components/mapping-component',
         'components/interfaces',
         'components/extension',

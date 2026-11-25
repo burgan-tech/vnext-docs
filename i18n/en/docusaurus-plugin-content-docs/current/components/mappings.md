@@ -8,6 +8,11 @@ description: IMapping interface, input/output handler usage, audit logging
 
 In the platform, **Mapping** is used to associate data to be passed to tasks and data generated as a result of tasks with the context in which the task is used. This document provides a comprehensive guide on how to use mapping interfaces and how to consume ScriptContext and ScriptResponse classes.
 
+
+:::tip Declarative alternative
+Before writing a `.csx` for a task binding, see [Declarative Task Mappings](./declarative-mappings): `input` / `output` blocks (`select`, `into`, `set`) cover most copies and one-expression computations without a `.csx`.
+:::
+
 ## Table of Contents
 1. [Mapping Types](#mapping-types)
 2. [Interfaces](#interfaces)
