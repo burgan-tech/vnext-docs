@@ -337,6 +337,7 @@ State Function yanıtında bu değer v0.0.99'dan itibaren üst seviye `stateSubT
 | `type` | string | **Evet** | Yalnızca `"S"` (SubFlow). <sup>New</sup> v0.0.95 state seviyesinde `"P"` (SubProcess) **publish'te reddedilir** (400) — fire-and-forget alt süreç için [SubProcess task](/docs/components/tasks/) kullanın |
 | `process` | object | **Evet** | Child workflow referansı (`key`, `domain`, `flow`, `version`) |
 | `mapping` | object \| null | Hayır | Child'ın start payload'ını üreten mapping betiği. Child'a iletilecek çağıran header'ları (ör. rol) da burada üretilir |
+| `input` / `output` | object \| null | Hayır | `mapping` yerine bildirimsel bloklar (`mapping` ile birlikte kullanılamaz) — bkz. [Task binding dışındaki bloklar](./declarative-mappings#task-binding-dışındaki-bloklar) |
 | `overrides` | object \| null | Hayır | Child'ı parent bağlamına göre ayarlayan override'lar: `timeout`, `transitions.<t>.roles`, `states.<s>.queryRoles`, `states.<s>.interaction.longPoll.{fallbackTimeoutSeconds, roles}` <sup>New</sup> v0.0.95, `states.<s>.views.<viewKey>` / `transitions.<t>.views.<viewKey>` <sup>New</sup> v0.0.95. Tam referans: [SubFlow Overrides](../how-to/subflow-overrides) |
 
 - **Başarısız subflow start'ı** <sup>New</sup> v0.0.95: child başlatılamazsa parent artık `Busy`'de asılı kalmaz; parent **fault** eder ve bir incident açılır, `retry` subflow start'ını yeniden dener — bkz. [Instance Incidents](/docs/concepts/incidents).
@@ -692,6 +693,7 @@ Kanonik adım sırası (pipeline `LifecycleOrder` değerleri), her trigger tipin
 | `view` | object \| null | Hayır | Transition view tanımı. Yalnızca `triggerType: 0` (manual) için geçerli |
 | `onExecutionTasks` | array | Hayır | Transition sırasında çalıştırılacak task listesi |
 | `mapping` | object \| null | Hayır | Transition input mapping betiği |
+| `output` | object \| null | Hayır | `mapping` yerine bildirimsel blok (`mapping` ile birlikte kullanılamaz; otomatik/zamanlanmış transition'da yok) — bkz. [Task binding dışındaki bloklar](./declarative-mappings#task-binding-dışındaki-bloklar) |
 | `roles` | array | Hayır | Yetkilendirme rolleri. DENY her zaman ALLOW'u geçersiz kılar. v0.0.99'dan itibaren `allOf` / `anyOf` kombinatörleri kullanılabilir — bkz. [Yetkilendirme → Kombinatörler](/docs/concepts/authorization#kombinatörler-allof--anyof) |
 | `executionType` | string | Hayır | Transition'ın çalıştırma modu (v0.0.99): `S` (sync) veya `A` (async). Flow'un `executionType`'ını ve çağıranın `?sync` parametresini ezer — bkz. [Çalıştırma Modu](#çalıştırma-modu-executiontype) |
 | `annotations` <sup>New</sup> | object \| null | Hayır | Client-side filtreleme ve UI bağlamı için key-value metadata. Platform annotations değerlerini yorumlamaz (passthrough). Çakışmaları önlemek için namespace'li key'ler kullanın (örn. `ui/visible-in`, `ui/priority`) |

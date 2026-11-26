@@ -252,7 +252,7 @@ Cevabın header'ları ve durum kodu da okunabilir:
 | Değişken | Anlamı | Örnek |
 |---|---|---|
 | `data` | instance'ın son verisi | `data.customer.id` |
-| `input` | transition istek gövdesi | `input.amount` |
+| `input` | hop'u tetikleyen istek gövdesi (task payload'ı değil); timer, devam ve SubFlow resume'da `null` — bkz. [`input` ve `headers`](#input-ve-headers) | `input.amount` |
 | `instance` | salt-okur görünüm, **camelCase**: `id`, `key`, `flow`, `version`, `currentState`, `effectiveState`, `effectiveStateType`, `effectiveStateSubType`, `effectiveStatus`, `type`, `data` | `instance.currentState` |
 | `now` | mapping başına tek zaman damgası | `now` |
 | `user` | çağıran: `available`, `roles`, `hasRole("x")` | `user.available && user.hasRole("approver")` |
@@ -260,6 +260,7 @@ Cevabın header'ları ve durum kodu da okunabilir:
 | `task` | task'ın `config`'i (JSON görünümü); output'ta input aşamasının bıraktığı hali | `task.url` |
 | `config` | host yapılandırması, `GetConfigValue` ile aynı erişim | `config.get("Example:ApiBaseUrl", "http://localhost:3001")` |
 | `result` | yalnız output: `body`, `headers`, `statusCode` | `result.body.score` |
+| `headers` | **gelen isteğin** header'ları, salt-okur; adlar büyük-küçük harfe duyarsız | `headers["x-channel"]`, `headers.has("x-channel")` |
 
 - `urlEncode(value)` tek bir URL parçasını yüzde-kodlar. `task`, `config` ve `urlEncode` yalnız task
   mapping'lerinde vardır, koşul kurallarında yoktur.
@@ -273,6 +274,28 @@ Cevabın header'ları ve durum kodu da okunabilir:
 `user.hasRole` okumak task'ı hatalı bitirir — her zaman koruyun: `user.available ? user.hasRole("x") : false`.
 Function ve extension'da `available` her zaman `false`'tur.
 
+## `input` ve `headers`
+
+`input`, **hop başına tek değerdir**: hop'u tetikleyen ham istek gövdesi. Hop'un tüm adımları aynı değeri okur; task çıktıları onu değiştirmez, birleşik instance verisi ya da task yanıtı da değildir.
+
+| Tetikleyici | `input` |
+|---|---|
+| Manuel transition, instance start, `updateData`, retry, event | istek gövdesi (retry'da gövde yoksa `null`) |
+| Çalışan timer, otomatik devam hop'u, SubFlow resume (tamamlanma, fault, iptal) | `null` |
+| Okuma yolları (view seçimi, state/data function'ları) | `null` |
+
+Bir kural `input == null` ile tetikleyen hop'u devamdan ayırır.
+
+- **`x-encryption` alanları düz metin gelir** (`encrypt` ve `hash`): şifreleme/özetleme instance-data yazım hunisinde, `input` yakalandıktan sonra olur. Alanı **kendi path'ine** geri yazmak korumayı korur; **korumasız bir path'e** kopyalamak düz metni saklar ve runtime bunu engellemez ya da loglamaz. `data.email` ise saklanan token'dır ve başka path'e yazılamaz. Forge, master schema projedeyse bu kopyalar için uyarır.
+- **`x-storage` alanları saklanan handle olarak gelir** (bayt değil). İstisna: transition / start `schemas[]` kuralı, yazım şeklinde `content` ile doğrulama yapmak için isteği **gönderildiği gibi** görür; dosya metadata'sıyla schema seçmeyin, dosyanın yanında istemcinin açıkça gönderdiği bir üyeyi okuyun.
+- Header'lar ve query parametreleri `input`'a dahil değildir.
+
+`headers` gelen isteğin header'larının salt-okur görünümüdür; `context.Headers` ile aynı sözlüğü okur, bu yüzden `Workflow:HeaderExposure:Deny` listesi aynen geçerlidir (yasaklı ad görünmez).
+
+- Tireli ad için indeksleyici kullanın: `headers["x-channel"]` (yoksa `null`); `headers.has("x-channel")` bool döner. `headers.x-channel` çıkarma olarak ayrışır, derlenmez. Değer metindir.
+- **`task.headers`, `headers` değildir**: `task.headers` task'ın kendi **giden** header'larıdır (`"$.headers.x-channel"` hedefleriyle yazılır); `headers` **gelen** isteğinkidir. İletmek için: `"set": { "$.headers.x-channel": "headers[\"x-channel\"]" }`.
+- `headers` bir `select` kökü değildir (`"select": "$.headers.x"` publish hatasıdır); `set` ifadesiyle okuyun.
+
 ## Eksik değer ve hata
 
 - Bulunamayan `select`, eksik yaprak, `?.` ya da eksik ara üye üzerinden okuma (`customer` yokken
@@ -280,6 +303,81 @@ Function ve extension'da `available` her zaman `false`'tur.
 - Diğer her hata (hatalı dönüşüm, yazılamaz path, sistem hop'unda rol okuma) **task'ı hatalı bitirir**:
   error boundary devreye girer, boundary yoksa instance fault olur; delta'nın hiçbir parçası yazılmaz.
 - JSON olmayan yanıt gövdesi string'dir: `result.body.x` eksik sayılır, `into`'suz `select` hata verir.
+- **JSON değerlerinde metot çağrılmaz; önce dönüştürün**: `input.name.ToString().Substring(0, 3)`, `data.amount.AsDouble()`. Mevcut bir değerde bilinmeyen metot çağrısı (`input.name.Substring(40)`, `.ToUpper()`) mapping'i hatalı bitirir; aynı çağrı eksik bir ara üye üzerinden (`data.missing.name.ToUpper()`) hâlâ eksik kaynaktır ve hiçbir şey yazmaz.
+
+## Task binding dışındaki bloklar
+
+Üç yer daha C# `mapping` betiği yerine bildirimsel blok kabul eder: transition `output`, SubFlow state `input` ve `output`. Blok dilbilgisi (`select`, `into`, `set`) ve ifade kuralları task binding'inkiyle aynıdır; değişen değişkenler, hedef doküman ve sonucun gittiği yerdir.
+
+- `input` callee'ye **giden** veriyi kurar, `output` **dönen** veriyi yazar. Tek blok kabul eden yer diğerini publish'te reddeder (transition'da `input` üyesi publish hatasıdır: `'input' is not supported on a transition; use 'output'.`).
+- `select`, sitenin `result`'ı varsa onu, yoksa `headers` hariç değişkenleri okur (`$.data…`, `$.input…`); `headers` hiçbir zaman `select` kökü değildir.
+- Aynı yerde blok ve C# `mapping` birlikte publish hatasıdır.
+
+| Yer | Hedef | Delta başlangıcı | Sonuç nereye gider |
+|---|---|---|---|
+| Transition `output` | instance verisi | boş; `"select": "$.input"` tüm isteği tutar | transition kaydı gövdesi, tek data append'i |
+| SubFlow `input` | child'ın start dokümanı `{ attributes, headers, key, tags }` | boş | child start isteği |
+| SubFlow `output` | instance verisi | boş | parent'ın tek data append'i |
+
+Değişkenler: transition `output` ve SubFlow `input` için `data`, `input`, `instance`, `now`, `user`, `context`, `headers`. SubFlow `output` ayrıca `result` alır (`select` kökü, varsayılan `$.data`); orada `input` `null`'dır, `headers` / `user` child'ı kapatan tarafındır.
+
+### Transition `output`
+
+`transitions[]`, `startTransition`, paylaşılan transition'lar ve `cancel` / `updateData` / `exit` için geçerlidir. Otomatik ve zamanlanmış transition'lar `mapping` gibi `output`'u da reddeder: otomatik hop'un eşleyecek isteği yoktur. Boş delta yeni data sürümü oluşturmaz.
+
+```json
+{
+  "key": "submit",
+  "target": "review",
+  "output": {
+    "select": "$.input.customer",
+    "into": "$.customer",
+    "set": { "$.submittedAt": "now", "$.reviewedByAuditor": "user.available && user.hasRole(\"auditor\")" }
+  }
+}
+```
+
+### SubFlow `input`
+
+Yalnız `type: S` için; `P` SubProcess iki bloğu da reddeder (kendi task'ıyla başlar). Hedef doküman `{ attributes, headers, key, tags }`:
+
+- `select` için `into` gerekir; `key` string, `tags` string dizisi olmalıdır, aksi halde child oluşmadan start başarısız olur. Sayıyı `.ToString()` ile çevirin (`"\"kyc-\" + data.customer.id.ToString()"`).
+- `$.headers.sub` boş yazılırsa boş kalır (instance-call credential kuralı).
+- `input`, SubFlow state'ine giren hop'un isteğidir: otomatik zincirde ve retry yeniden başlatmasında `null`'dır (retry'da `user` ve `headers` yeniden deneyen istekçinindir).
+
+```json
+"subFlow": {
+  "type": "S",
+  "process": { "key": "kyc-check", "domain": "core", "version": "1.0.0", "flow": "sys-flows" },
+  "input": {
+    "set": {
+      "$.attributes.customerId": "data.customer.id",
+      "$.attributes.amount": "input.amount",
+      "$.headers.x-channel": "\"web\"",
+      "$.key": "\"kyc-\" + data.customer.id.ToString()",
+      "$.tags": "new string[] { \"kyc\" }"
+    }
+  }
+}
+```
+
+### SubFlow `output`
+
+Tamamlanmada **ve** fault'ta çalışır; `result.status` (`"completed"` ya da `"faulted"`) ikisini ayırır. `result`, `{ data, status }`'tur. Child verisi düz metin gelir. Betikteki `Mutations`'ın blok karşılığı yoktur.
+
+```json
+"subFlow": {
+  "type": "S",
+  "process": { "key": "kyc-check", "domain": "core", "version": "1.0.0", "flow": "sys-flows" },
+  "output": {
+    "select": "$.data.score",
+    "into": "$.kyc.score",
+    "set": { "$.kyc.outcome": "result.status", "$.kyc.settledAt": "now" }
+  }
+}
+```
+
+Hata durumunda her yer kendi betiğinin hata koduyla başarısız olur (transition `output`: transition mapping hatası; SubFlow `input`: `SubFlowInputMappingFailed`; SubFlow `output`: `SubFlowOutputMappingFailed`). Rol sağlayıcı hatası `Authorization:110006` kalır; çağıransız bir okumada `user.roles` kalıcı hatadır.
 
 ## Örnek
 
