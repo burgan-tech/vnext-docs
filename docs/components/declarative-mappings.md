@@ -407,6 +407,8 @@ Hata durumunda her yer kendi betiğinin hata koduyla başarısız olur (transiti
 }
 ```
 
+`.ToString()` eksik bir üyede (`input.customerId` payload'da yoksa) eşlemeyi başarısız kılar; opsiyonel alanı `input.customerId != null ? input.customerId.ToString() : null` ile koruyun.
+
 Hata, betikteki gibi `EventMappingFailed` (40993) olarak loglanır; hata kodu `EventMappingFailed`, span `Script.Execute` altında `eventMapping` türüdür.
 
 ### Workflow `output`
@@ -421,7 +423,7 @@ Yalnız senkron start / transition cevabını şekillendirir; sub-flow instance'
 "output": {
   "select": "$.data.score",
   "into": "$.data.score",
-  "set": { "$.statusCode": "201", "$.headers.x-score-band": "data.score > 700 ? \"high\" : \"low\"" }
+  "set": { "$.statusCode": "201", "$.headers.x-score-band": "data.score.AsDouble() > 700 ? \"high\" : \"low\"" }
 }
 ```
 

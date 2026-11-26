@@ -408,6 +408,8 @@ Three more sites take a block beside their script: an event's `input` (beside `m
 }
 ```
 
+`.ToString()` on an absent member (`input.customerId` missing from the payload) fails the mapping; guard an optional field with `input.customerId != null ? input.customerId.ToString() : null`.
+
 A failure logs `EventMappingFailed` (40993), as the script does, with error code `EventMappingFailed` under the `Script.Execute` span, kind `eventMapping`.
 
 ### Workflow `output`
@@ -422,7 +424,7 @@ Shapes a sync start / transition response only, and never runs for a sub-flow in
 "output": {
   "select": "$.data.score",
   "into": "$.data.score",
-  "set": { "$.statusCode": "201", "$.headers.x-score-band": "data.score > 700 ? \"high\" : \"low\"" }
+  "set": { "$.statusCode": "201", "$.headers.x-score-band": "data.score.AsDouble() > 700 ? \"high\" : \"low\"" }
 }
 ```
 
