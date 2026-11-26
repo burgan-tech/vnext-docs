@@ -280,7 +280,11 @@ Function ve extension'da `available` her zaman `false`'tur.
 
 | Tetikleyici | `input` |
 |---|---|
-| Manuel transition, instance start, `updateData`, retry, event | istek gövdesi (retry'da gövde yoksa `null`) |
+| Manuel transition, instance start, `updateData`, retry | istek gövdesi (retry'da gövde yoksa `null`) |
+| Event ile tetiklenen transition'da task mapping'leri | event bloğunun (ya da event `mapping` betiğinin) kurduğu **eşlenmiş gövde**; ham event payload'ı değil |
+| Event bloğunun kendisi (`event.input`) | event payload'ı (CloudEvent açıldıktan sonra; boş gövdede `null`) — bkz. [Event `input`](#event-input) |
+| Function'ın `output` bloğu ve task mapping'leri | function'ın istek gövdesi |
+| Transition / start `schemas[]` kuralı | transition istek gövdesi, **gönderildiği gibi** (`x-storage` dosya takasından önce) |
 | Çalışan timer, otomatik devam hop'u, SubFlow resume (tamamlanma, fault, iptal) | `null` |
 | Okuma yolları (view seçimi, state/data function'ları) | `null` |
 
@@ -378,6 +382,76 @@ Tamamlanmada **ve** fault'ta çalışır; `result.status` (`"completed"` ya da `
 ```
 
 Hata durumunda her yer kendi betiğinin hata koduyla başarısız olur (transition `output`: transition mapping hatası; SubFlow `input`: `SubFlowInputMappingFailed`; SubFlow `output`: `SubFlowOutputMappingFailed`). Rol sağlayıcı hatası `Authorization:110006` kalır; çağıransız bir okumada `user.roles` kalıcı hatadır.
+
+## Event `input`, workflow `output` ve function `output`
+
+Üç yer daha betiğinin yanında blok kabul eder: event'in `input`'u (`mapping` yanında), workflow'un ve function'ın `output`'u (`output` betiği yanında). Bu üç yerde `select` ve `into` **birlikte** yazılır (biri tek başına publish hatasıdır), boş blok (`{"set":{}}`) publish hatasıdır ve `headers` hiçbir zaman `select` kökü değildir. `select` değişkenleri okur (`$.input…`, `$.data…`); function `output`'ta ise `result`'ı okur ve varsayılanı yoktur.
+
+| Yer | Değişkenler | Hedef doküman | Ne için |
+|---|---|---|---|
+| Event `input` | `input`, `now`, `context`, `headers` | `{ key, attributes }` | event teslimatının start / transition gövdesi |
+| Workflow `output` | `data`, `input`, `instance`, `now`, `user`, `context`, `headers` | `{ data, statusCode, headers }` | senkron start / transition cevabı |
+| Function `output` | `data`, `input`, `instance`, `now`, `context`, `headers`, `result` | `{ data, statusCode, headers }` | function cevabı |
+
+### Event `input`
+
+`input`, CloudEvent açıldıktan sonraki event payload'ıdır (boş gövdede `null`); `headers` event'in header'larıdır (yasaklı adlar süzülmüş görünüm). `data`, `instance` ve `user` burada yoktur: birini yazmak publish hatasıdır. `attributes` boş başlar; `key` string olur ya da hiç yazılmaz, başka tip eşleme hatasıdır. Filtreyle instance bulma (`Selector`) yalnız C# tarafındadır: blok `key` yazmayan bir transition event'i, eşleşmeyen event gibi yok sayılır. Aynı event'te `mapping` ve `input` birlikte publish hatasıdır (`event: 'mapping' and 'input' are mutually exclusive`); ikisini birden taşıyan saklı bir event betiği çalıştırır, hiçbirini taşımayan runtime'da `EventDefinitionMissing` olarak kalır. Kontrol, workflow `event`'i ile `event` taşıyan her transition'ı kapsar.
+
+```json
+"event": {
+  "input": {
+    "select": "$.input.payload",
+    "into": "$.attributes",
+    "set": { "$.key": "input.customerId.ToString()", "$.attributes.channel": "headers[\"x-channel\"]" }
+  }
+}
+```
+
+Hata, betikteki gibi `EventMappingFailed` (40993) olarak loglanır; hata kodu `EventMappingFailed`, span `Script.Execute` altında `eventMapping` türüdür.
+
+### Workflow `output`
+
+Yalnız senkron start / transition cevabını şekillendirir; sub-flow instance'ları için hiç çalışmaz. `output` JSON'unda `location` ya da `code` taşıyan nesne betiktir; `select` / `into` / `set` taşıyıp bunları taşımayan nesne bloktur; ikisinin üyeleri bir arada olursa publish 400 döner (`InvalidWorkflow`, mesaj `output`'u adlandırır). Betik `output` eskisi gibi bire bir saklanır.
+
+- `data` instance'ın son verisidir (`x-encryption` alanları token olarak kalır). `input`, hop'u bu process çalıştırdıysa kabul edilen hop payload'ıdır: start'ta dosya offload'undan sonraki start attribute'ları, transition'da `x-storage` takasından sonraki payload (dosya üyesi saklanan handle'dır, hiçbir zaman satır içi base64 değil). Hop burada çalışmadıysa `null`'dır: mevcut instance'ı döndüren idempotent start, SubFlow'a proxy'lenen transition, aktif SubFlow'a iletilen parent transition'ı.
+- `statusCode` tamsayı JSON sayısı, `headers` string değerli nesne olmalıdır; `data` yok ya da `null` ise cevap boştur.
+- `statusCode` / `headers` tipi yanlışsa dahil her blok hatasında standart zarfa düşülür; `WorkflowOutputScriptFailed` loglanır ve span hata alır — hatalı betikle aynı.
+
+```json
+"output": {
+  "select": "$.data.score",
+  "into": "$.data.score",
+  "set": { "$.statusCode": "201", "$.headers.x-score-band": "data.score > 700 ? \"high\" : \"low\"" }
+}
+```
+
+### Function `output`
+
+`result`, çalışan her task için `{ <variableKey>: { body, headers, statusCode } }`'tir (`variableKey` ya da task key'inin değişken adı); atlanan task yoktur. `instance` domain ya da flow kapsamlı function'da boştur.
+
+- **Çağıran yoktur.** `user.available` `false`'tur ve `user` okuyan blok publish hatasıdır (`function output has no caller: the function response cache does not vary by role`); output betiğinin çağıranı da kapalıdır.
+- Sıra: output betiği varsa o, yoksa blok, yoksa eski tek-task çıkarımı.
+- `rawResponse: false`: cevap `{ <function key'i değişken adı olarak>: data }`'dır; `statusCode` ve `headers` yok sayılır, tip kontrolü yapılmaz ve blok bunları hedefliyorsa publish uyarı verir (mesaj `rawResponse`'u adlandırır). `rawResponse: true`: `data`, `statusCode` (tamsayı) ve `headers` (string değerli nesne) kullanılır; yanlış tip çağrıyı başarısız kılar. Aşağıdaki örnek `rawResponse: true` ister.
+- İkili (binary) cevaplar (`byte[]`, `ScriptFile`) yalnız betikle üretilir.
+- Function cevap cache'i blokla kurulan cevabı betikle kurulan gibi saklar.
+- Hata `ExtensionExecutionFailed`'dır, mesaj `Function '{key}' output declarative output mapping failed: {detail}`; `FunctionOutputMappingFailed` (10280) ile bir kez loglanır (betik hataları da artık bunu kullanır).
+
+```json
+"rawResponse": true,
+"output": {
+  "select": "$.fetch.body.items",
+  "into": "$.data.items",
+  "set": { "$.data.count": "result.fetch.body.items.AsArrayLength()", "$.statusCode": "200" }
+}
+```
+
+### Hatalar
+
+| Yer | Hata kodu | Span türü | Log olayı |
+|---|---|---|---|
+| Event `input` | `EventMappingFailed` | `eventMapping` | 40993 `EventMappingFailed` |
+| Workflow `output` | standart zarfa düşer | `Script.Execute` (hata) | `WorkflowOutputScriptFailed` |
+| Function `output` | `ExtensionExecutionFailed` | `Script.Execute` (hata) | 10280 `FunctionOutputMappingFailed` |
 
 ## Örnek
 

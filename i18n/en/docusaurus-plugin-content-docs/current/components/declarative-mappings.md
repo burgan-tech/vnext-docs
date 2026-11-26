@@ -281,7 +281,11 @@ extensions always see `available == false`.
 
 | Trigger | `input` |
 |---|---|
-| Manual transition, instance start, `updateData`, retry, event | the request body (`null` on a retry with no body) |
+| Manual transition, instance start, `updateData`, retry | the request body (`null` on a retry with no body) |
+| Task mappings on an event-triggered transition | the **mapped body** the event block (or event `mapping` script) built; not the raw event payload |
+| The event block itself (`event.input`) | the event payload (after CloudEvent unwrapping; `null` for an empty body) — see [Event `input`](#event-input) |
+| A function's `output` block and task mappings | the function's request body |
+| Transition / start `schemas[]` rule | the transition request body **as sent** (before the `x-storage` file swap) |
 | Fired timer, automatic continuation hop, SubFlow resume (completion, fault, cancellation) | `null` |
 | Read paths (view selection, state / data functions) | `null` |
 
@@ -379,6 +383,76 @@ Runs on completion **and** on fault; `result.status` (`"completed"` or `"faulted
 ```
 
 On failure each site fails with its script's error code (transition `output`: the transition mapping error; SubFlow `input`: `SubFlowInputMappingFailed`; SubFlow `output`: `SubFlowOutputMappingFailed`). A role-provider failure stays `Authorization:110006`; reading `user.roles` with no caller is a permanent failure.
+
+## Event `input`, workflow `output` and function `output`
+
+Three more sites take a block beside their script: an event's `input` (beside `mapping`), and a workflow's or a function's `output` (beside the `output` script). On these three, `select` and `into` are written **together** (either alone is a publish error), an empty block (`{"set":{}}`) is a publish error, and `headers` is never a `select` root. `select` reads the variables (`$.input…`, `$.data…`); on a function `output` it reads `result` and has no default.
+
+| Site | Variables | Target document | Used for |
+|---|---|---|---|
+| Event `input` | `input`, `now`, `context`, `headers` | `{ key, attributes }` | the start / transition body of the event delivery |
+| Workflow `output` | `data`, `input`, `instance`, `now`, `user`, `context`, `headers` | `{ data, statusCode, headers }` | the sync start / transition response |
+| Function `output` | `data`, `input`, `instance`, `now`, `context`, `headers`, `result` | `{ data, statusCode, headers }` | the function response |
+
+### Event `input`
+
+`input` is the event payload after CloudEvent unwrapping (`null` for an empty body); `headers` are the event's headers (a deny-filtered view). `data`, `instance` and `user` do not exist here: naming one is a publish error. `attributes` starts empty; `key` is a string or left unset, anything else is a mapping failure. The instance lookup by filter (`Selector`) stays C#-only: a transition event whose block sets no `key` is ignored like an unmatched event. `mapping` and `input` on one event is a publish error (`event: 'mapping' and 'input' are mutually exclusive`); a stored event holding both runs the script, and one holding neither stays the runtime `EventDefinitionMissing`. The check covers the workflow `event` and every transition that carries an `event`.
+
+```json
+"event": {
+  "input": {
+    "select": "$.input.payload",
+    "into": "$.attributes",
+    "set": { "$.key": "input.customerId.ToString()", "$.attributes.channel": "headers[\"x-channel\"]" }
+  }
+}
+```
+
+A failure logs `EventMappingFailed` (40993), as the script does, with error code `EventMappingFailed` under the `Script.Execute` span, kind `eventMapping`.
+
+### Workflow `output`
+
+Shapes a sync start / transition response only, and never runs for a sub-flow instance. In the `output` JSON, an object with `location` or `code` is a script; one with `select` / `into` / `set` and neither of those is a block; members of both kinds together return a publish 400 (`InvalidWorkflow`, the message names `output`). A script `output` is stored byte for byte as before.
+
+- `data` is the latest instance data (`x-encryption` fields stay tokens). `input` is the admitted hop payload when this process ran the hop: the start attributes after file offload, or the transition payload after the `x-storage` swap (a file member is the stored handle, never inline base64). It is `null` when no hop ran here: an idempotent start that returned an existing instance, a transition proxied to a SubFlow, a parent transition relayed to its active SubFlow.
+- `statusCode` must be an integer JSON number and `headers` an object of string values; `data` absent or `null` is an empty response.
+- Any block failure, a wrong-typed `statusCode` / `headers` included, falls back to the standard envelope, logs `WorkflowOutputScriptFailed` and marks the span as an error, exactly like a failing script.
+
+```json
+"output": {
+  "select": "$.data.score",
+  "into": "$.data.score",
+  "set": { "$.statusCode": "201", "$.headers.x-score-band": "data.score > 700 ? \"high\" : \"low\"" }
+}
+```
+
+### Function `output`
+
+`result` is `{ <variableKey>: { body, headers, statusCode } }` for every executed task (`variableKey`, or the task key's variable name); a skipped task is absent. `instance` is empty for a domain- or flow-scoped function.
+
+- **No caller.** `user.available` is `false` and a block that reads `user` is a publish error (`function output has no caller: the function response cache does not vary by role`); the output script's caller is closed too.
+- Order: the output script if present, else the block, else the old single-task extraction.
+- `rawResponse: false`: the response is `{ <function key as variable name>: data }`; `statusCode` and `headers` are ignored and not type-checked, and publish warns when the block targets them (the message names `rawResponse`). `rawResponse: true`: `data`, `statusCode` (integer) and `headers` (object of strings) are used, and wrong types fail the call. The example below needs `rawResponse: true`.
+- Binary responses (`byte[]`, `ScriptFile`) are script-only.
+- The function response cache stores a block-built response like a script-built one.
+- A failure is `ExtensionExecutionFailed` with the message `Function '{key}' output declarative output mapping failed: {detail}`, logged once as `FunctionOutputMappingFailed` (10280; script failures use it now too).
+
+```json
+"rawResponse": true,
+"output": {
+  "select": "$.fetch.body.items",
+  "into": "$.data.items",
+  "set": { "$.data.count": "result.fetch.body.items.AsArrayLength()", "$.statusCode": "200" }
+}
+```
+
+### Failures
+
+| Site | Error code | Span kind | Log event |
+|---|---|---|---|
+| Event `input` | `EventMappingFailed` | `eventMapping` | 40993 `EventMappingFailed` |
+| Workflow `output` | falls back to the standard envelope | `Script.Execute` (error) | `WorkflowOutputScriptFailed` |
+| Function `output` | `ExtensionExecutionFailed` | `Script.Execute` (error) | 10280 `FunctionOutputMappingFailed` |
 
 ## Example
 
